@@ -1,0 +1,1 @@
+ANALYZE and design only tests for task $task. Read constitution, spec, plan, linked requirements and acceptance criteria. Modify test/fixture files only. Do not change production code. Tests must be observable, deterministic, and fail for the missing behavior.

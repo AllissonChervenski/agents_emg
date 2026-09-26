@@ -1,0 +1,37 @@
+providers:
+  preference: [agy, opencode, codex]
+  model_tiers:
+    fast: {}
+    balanced: {}
+    strong: {}
+    coding_strong: {}
+roles:
+  specification: {tier: balanced}
+  specification_validator: {tier: balanced}
+  planning: {tier: strong}
+  cross_artifact_validator: {tier: strong}
+  test_designer: {tier: coding_strong}
+  test_validator: {tier: balanced}
+  coder: {tier: coding_strong}
+  refactorer: {tier: coding_strong}
+  code_reviewer: {tier: strong}
+timeouts:
+  provider: 600
+  verification: 600
+retries:
+  artifact_generation: 3
+  implementation: 3
+  review: 2
+human_gates:
+  mode: interactive
+  constitution_change: true
+  high_impact_architecture: true
+verification:
+  build: []
+  tests: []
+  lint: []
+  static: []
+git:
+  checkpoint_per_task: true
+logging:
+  level: INFO
