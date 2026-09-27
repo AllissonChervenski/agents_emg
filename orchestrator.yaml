@@ -1,0 +1,44 @@
+{
+  "providers": {"preference": ["codex", "opencode", "agy"]},
+  "roles": {
+    "constitution": {"tier": "balanced", "preferred_providers": ["agy", "codex", "opencode"]},
+    "constitution_validator": {"tier": "balanced", "preferred_providers": ["codex", "agy", "opencode"], "prefer_different_provider_from": ["constitution"]},
+    "specification": {"tier": "balanced", "preferred_providers": ["agy", "codex", "opencode"]},
+    "specification_validator": {"tier": "balanced", "preferred_providers": ["codex", "agy", "opencode"], "prefer_different_provider_from": ["specification"]},
+    "planning": {"tier": "strong", "preferred_providers": ["codex", "agy", "opencode"]},
+    "plan_validator": {"tier": "balanced", "preferred_providers": ["codex", "agy", "opencode"], "prefer_different_provider_from": ["planning"]},
+    "tasks": {"tier": "balanced", "preferred_providers": ["agy", "codex", "opencode"]},
+    "tasks_validator": {"tier": "balanced", "preferred_providers": ["codex", "agy", "opencode"], "prefer_different_provider_from": ["tasks"]},
+    "cross_artifact_validator": {"tier": "strong", "preferred_providers": ["codex", "agy", "opencode"]},
+    "test_designer": {"tier": "coding_strong", "preferred_providers": ["codex", "opencode", "agy"]},
+    "test_validator": {"tier": "balanced", "preferred_providers": ["codex", "agy", "opencode"], "prefer_different_provider_from": ["test_designer"]},
+    "coder": {"tier": "coding_strong", "preferred_providers": ["opencode", "codex", "agy"], "prefer_different_provider_from": ["test_designer"]},
+    "refactorer": {"tier": "coding_strong", "preferred_providers": ["opencode", "codex", "agy"]},
+    "code_reviewer": {"tier": "strong", "preferred_providers": ["codex", "agy", "opencode"], "prefer_different_provider_from": ["coder"]},
+    "final_reviewer": {"tier": "strong", "preferred_providers": ["codex", "agy", "opencode"], "prefer_different_provider_from": ["coder"]}
+  },
+  "retries": {"artifact_generation": 3, "implementation": 3, "review": 2},
+  "routing": {"adaptive_routing_mode": "observe", "historical_min_samples": 10, "decay_half_life_days": 30, "exploration_rate": 0.05},
+  "real_run": {"safety_mode": "strict", "max_agent_calls_per_task": 12, "max_agent_calls_per_workflow": 100, "max_retries": 3, "max_wall_time": 7200,
+    "file_scopes": {"test_designer": ["tests/", "fixtures/", "conftest.py", "pytest.ini", "tox.ini"], "coder": "task", "refactorer": "task", "specification_validator": [], "plan_validator": [], "tasks_validator": [], "test_validator": [], "code_reviewer": [], "final_reviewer": []}},
+  "timeouts": {"provider": 600, "verification": 600},
+  "human_gates": {"mode": "interactive", "constitution_change": true},
+  "verification": {
+    "task_tests": [],
+    "regression_tests": [{"name": "regression suite", "command": ["python", "-m", "pytest", "-q"]}],
+    "build": [{"name": "Python wheel", "command": ["python", "-m", "pip", "wheel", "--no-deps", ".", "--wheel-dir", ".orchestrator/build"]}],
+    "tests": [{"name": "full pytest suite", "command": ["python", "-m", "pytest", "-q"]}],
+    "lint": [{"name": "Ruff lint", "command": ["python", "-m", "ruff", "check", "orchestrator", "tests"]}],
+    "type": [{"name": "mypy type checking", "command": ["python", "-m", "mypy"]}],
+    "syntax": [{"name": "Python syntax", "command": ["python", "-m", "compileall", "-q", "orchestrator", "tests"]}],
+    "static": [],
+    "requirements": [
+      {"requirement_id": "ORCH-MODEL-DISCOVERY", "checks": [{"name": "model discovery tests", "command": ["python", "-m", "pytest", "-q", "tests/test_model_discovery.py"]}]},
+      {"requirement_id": "ORCH-ROUTING-AND-HARNESS", "checks": [{"name": "routing and harness tests", "command": ["python", "-m", "pytest", "-q", "tests/test_routing_and_verification_v2.py"]}]},
+      {"requirement_id": "ORCH-TDD-CONTRACT", "checks": [{"name": "task-specific TDD tests", "command": ["python", "-m", "pytest", "-q", "tests/test_tdd_contract_v3.py", "tests/test_tdd_execution_v3.py"]}]},
+      {"requirement_id": "ORCH-TRACE-METRICS", "checks": [{"name": "trace and metrics tests", "command": ["python", "-m", "pytest", "-q", "tests/test_trace_metrics_gate_v3.py"]}]}
+    ]
+  },
+  "git": {"checkpoint_per_task": true},
+  "logging": {"level": "INFO"}
+}

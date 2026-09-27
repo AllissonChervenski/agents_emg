@@ -1,6 +1,10 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
-import json, shlex, subprocess, time
+import json
+import shlex
+import subprocess
+import time
+import re
 from .policies import CommandPolicy
 
 
@@ -13,54 +17,142 @@ class VerificationResult:
     stderr: str
     duration: float
     classification: str = "PASS"
+    name: str = ""
+    status: str = ""
+    category: str = ""
+    cause: str = ""
+
+    def __post_init__(self):
+        if not self.status: self.status=self.classification
+
+
+@dataclass
+class RequirementVerification:
+    requirement_id: str
+    checks: list[str] = field(default_factory=list)
+    results: list[VerificationResult] = field(default_factory=list)
+    status: str = "BLOCKED"
+
+
+def final_verification_pass(results, requirements=()):
+    """Only deterministic evidence can authorize the final workflow transition."""
+    return bool(results) and all(result.success for result in results) and all(item.status=="PASS" for item in requirements)
 
 
 class VerificationHarness:
     def __init__(self, workspace, commands=None, timeout=600):
-        self.workspace = Path(workspace).resolve(); self.commands = commands or {}; self.timeout = timeout; self.policy = CommandPolicy(self.workspace)
+        self.workspace = Path(workspace).resolve(); self.commands = commands or {}; self.timeout = timeout; self.policy = CommandPolicy(self.workspace); self.requirement_results=[]; self.on_command=None
     def detect(self):
         root = self.workspace
-        found = {"build": [], "tests": [], "lint": [], "static": []}
-        if (root / "pyproject.toml").exists() or list(root.glob("test*.py")) or (root / "tests").exists():
-            found["tests"].append(["python", "-m", "pytest", "-q"])
-        if (root / "package.json").exists(): found["tests"].append(["npm", "test"])
-        if (root / "Cargo.toml").exists(): found["tests"].append(["cargo", "test"])
-        if (root / "go.mod").exists(): found["tests"].append(["go", "test", "./..."])
-        if (root / "Makefile").exists(): found["build"].append(["make"])
-        if (root / "CMakeLists.txt").exists(): found["build"].append(["cmake", "--build", "build"])
-        if (root / "platformio.ini").exists(): found["build"].append(["pio", "run"])
+        found = {key:[] for key in ("task_tests","regression_tests","build","tests","lint","type","static","syntax","requirements")}
+        def add(kind,name,command,reason): found[kind].append({"name":name,"command":command,"reason":reason})
+        pyproject=root/"pyproject.toml"
+        if pyproject.exists():
+            try:
+                import tomllib
+                project=tomllib.loads(pyproject.read_text())
+            except (ValueError,OSError): project={}
+            if (root/"tests").exists() or "pytest" in project.get("tool",{}):
+                add("regression_tests","pytest regression",["python","-m","pytest","-q"],"Python tests found")
+                add("tests","pytest full suite",["python","-m","pytest","-q"],"Python tests found")
+            if "build-system" in project:
+                add("build","Python wheel",["python","-m","pip","wheel","--no-deps","."],"pyproject.toml declares a build system; requires declared build dependencies")
+            if "ruff" in project.get("tool",{}) or (root/"ruff.toml").exists() or (root/".ruff.toml").exists():
+                add("lint","ruff",["ruff","check","."],"Ruff configuration found")
+            if "mypy" in project.get("tool",{}) or (root/"mypy.ini").exists():
+                add("type","mypy",["python","-m","mypy"],"Mypy configuration found")
+            add("syntax","Python syntax",["python","-m","compileall","-q","orchestrator"],"Python package found; syntax check only")
+        if (root/"package.json").exists():
+            try: scripts=json.loads((root/"package.json").read_text()).get("scripts",{})
+            except (ValueError,OSError): scripts={}
+            manager="pnpm" if (root/"pnpm-lock.yaml").exists() else "npm"
+            for script,kind in (("test","tests"),("build","build"),("lint","lint"),("typecheck","type")):
+                if script in scripts:
+                    command=[manager,"run",script]
+                    add(kind,f"{manager} {script}",command,f"package.json script {script}")
+                    if script=="test":
+                        add("regression_tests",f"{manager} regression",command,"package.json test script")
+        if (root/"Cargo.toml").exists():
+            add("build","cargo build",["cargo","build"],"Cargo.toml found")
+            for kind in ("tests","regression_tests"): add(kind,"cargo test",["cargo","test"],"Cargo.toml found")
+        if (root/"go.mod").exists():
+            add("build","go build",["go","build","./..."],"go.mod found")
+            for kind in ("tests","regression_tests"): add(kind,"go test",["go","test","./..."],"go.mod found")
+            add("static","go vet",["go","vet","./..."],"go.mod found")
+        if (root/"platformio.ini").exists(): add("build","PlatformIO build",["pio","run"],"platformio.ini found")
+        if (root/"CMakeLists.txt").exists(): add("build","CMake build",["cmake","--build","build"],"CMakeLists.txt found; configure build directory first")
+        if (root/"Makefile").exists():
+            content=(root/"Makefile").read_text()
+            for target,kind in (("build","build"),("test","tests"),("lint","lint")):
+                if re.search(rf"(?m)^{target}\s*:",content): add(kind,f"make {target}",["make",target],f"Makefile target {target}")
+        if (root/".clang-tidy").exists(): add("static","clang-tidy",["clang-tidy","-p","build","."],"clang-tidy config found; review compile database and source paths")
+        if (root/"cppcheck.cfg").exists(): add("static","cppcheck",["cppcheck","--enable=warning","."],"cppcheck config found")
         return found
-    def run_command(self, command):
+    def run_command(self, command, name="", category=""):
         args = shlex.split(command) if isinstance(command, str) else list(command)
         allowed, reason = self.policy.validate(args)
-        if not allowed: return VerificationResult(args, False, None, "", reason, 0, "BLOCKED")
+        if not allowed:
+            result=VerificationResult(args, False, None, "", reason, 0, "BLOCKED",name,"BLOCKED",category)
+            if self.on_command: self.on_command("finished",result)
+            return result
+        if self.on_command: self.on_command("started",{"command":args,"name":name,"category":category})
         start = time.monotonic()
         try:
             cp = subprocess.run(args, cwd=self.workspace, text=True, capture_output=True, timeout=self.timeout, check=False)
-            return VerificationResult(args, cp.returncode == 0, cp.returncode, cp.stdout, cp.stderr, time.monotonic()-start, "PASS" if cp.returncode == 0 else "FAIL")
+            status="PASS" if cp.returncode == 0 else "FAIL"
+            result=VerificationResult(args, cp.returncode == 0, cp.returncode, cp.stdout, cp.stderr, time.monotonic()-start, status,name,status,category)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            return VerificationResult(args, False, None, "", str(exc), time.monotonic()-start, "INFRASTRUCTURE_FAILURE")
+            result=VerificationResult(args, False, None, "", str(exc), time.monotonic()-start, "INFRASTRUCTURE_FAILURE",name,"INFRASTRUCTURE_FAILURE",category)
+        if self.on_command: self.on_command("finished",result)
+        return result
     def run(self, categories=None):
-        detected = self.detect()
-        configured = {key: (value or detected.get(key, [])) for key, value in (self.commands or detected).items()}
+        configured=self.commands
         results = []
-        for category in categories or ("tests", "build", "lint", "static"):
+        for category in categories or ("build", "tests", "lint", "type", "static", "syntax", "requirements"):
+            if category=="requirements":
+                for requirement in self.run_requirements(): results.extend(requirement.results)
+                continue
             commands = configured.get(category, [])
             for command in commands:
-                results.append(self.run_command(command))
+                if isinstance(command,dict): results.append(self.run_command(command["command"],command.get("name",""),category))
+                else: results.append(self.run_command(command,category=category))
         return results
 
-    def run_red(self, command, expected_markers=()):
-        result = self.run_command(command)
+    def run_requirements(self):
+        self.requirement_results=[]
+        for item in self.commands.get("requirements",[]):
+            requirement_id=item.get("requirement_id","")
+            checks=item.get("checks",[])
+            results=[self.run_command(check["command"],check.get("name",requirement_id),"requirements") if isinstance(check,dict) else self.run_command(check,requirement_id,"requirements") for check in checks]
+            status="PASS" if results and all(result.success for result in results) else "BLOCKED" if not results else "FAIL"
+            self.requirement_results.append(RequirementVerification(requirement_id,[r.name for r in results],results,status))
+        return self.requirement_results
+
+    def run_red(self, command, expected_markers=(), expected_test_ids=()):
+        result = self.run_command(command,category="task_tests")
         output = result.stdout + result.stderr
         lowered=output.lower()
-        discovered = any(token in lowered for token in ("collected ", "ran ", "=== fail", "failed:", "--- fail", "test result: failed"))
-        if result.classification == "INFRASTRUCTURE_FAILURE": result.classification = "INFRASTRUCTURE_FAILURE"
-        elif not discovered or any(token in lowered for token in ("syntaxerror", "modulenotfounderror", "importerror", "no tests ran", "no tests collected")): result.classification = "INVALID_TEST"
-        elif result.success: result.classification = "UNEXPECTED_FAILURE"
-        elif not any(token in lowered for token in ("assertionerror", "assert ", "assertion failed", "expected:", "not equal", "failed: test", "=== fail", "test result: failed")): result.classification = "UNEXPECTED_FAILURE"
-        elif expected_markers and not any(marker.lower() in output.lower() for marker in expected_markers): result.classification = "UNEXPECTED_FAILURE"
-        else: result.classification = "EXPECTED_FAILURE"
+        discovered = any(token in lowered for token in ("collected ", "ran ", "--- fail", "test result: failed"))
+        infra_tokens=("timed out","permission denied","connection refused","no such file or directory")
+        invalid_tokens=("syntaxerror", "modulenotfounderror", "importerror", "no tests ran", "no tests collected", "collected 0 items", "error collecting", "usage error", "unrecognized arguments")
+        assertion_tokens=("assertionerror", "assert ", "assertion failed", "expected:", "not equal", "failed: test", "=== fail", "test result: failed")
+        if result.classification in ("INFRASTRUCTURE_FAILURE","BLOCKED"):
+            result.cause=result.stderr or "Command could not run"
+        elif any(token in lowered for token in infra_tokens):
+            result.classification="INFRASTRUCTURE_FAILURE"; result.cause="Test infrastructure failed"
+        elif not discovered or any(token in lowered for token in invalid_tokens):
+            result.classification="INVALID_TEST"; result.cause="No valid discovered test execution or test collection/import/syntax error"
+        elif result.success:
+            result.classification="UNEXPECTED_FAILURE"; result.cause="RED test passed before implementation"
+        elif not any(token in lowered for token in assertion_tokens):
+            result.classification="UNEXPECTED_FAILURE"; result.cause="Failure did not show an assertion about missing behavior"
+        elif expected_test_ids and not any(test_id in output for test_id in expected_test_ids):
+            result.classification="UNEXPECTED_FAILURE"; result.cause="Failure was not linked to a declared task test"
+        elif expected_markers and not any(marker.lower() in lowered for marker in expected_markers):
+            result.classification="UNEXPECTED_FAILURE"; result.cause="Failure did not match the expected behavior marker"
+        else:
+            result.classification="EXPECTED_FAILURE"; result.cause="Discovered task test failed with a linked assertion"
+        result.status=result.classification
         return result
 
     def save(self, path, results):

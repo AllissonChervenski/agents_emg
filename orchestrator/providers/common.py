@@ -41,12 +41,15 @@ def execute(provider: str, model: str | None, role: str, command: list[str], cwd
         return AgentResult(provider, model, role, False, None, duration=time.monotonic()-start, error=f"PROVIDER_FAILURE: {exc}")
 
 
-def probe(binary: str, args: list[str]) -> tuple[bool, str, str]:
+def probe(binary: str, args: list[str], timeout: int = 20) -> tuple[bool, str, str]:
     path = resolve_binary(binary)
     if not path:
         return False, "", f"{binary} unavailable"
     try:
-        cp = subprocess.run([path, *args], capture_output=True, text=True, timeout=20, check=False)
-        return cp.returncode == 0, (cp.stdout + cp.stderr).strip(), ""
+        cp = subprocess.run([path, *args], capture_output=True, text=True, timeout=timeout, check=False)
+        output=(cp.stdout or "")
+        if cp.returncode == 0 and not output.strip(): output=cp.stderr or ""
+        error=((cp.stderr or "")+(cp.stdout or "")) if cp.returncode else ""
+        return cp.returncode == 0, output.strip(), error.strip()
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, "", str(exc)

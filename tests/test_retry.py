@@ -9,11 +9,11 @@ class Fake:
 
 
 def test_provider_failure_falls_back():
-    caps={x:type("C",(),{"cli_available":True,"models":[]})() for x in ("agy","codex")}
-    providers={"agy":Fake("agy",False),"codex":Fake("codex",True)}
-    runner=AgentRunner(providers,ModelRouter(caps,{"provider_preference":["agy","codex"]}))
+    caps={x:type("C",(),{"cli_available":True,"models":[],"supports_file_editing":True,"supports_shell":True})() for x in ("opencode","codex")}
+    providers={"opencode":Fake("opencode",False),"codex":Fake("codex",True)}
+    runner=AgentRunner(providers,ModelRouter(caps))
     assert runner.run("coder","prompt").success
-    assert providers["agy"].calls==providers["codex"].calls==1
+    assert providers["opencode"].calls==providers["codex"].calls==1
 
 
 def test_validation_uses_self_only_when_no_independent_provider():

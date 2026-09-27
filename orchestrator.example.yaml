@@ -1,20 +1,27 @@
 providers:
-  preference: [agy, opencode, codex]
+  # Final fallback order only; each role's preference and required capabilities take priority.
+  preference: [codex, opencode, agy]
   model_tiers:
     fast: {}
     balanced: {}
     strong: {}
     coding_strong: {}
 roles:
-  specification: {tier: balanced}
-  specification_validator: {tier: balanced}
-  planning: {tier: strong}
-  cross_artifact_validator: {tier: strong}
-  test_designer: {tier: coding_strong}
-  test_validator: {tier: balanced}
-  coder: {tier: coding_strong}
-  refactorer: {tier: coding_strong}
-  code_reviewer: {tier: strong}
+  constitution: {tier: balanced, required_capabilities: [DOCUMENT_GENERATION, REASONING], preferred_providers: [agy, opencode, codex]}
+  constitution_validator: {tier: balanced, required_capabilities: [VALIDATION, REASONING], preferred_providers: [codex, opencode, agy], prefer_different_provider_from: [constitution]}
+  specification: {tier: balanced, required_capabilities: [DOCUMENT_GENERATION, REASONING], preferred_providers: [agy, codex, opencode]}
+  specification_validator: {tier: balanced, required_capabilities: [VALIDATION, REASONING], preferred_capabilities: [STRUCTURED_OUTPUT], preferred_providers: [codex, agy, opencode], prefer_different_provider_from: [specification]}
+  planning: {tier: strong, required_capabilities: [REASONING, DOCUMENT_GENERATION], preferred_providers: [codex, agy, opencode]}
+  plan_validator: {tier: balanced, required_capabilities: [VALIDATION, REASONING], preferred_providers: [codex, agy, opencode], prefer_different_provider_from_author: true}
+  tasks: {tier: balanced, required_capabilities: [DOCUMENT_GENERATION, REASONING], preferred_providers: [agy, codex, opencode]}
+  tasks_validator: {tier: balanced, required_capabilities: [VALIDATION, REASONING], preferred_providers: [codex, agy, opencode], prefer_different_provider_from_author: true}
+  cross_artifact_validator: {tier: strong, required_capabilities: [VALIDATION, REASONING], preferred_providers: [codex, agy, opencode]}
+  test_designer: {tier: coding_strong, required_capabilities: [CODING, FILE_EDITING], preferred_capabilities: [AGENTIC_CODING], preferred_providers: [codex, agy, opencode]}
+  test_validator: {tier: balanced, required_capabilities: [VALIDATION, REASONING], preferred_providers: [codex, agy, opencode], prefer_different_provider_from_author: true}
+  coder: {tier: coding_strong, required_capabilities: [CODING, FILE_EDITING, SHELL], preferred_capabilities: [AGENTIC_CODING], preferred_providers: [opencode, codex, agy]}
+  refactorer: {tier: coding_strong, required_capabilities: [CODING, FILE_EDITING], preferred_capabilities: [AGENTIC_CODING], preferred_providers: [opencode, codex, agy]}
+  code_reviewer: {tier: strong, required_capabilities: [VALIDATION, CODING], preferred_providers: [codex, agy, opencode], prefer_different_provider_from_author: true}
+  final_reviewer: {tier: strong, required_capabilities: [VALIDATION, REASONING], preferred_providers: [codex, agy, opencode], prefer_different_provider_from_author: true}
 timeouts:
   provider: 600
   verification: 600
@@ -22,15 +29,38 @@ retries:
   artifact_generation: 3
   implementation: 3
   review: 2
+routing:
+  adaptive_routing_mode: observe # observe or assist; observe never changes policy selection
+  historical_min_samples: 10
+  decay_half_life_days: 30
+  exploration_rate: 0.05 # applies only in assist when compatible alternatives exist
+real_run:
+  safety_mode: strict
+  max_agent_calls_per_task: 12
+  max_agent_calls_per_workflow: 100
+  max_retries: 3
+  max_wall_time: 7200
+  file_scopes:
+    test_designer: [tests/, fixtures/, conftest.py, pytest.ini, tox.ini]
+    coder: task # each task declares allowed_files
+    refactorer: task
+    test_validator: []
+    code_reviewer: []
 human_gates:
   mode: interactive
   constitution_change: true
   high_impact_architecture: true
 verification:
+  # Suggestions are emitted by `python -m orchestrator configure`; review before execution.
+  task_tests: []
+  regression_tests: []
   build: []
   tests: []
   lint: []
+  type: []
+  syntax: []
   static: []
+  requirements: [] # [{requirement_id: FR-018, checks: [{name: queue overflow, command: [python, -m, pytest, -q, tests/test_queue.py]}]}]
 git:
   checkpoint_per_task: true
 logging:

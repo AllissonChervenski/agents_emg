@@ -1,20 +1,22 @@
 # Model selection report
 
-Initial routing is heuristic and reflects discovered availability, configured preferences and tiers. It does not claim model superiority.
+Routing uses configured tiers, CLI metadata, history, then low-confidence heuristics. No model is claimed superior without measured evidence.
 
-- **constitution**: provider `agy`, model `CLI default`, tier `balanced` — Heuristic tier=balanced; preferred available provider; model availability is discovery/config based.
-- **constitution_validator**: provider `agy`, model `CLI default`, tier `balanced` — Heuristic tier=balanced; preferred available provider; model availability is discovery/config based.
-- **specification**: provider `agy`, model `CLI default`, tier `balanced` — Heuristic tier=balanced; preferred available provider; model availability is discovery/config based.
-- **specification_validator**: provider `agy`, model `CLI default`, tier `balanced` — Heuristic tier=balanced; preferred available provider; model availability is discovery/config based.
-- **planning**: provider `agy`, model `CLI default`, tier `strong` — Heuristic tier=strong; preferred available provider; model availability is discovery/config based.
-- **plan_validator**: provider `agy`, model `CLI default`, tier `balanced` — Heuristic tier=balanced; preferred available provider; model availability is discovery/config based.
-- **tasks**: provider `agy`, model `CLI default`, tier `balanced` — Heuristic tier=balanced; preferred available provider; model availability is discovery/config based.
-- **tasks_validator**: provider `agy`, model `CLI default`, tier `balanced` — Heuristic tier=balanced; preferred available provider; model availability is discovery/config based.
-- **cross_artifact_validator**: provider `agy`, model `CLI default`, tier `strong` — Heuristic tier=strong; preferred available provider; model availability is discovery/config based.
-- **test_designer**: provider `agy`, model `CLI default`, tier `coding_strong` — Heuristic tier=coding_strong; preferred available provider; model availability is discovery/config based.
-- **test_validator**: provider `agy`, model `CLI default`, tier `balanced` — Heuristic tier=balanced; preferred available provider; model availability is discovery/config based.
-- **coder**: provider `agy`, model `CLI default`, tier `coding_strong` — Heuristic tier=coding_strong; preferred available provider; model availability is discovery/config based.
-- **refactorer**: provider `agy`, model `CLI default`, tier `coding_strong` — Heuristic tier=coding_strong; preferred available provider; model availability is discovery/config based.
-- **code_reviewer**: provider `agy`, model `CLI default`, tier `strong` — Heuristic tier=strong; preferred available provider; model availability is discovery/config based.
-- **debugger**: provider `agy`, model `CLI default`, tier `strong` — Heuristic tier=strong; preferred available provider; model availability is discovery/config based.
-- **final_reviewer**: provider `agy`, model `CLI default`, tier `strong` — Heuristic tier=strong; preferred available provider; model availability is discovery/config based.
+| Role | Provider | Model | Tier | Tier source | Independence | Reason |
+|---|---|---|---|---|---|---|
+| `constitution` | `agy` | `gemini-3.8-flash-medium` | `balanced` | `config` | `n/a` | capabilities DOCUMENT_GENERATION, REASONING matched; role preference #1; config tier evidence for balanced; base=216.0, historical=0.0, confidence=0.00, mode=observe; score=216.0 |
+| `constitution_validator` | `codex` | `gpt-6-sol` | `balanced` | `config` | `true` | capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider agy |
+| `specification` | `agy` | `gemini-3.8-flash-medium` | `balanced` | `config` | `n/a` | capabilities DOCUMENT_GENERATION, REASONING matched; role preference #1; config tier evidence for balanced; base=216.0, historical=0.0, confidence=0.00, mode=observe; score=216.0 |
+| `specification_validator` | `codex` | `gpt-6-sol` | `balanced` | `config` | `true` | capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=241.0, historical=0.0, confidence=0.00, mode=observe; score=241.0; different from author provider agy |
+| `planning` | `codex` | `gpt-6-astra` | `strong` | `config` | `n/a` | capabilities DOCUMENT_GENERATION, REASONING matched; role preference #1; config tier evidence for strong; base=220.0, historical=0.0, confidence=0.00, mode=observe; score=220.0 |
+| `plan_validator` | `agy` | `gemini-3.8-flash-medium` | `balanced` | `config` | `true` | capabilities REASONING, VALIDATION matched; role preference #2; config tier evidence for balanced; base=214.0, historical=0.0, confidence=0.00, mode=observe; score=214.0; different from author provider codex |
+| `tasks` | `agy` | `gemini-3.8-flash-medium` | `balanced` | `config` | `n/a` | capabilities DOCUMENT_GENERATION, REASONING matched; role preference #1; config tier evidence for balanced; base=216.0, historical=0.0, confidence=0.00, mode=observe; score=216.0 |
+| `tasks_validator` | `codex` | `gpt-6-sol` | `balanced` | `config` | `true` | capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider agy |
+| `cross_artifact_validator` | `codex` | `gpt-6-astra` | `strong` | `config` | `true` | capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for strong; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider agy |
+| `test_designer` | `codex` | `gpt-6-sol` | `coding_strong` | `config` | `n/a` | capabilities CODING, FILE_EDITING matched; role preference #1; config tier evidence for coding_strong; base=225.0, historical=0.0, confidence=0.00, mode=observe; score=225.0 |
+| `test_validator` | `agy` | `gemini-3.8-flash-medium` | `balanced` | `config` | `true` | capabilities REASONING, VALIDATION matched; role preference #2; config tier evidence for balanced; base=214.0, historical=0.0, confidence=0.00, mode=observe; score=214.0; different from author provider codex |
+| `coder` | `opencode` | `opencode-go/kimi-k2.7-code` | `coding_strong` | `config` | `true` | capabilities CODING, FILE_EDITING, SHELL matched; role preference #1; config tier evidence for coding_strong; base=239.0, historical=0.0, confidence=0.00, mode=observe; score=239.0; different from author provider codex |
+| `refactorer` | `opencode` | `opencode-go/kimi-k2.7-code` | `coding_strong` | `config` | `n/a` | capabilities CODING, FILE_EDITING matched; role preference #1; config tier evidence for coding_strong; base=223.0, historical=0.0, confidence=0.00, mode=observe; score=223.0 |
+| `code_reviewer` | `codex` | `gpt-6-astra` | `strong` | `config` | `true` | capabilities CODING, VALIDATION matched; role preference #1; config tier evidence for strong; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider opencode |
+| `debugger` | `codex` | `gpt-6-astra` | `strong` | `config` | `n/a` | capabilities CODING, REASONING matched; role preference #1; config tier evidence for strong; base=220.0, historical=0.0, confidence=0.00, mode=observe; score=220.0 |
+| `final_reviewer` | `codex` | `gpt-6-astra` | `strong` | `config` | `true` | capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for strong; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider opencode |
