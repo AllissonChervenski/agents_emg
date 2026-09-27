@@ -1,0 +1,112 @@
+Refusing to run agents: Git working tree has uncommitted changes. Commit or stash them before execution.
+Workflow: Constitution → Spec → Plan → Tasks → Cross validation → TDD (Analyze/Red/Green/Refactor/Review) → Final verification
+Roles: constitution, constitution_validator, specification, specification_validator, planning, plan_validator, tasks, tasks_validator, cross_artifact_validator, test_designer, test_validator, coder, refactorer, code_reviewer, final_reviewer
+  constitution                agy       gemini-3.8-flash-medium                  balanced       tier_source=config score=216.0 independence=n/a selection_mode=exploitation
+    selected_by_policy: agy/gemini-3.8-flash-medium; historical_recommendation: agy/gemini-3.8-flash-medium
+    reason: capabilities DOCUMENT_GENERATION, REASONING matched; role preference #1; config tier evidence for balanced; base=216.0, historical=0.0, confidence=0.00, mode=observe; score=216.0; fallback_chain: codex/gpt-6-sol, codex/gpt-5.6-terra, agy/gemini-3.6-flash-medium (+58 more; use route explain)
+    task_profile: DOCUMENT/LOW/HIGH/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=agy/gemini-3.8-flash-medium; recommendation=LUNA satisfies LOW/HIGH/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  constitution_validator      codex     gpt-6-sol                                balanced       tier_source=config score=236.0 independence=true selection_mode=exploitation
+    selected_by_policy: codex/gpt-6-sol; historical_recommendation: codex/gpt-6-sol
+    reason: capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider agy; fallback_chain: codex/gpt-5.6-terra, codex/gpt-5.6-sol, codex/gpt-5.5 (+44 more; use route explain)
+    task_profile: VALIDATION/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=codex/gpt-6-sol; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  specification               agy       gemini-3.8-flash-medium                  balanced       tier_source=config score=216.0 independence=n/a selection_mode=exploitation
+    selected_by_policy: agy/gemini-3.8-flash-medium; historical_recommendation: agy/gemini-3.8-flash-medium
+    reason: capabilities DOCUMENT_GENERATION, REASONING matched; role preference #1; config tier evidence for balanced; base=216.0, historical=0.0, confidence=0.00, mode=observe; score=216.0; fallback_chain: codex/gpt-6-sol, codex/gpt-5.6-terra, agy/gemini-3.6-flash-medium (+58 more; use route explain)
+    task_profile: SPECIFICATION/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=agy/gemini-3.8-flash-medium; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  specification_validator     codex     gpt-6-sol                                balanced       tier_source=config score=241.0 independence=true selection_mode=exploitation
+    selected_by_policy: codex/gpt-6-sol; historical_recommendation: codex/gpt-6-sol
+    reason: capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=241.0, historical=0.0, confidence=0.00, mode=observe; score=241.0; different from author provider agy; fallback_chain: codex/gpt-5.6-terra, codex/gpt-5.6-sol, codex/gpt-5.5 (+44 more; use route explain)
+    task_profile: VALIDATION/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=codex/gpt-6-sol; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  planning                    codex     gpt-6-sol                                balanced       tier_source=config score=220.0 independence=n/a selection_mode=exploitation
+    selected_by_policy: codex/gpt-6-sol; historical_recommendation: codex/gpt-6-sol
+    reason: capabilities DOCUMENT_GENERATION, REASONING matched; role preference #1; config tier evidence for balanced; base=220.0, historical=0.0, confidence=0.00, mode=observe; score=220.0; fallback_chain: codex/gpt-5.6-terra, agy/gemini-3.8-flash-medium, codex/gpt-5.6-sol (+58 more; use route explain)
+    task_profile: PLANNING/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=codex/gpt-6-sol; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  plan_validator              agy       gemini-3.8-flash-medium                  balanced       tier_source=config score=214.0 independence=true selection_mode=exploitation
+    selected_by_policy: agy/gemini-3.8-flash-medium; historical_recommendation: agy/gemini-3.8-flash-medium
+    reason: capabilities REASONING, VALIDATION matched; role preference #2; config tier evidence for balanced; base=214.0, historical=0.0, confidence=0.00, mode=observe; score=214.0; different from author provider codex; fallback_chain: agy/gemini-3.6-flash-medium, agy/gemini-3.7-flash-medium, agy/gpt-oss-120b-medium (+51 more; use route explain)
+    task_profile: VALIDATION/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: agy/gemini-3.8-flash-medium; preferred_starting_level: OTHER; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+  tasks                       agy       gemini-3.8-flash-medium                  balanced       tier_source=config score=216.0 independence=n/a selection_mode=exploitation
+    selected_by_policy: agy/gemini-3.8-flash-medium; historical_recommendation: agy/gemini-3.8-flash-medium
+    reason: capabilities DOCUMENT_GENERATION, REASONING matched; role preference #1; config tier evidence for balanced; base=216.0, historical=0.0, confidence=0.00, mode=observe; score=216.0; fallback_chain: codex/gpt-6-sol, codex/gpt-5.6-terra, agy/gemini-3.6-flash-medium (+58 more; use route explain)
+    task_profile: PLANNING/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=agy/gemini-3.8-flash-medium; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  tasks_validator             codex     gpt-6-sol                                balanced       tier_source=config score=236.0 independence=true selection_mode=exploitation
+    selected_by_policy: codex/gpt-6-sol; historical_recommendation: codex/gpt-6-sol
+    reason: capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider agy; fallback_chain: codex/gpt-5.6-terra, codex/gpt-5.6-sol, codex/gpt-5.5 (+44 more; use route explain)
+    task_profile: VALIDATION/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=codex/gpt-6-sol; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  cross_artifact_validator    codex     gpt-6-sol                                balanced       tier_source=config score=236.0 independence=true selection_mode=exploitation
+    selected_by_policy: codex/gpt-6-sol; historical_recommendation: codex/gpt-6-sol
+    reason: capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider agy; fallback_chain: codex/gpt-5.6-terra, codex/gpt-5.6-sol, codex/gpt-5.5 (+44 more; use route explain)
+    task_profile: VALIDATION/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=codex/gpt-6-sol; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  test_designer               codex     gpt-6-sol                                coding_strong  tier_source=config score=225.0 independence=n/a selection_mode=exploitation
+    selected_by_policy: codex/gpt-6-sol; historical_recommendation: codex/gpt-6-sol
+    reason: capabilities CODING, FILE_EDITING matched; role preference #1; config tier evidence for coding_strong; base=225.0, historical=0.0, confidence=0.00, mode=observe; score=225.0; fallback_chain: codex/gpt-5.5, codex/gpt-5.6-sol, opencode/opencode-go/kimi-k2.7-code (+58 more; use route explain)
+    task_profile: TEST_DESIGN/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=codex/gpt-6-sol; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  test_validator              agy       gemini-3.8-flash-medium                  balanced       tier_source=config score=214.0 independence=true selection_mode=exploitation
+    selected_by_policy: agy/gemini-3.8-flash-medium; historical_recommendation: agy/gemini-3.8-flash-medium
+    reason: capabilities REASONING, VALIDATION matched; role preference #2; config tier evidence for balanced; base=214.0, historical=0.0, confidence=0.00, mode=observe; score=214.0; different from author provider codex; fallback_chain: agy/gemini-3.6-flash-medium, agy/gemini-3.7-flash-medium, agy/gpt-oss-120b-medium (+51 more; use route explain)
+    task_profile: TEST_VALIDATION/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: agy/gemini-3.8-flash-medium; preferred_starting_level: OTHER; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+  coder                       opencode  opencode-go/kimi-k2.7-code               coding_strong  tier_source=config score=239.0 independence=true selection_mode=exploitation
+    selected_by_policy: opencode/opencode-go/kimi-k2.7-code; historical_recommendation: opencode/opencode-go/kimi-k2.7-code
+    reason: capabilities CODING, FILE_EDITING, SHELL matched; role preference #1; config tier evidence for coding_strong; base=239.0, historical=0.0, confidence=0.00, mode=observe; score=239.0; different from author provider codex; fallback_chain: opencode/opencode-go/deepseek-v4-pro, opencode/opencode-go/mimo-v2.5-pro, opencode/opencode-go/mimo-v2.6-pro (+51 more; use route explain)
+    task_profile: CODING/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: opencode/opencode-go/qwen3.8-flash; preferred_starting_level: CODING_ECONOMY; mode=observe; estimated_savings=unknown
+    ponytail: compact (prompt); caveman: compact (prompt); policy_overhead_estimate=51 tokens
+    policy_difference: selected_by_policy=opencode/opencode-go/kimi-k2.7-code; recommendation=CODING_ECONOMY satisfies LOW/LOW/LOCAL with expected quality 0.90 (heuristic_prior); cost unknown
+  refactorer                  opencode  opencode-go/kimi-k2.7-code               coding_strong  tier_source=config score=223.0 independence=n/a selection_mode=exploitation
+    selected_by_policy: opencode/opencode-go/kimi-k2.7-code; historical_recommendation: opencode/opencode-go/kimi-k2.7-code
+    reason: capabilities CODING, FILE_EDITING matched; role preference #1; config tier evidence for coding_strong; base=223.0, historical=0.0, confidence=0.00, mode=observe; score=223.0; fallback_chain: codex/gpt-6-sol, codex/gpt-5.5, codex/gpt-5.6-sol (+58 more; use route explain)
+    task_profile: REFACTOR/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: compact (prompt); caveman: compact (prompt); policy_overhead_estimate=51 tokens
+    policy_difference: selected_by_policy=opencode/opencode-go/kimi-k2.7-code; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  code_reviewer               codex     gpt-6-sol                                balanced       tier_source=config score=236.0 independence=true selection_mode=exploitation
+    selected_by_policy: codex/gpt-6-sol; historical_recommendation: codex/gpt-6-sol
+    reason: capabilities CODING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider opencode; fallback_chain: codex/gpt-5.6-terra, agy/gemini-3.8-flash-medium, codex/gpt-5.6-sol (+17 more; use route explain)
+    task_profile: REVIEW/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=codex/gpt-6-sol; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+  final_reviewer              codex     gpt-6-sol                                balanced       tier_source=config score=236.0 independence=true selection_mode=exploitation
+    selected_by_policy: codex/gpt-6-sol; historical_recommendation: codex/gpt-6-sol
+    reason: capabilities REASONING, VALIDATION matched; role preference #1; config tier evidence for balanced; base=236.0, historical=0.0, confidence=0.00, mode=observe; score=236.0; different from author provider opencode; fallback_chain: codex/gpt-5.6-terra, agy/gemini-3.8-flash-medium, codex/gpt-5.6-sol (+17 more; use route explain)
+    task_profile: REVIEW/LOW/LOW/LOCAL; routing_profile=balanced
+    cost_aware_recommendation: codex/gpt-6-luna; preferred_starting_level: LUNA; mode=observe; estimated_savings=unknown
+    ponytail: off (off); caveman: compact (prompt); policy_overhead_estimate=22 tokens
+    policy_difference: selected_by_policy=codex/gpt-6-sol; recommendation=LUNA satisfies LOW/LOW/LOCAL with expected quality 0.92 (heuristic_prior); cost unknown
+Escalation ladder: LUNA (codex/gpt-6-luna) → SOL (codex/gpt-6-sol) → SONNET (agy/claude-sonnet-4-6) → ASTRA (codex/gpt-6-astra)
+Extraordinary fallback: {"provider": "agy", "model": "claude-opus-4-6-thinking"}
+Validation gates: artifacts; cross-artifact; test validation; RED expected failure; GREEN; regression; review; deterministic final verification
+Task tests: selected from TestDesigner.created_tests and test_commands per task
+Configured verification commands: {"task_tests": [], "regression_tests": [{"name": "regression suite", "command": ["python", "-m", "pytest", "-q"]}], "build": [{"name": "Python wheel", "command": ["python", "-m", "pip", "wheel", "--no-deps", ".", "--wheel-dir", ".orchestrator/build"]}], "tests": [{"name": "full pytest suite", "command": ["python", "-m", "pytest", "-q"]}], "lint": [{"name": "Ruff lint", "command": ["python", "-m", "ruff", "check", "orchestrator", "tests"]}], "type": [{"name": "mypy type checking", "command": ["python", "-m", "mypy"]}], "static": [], "syntax": [{"name": "Python syntax", "command": ["python", "-m", "compileall", "-q", "orchestrator", "tests"]}], "requirements": [{"requirement_id": "ORCH-MODEL-DISCOVERY", "checks": [{"name": "model discovery tests", "command": ["python", "-m", "pytest", "-q", "tests/test_model_discovery.py"]}]}, {"requirement_id": "ORCH-ROUTING-AND-HARNESS", "checks": [{"name": "routing and harness tests", "command": ["python", "-m", "pytest", "-q", "tests/test_routing_and_verification_v2.py"]}]}, {"requirement_id": "ORCH-TDD-CONTRACT", "checks": [{"name": "task-specific TDD tests", "command": ["python", "-m", "pytest", "-q", "tests/test_tdd_contract_v3.py", "tests/test_tdd_execution_v3.py"]}]}, {"requirement_id": "ORCH-TRACE-METRICS", "checks": [{"name": "trace and metrics tests", "command": ["python", "-m", "pytest", "-q", "tests/test_trace_metrics_gate_v3.py"]}]}]}
+Suggested verification commands (review with `configure`): {"task_tests": [], "regression_tests": [{"name": "pytest regression", "command": ["python", "-m", "pytest", "-q"], "reason": "Python tests found"}], "build": [{"name": "Python wheel", "command": ["python", "-m", "pip", "wheel", "--no-deps", "."], "reason": "pyproject.toml declares a build system; requires declared build dependencies"}], "tests": [{"name": "pytest full suite", "command": ["python", "-m", "pytest", "-q"], "reason": "Python tests found"}], "lint": [{"name": "ruff", "command": ["ruff", "check", "."], "reason": "Ruff configuration found"}], "type": [{"name": "mypy", "command": ["python", "-m", "mypy"], "reason": "Mypy configuration found"}], "static": [], "syntax": [{"name": "Python syntax", "command": ["python", "-m", "compileall", "-q", "orchestrator"], "reason": "Python package found; syntax check only"}], "requirements": []}
