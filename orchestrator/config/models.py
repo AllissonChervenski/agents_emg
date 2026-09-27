@@ -39,6 +39,8 @@ class ProviderCapabilities:
     capabilities: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     model_details: list[ModelCapabilities] = field(default_factory=list)
+    supports_ponytail: bool | None = None
+    supports_caveman: bool | None = None
 
 
 @dataclass
@@ -90,4 +92,6 @@ class Config:
     timeouts: dict[str, int] = field(default_factory=lambda: {"provider": 600, "verification": 600})
     routing: dict[str, Any] = field(default_factory=lambda: {"adaptive_routing_mode":"observe","historical_min_samples":10,"decay_half_life_days":30,"exploration_rate":0.05})
     real_run: dict[str, Any] = field(default_factory=lambda: {"safety_mode":"strict","max_agent_calls_per_task":12,"max_agent_calls_per_workflow":100,"max_retries":3,"max_wall_time":7200})
+    cost_optimization: dict[str, Any] = field(default_factory=lambda: {"mode":"observe","profile":"balanced","ladder":[]})
+    execution_policies: dict[str, Any] = field(default_factory=lambda: {"prompt_fallback":False,"ponytail_roles":["coder","refactorer"]})
     path: Path = Path("orchestrator.yaml")

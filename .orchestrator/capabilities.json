@@ -296,7 +296,9 @@
         "confidence": "high",
         "metadata": {}
       }
-    ]
+    ],
+    "supports_ponytail": null,
+    "supports_caveman": null
   },
   "opencode": {
     "provider": "opencode",
@@ -1314,7 +1316,9 @@
           "output_cost": 0
         }
       }
-    ]
+    ],
+    "supports_ponytail": null,
+    "supports_caveman": null
   },
   "codex": {
     "provider": "codex",
@@ -1676,6 +1680,8 @@
           ]
         }
       }
-    ]
+    ],
+    "supports_ponytail": null,
+    "supports_caveman": null
   }
 }

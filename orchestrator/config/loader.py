@@ -41,4 +41,6 @@ def load_config(path: str | Path = "orchestrator.yaml") -> Config:
         human_gates=data.get("human_gates", {}), timeouts=data.get("timeouts", {"provider": 600, "verification": 600}), path=p,
         routing={**Config().routing,**data.get("routing",{})},
         real_run={**Config().real_run,**data.get("real_run",{})},
+        cost_optimization={**Config().cost_optimization,**data.get("cost_optimization",{})},
+        execution_policies={**Config().execution_policies,**data.get("execution_policies",{})},
     )

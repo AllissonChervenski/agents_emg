@@ -6,6 +6,32 @@ from pathlib import Path
 from typing import Any
 
 
+def extract_usage(provider: str, stdout: str, structured: Any = None) -> dict[str, int | float]:
+    """Keep only numeric counters explicitly reported by the CLI."""
+    events=[]
+    if isinstance(structured,dict): events.append(structured)
+    if provider in {"codex","opencode"}:
+        for line in stdout.splitlines():
+            try: item=json.loads(line)
+            except ValueError: continue
+            if isinstance(item,dict): events.append(item)
+    usage={}
+    for event in events:
+        data=event.get("usage")
+        if provider=="opencode" and event.get("type")=="step_finish":
+            part=event.get("part") or {}
+            data=part.get("tokens") if isinstance(part,dict) else None
+            reported_cost=part.get("cost") if isinstance(part,dict) else None
+            if isinstance(reported_cost,(int,float)) and not isinstance(reported_cost,bool): usage["reported_cost"]=reported_cost
+        if not isinstance(data,dict): continue
+        for key,aliases in {"input_tokens":("input_tokens","input"),"output_tokens":("output_tokens","output"),"total_tokens":("total_tokens","total")}.items():
+            value=next((data[name] for name in aliases if isinstance(data.get(name),(int,float)) and not isinstance(data.get(name),bool)),None)
+            if value is not None: usage[key]=int(value)
+    if "total_tokens" not in usage and "input_tokens" in usage and "output_tokens" in usage:
+        usage["total_tokens"]=usage["input_tokens"]+usage["output_tokens"]
+    return usage
+
+
 def resolve_binary(binary: str) -> str | None:
     """Resolve mise-managed shims to their real installed executable when possible."""
     mise = shutil.which("mise")
@@ -36,7 +62,8 @@ def execute(provider: str, model: str | None, role: str, command: list[str], cwd
             structured = json.loads(out)
         except (ValueError, TypeError):
             pass
-        return AgentResult(provider, model, role, cp.returncode == 0, cp.returncode, out, cp.stderr or "", time.monotonic()-start, structured, error=None if cp.returncode == 0 else "PROVIDER_FAILURE")
+        return AgentResult(provider, model, role, cp.returncode == 0, cp.returncode, out, cp.stderr or "", time.monotonic()-start, structured,
+                           usage=extract_usage(provider,out,structured),error=None if cp.returncode == 0 else "PROVIDER_FAILURE")
     except (OSError, subprocess.TimeoutExpired) as exc:
         return AgentResult(provider, model, role, False, None, duration=time.monotonic()-start, error=f"PROVIDER_FAILURE: {exc}")
 

@@ -228,6 +228,8 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
             task.evidence["green"]["attempts"][-1]["regression"]=[{"command":result.command,"status":result.status} for result in early_regression]
             if early_regression and not all(result.success for result in early_regression): task.evidence["green_regression_failed"]=True
             green_pass=bool(early_regression) and all(result.success for result in early_regression)
+        if not green_pass and any(result.status=="FAIL" for result in green_results) and hasattr(runner,"record_model_feedback"):
+            runner.record_model_feedback(coder,"GREEN_IMPLEMENTATION_FAILURE","Validated task tests still fail after implementation")
         if green_pass:
             gate.green(True); task.evidence["green_attempts"]=task.attempts["green"]+1; checkpoint("GREEN_VALIDATED"); break
         task.attempts["green"]+=1
@@ -275,6 +277,8 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     if review_result and review_result.status=="PASS":
         gate.review(True, bool(task.requirements and task.evidence.get("red_test_files")), "PASS")
     else:
+        if review_result and "coder" in locals() and hasattr(runner,"record_model_feedback"):
+            runner.record_model_feedback(coder,"REVIEW_REJECTION",review_result.summary)
         task.advance(TDDPhase.BLOCKED)
     save()
     task.evidence["final_status"]=task.phase.value

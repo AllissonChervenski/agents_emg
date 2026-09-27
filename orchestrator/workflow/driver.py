@@ -42,6 +42,8 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
         runner.record_validation(reviewer,validation)
         if getattr(runner,"store",None) and author.usage.get("execution_id"):
             runner.store.update_execution_outcome(author.usage["execution_id"],validator_accepted=validation.status=="PASS",blocked=validation.status=="BLOCKED")
+        if validation.status!="PASS" and hasattr(runner,"record_model_feedback"):
+            runner.record_model_feedback(author,"VALIDATOR_REJECTION",validation.summary)
         last=validation
         if validation.status=="PASS": return author,validation
         if validation.status=="BLOCKED":

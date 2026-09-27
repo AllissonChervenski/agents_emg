@@ -7,6 +7,7 @@ import hashlib
 import time
 from datetime import datetime, timezone
 from orchestrator.agents.history import classify_task
+from orchestrator.agents.cost import TaskProfile
 
 
 def load_prompt(role: str, **values: str) -> str:
@@ -16,12 +17,15 @@ def load_prompt(role: str, **values: str) -> str:
 
 
 class AgentRunner:
-    def __init__(self, providers, router, store=None, workflow_id=None, safety=None):
+    def __init__(self, providers, router, store=None, workflow_id=None, safety=None, cost_router=None, execution_policy_router=None):
         self.providers, self.router, self.store = providers, router, store
         self.on_fallback=None
         self.on_call=None
         self.workflow_id=workflow_id
         self.safety=safety or {}
+        self.cost_router=cost_router
+        self.execution_policy_router=execution_policy_router
+        self.model_feedback=[]
         self.started_at=time.monotonic()
         self.calls=0
         self.task_calls={}
@@ -54,14 +58,25 @@ class AgentRunner:
         return None
 
     def record_validation(self, agent_result, validation_result):
+        malformed=validation_result.summary in ("Could not parse strict validation output","Malformed issue schema")
+        if malformed:
+            self.record_model_feedback(agent_result,"STRUCTURED_OUTPUT_FAILURE",validation_result.summary)
         if not self.store: return
         execution_id=agent_result.usage.get("execution_id")
         if execution_id:
-            self.store.update_execution_outcome(execution_id,structured_output_valid=validation_result.summary not in ("Could not parse strict validation output","Malformed issue schema"),validator_accepted=validation_result.status=="PASS",blocked=validation_result.status=="BLOCKED")
-        if validation_result.summary in ("Could not parse strict validation output","Malformed issue schema"):
+            self.store.update_execution_outcome(execution_id,structured_output_valid=not malformed,validator_accepted=validation_result.status=="PASS",blocked=validation_result.status=="BLOCKED")
+        if malformed:
             self.store.record_metric(agent_result.provider,agent_result.model,agent_result.role,"structured_output_failure")
         elif validation_result.status!="PASS":
             self.store.record_metric(agent_result.provider,agent_result.model,agent_result.role,"validator_rejection")
+
+    def record_model_feedback(self, agent_result, category, reason=""):
+        """Only attributable failures can unlock the next cost escalation level."""
+        event={"provider":agent_result.provider,"model":agent_result.model,"category":category,"reason":reason,
+               "role":agent_result.role,"task_id":agent_result.usage.get("task_id")}
+        self.model_feedback.append(event)
+        if self.store and agent_result.usage.get("execution_id"):
+            self.store.update_execution_outcome(agent_result.usage["execution_id"],model_failure_category=category,model_failure_reason=reason)
 
     def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None):
         invocation_id=str(uuid4())
@@ -71,9 +86,27 @@ class AgentRunner:
             route_excludes.discard(author_provider)
         task_id=task_id or (task or {}).get("id")
         kind,difficulty=classify_task(role,task)
+        profile=TaskProfile.derive(role,task)
         route = self.router.route(role, override_provider=override_provider, override_model=override_model, exclude=route_excludes, author_provider=author_provider,task=task)
+        decision=None
+        if self.cost_router and route.provider!="unavailable":
+            failures=(self.store.model_failure_events(self.workflow_id,task_id,role) if self.store and self.workflow_id else self.model_feedback)
+            decision=self.cost_router.assess(role,route,task,author_provider,failures,override_model,(task or {}).get("astra_escalation_reason"))
+            route=decision["actual_route"]
         if route.provider == "unavailable":
             return AgentResult("unavailable", None, role, False, error="PROVIDER_FAILURE: no provider available")
+        def cost_safety_error(chosen, assessment):
+            if not assessment: return None
+            row=next((item for item in assessment["candidates"] if item["provider"]==chosen.provider and item["model"]==chosen.model),None)
+            if row and row["level"]=="ASTRA" and not assessment["astra_escalation_reason"]:
+                return "ASTRA_ESCALATION_REQUIRED: explicit escalation reason is missing"
+            if row and any("budget exhausted" in reason for reason in row["eligibility_reasons"]):
+                return "BUDGET_EXCEEDED: strong model call limit"
+            if row and row["level"]=="OPUS" and "extraordinary_fallback_requires_override" in row["eligibility_reasons"]:
+                return "OPUS_OVERRIDE_REQUIRED: extraordinary model is outside the normal ladder"
+            return None
+        route_error=cost_safety_error(route,decision)
+        if route_error: return AgentResult(route.provider,route.model,role,False,error=route_error)
         if self.safety.get("safety_mode")=="strict" and role in {"coder","refactorer"} and not allowed_paths:
             return AgentResult(route.provider,route.model,role,False,error="SCOPE_VIOLATION: production files are not declared for this task")
         configured_scope=self.safety.get("file_scopes",{}).get(role)
@@ -90,7 +123,9 @@ class AgentRunner:
             if self.store and self.workflow_id:
                 item=self.store.get_workflow(self.workflow_id)
                 if item: self.store.update_workflow(self.workflow_id,"RUNNING_AGENT",{**item["state"],"running_role":role,"running_task":task_id,"running_provider":chosen.provider,"running_model":chosen.model},task_id)
-            result=self.providers[chosen.provider].run(prompt,role,chosen.model,cwd,timeout,"read" if ROLES[role].validation else None)
+            policy=self.execution_policy_router.select(role,chosen.provider,profile) if self.execution_policy_router else None
+            effective_prompt=(policy.prefix+"\n\n"+prompt) if policy and policy.prefix else prompt
+            result=self.providers[chosen.provider].run(effective_prompt,role,chosen.model,cwd,timeout,"read" if ROLES[role].validation else None)
             if self.safety.get("safety_mode")=="strict":
                 after=self._snapshot(cwd)
                 changed=sorted(path for path in set(before)|set(after) if before.get(path)!=after.get(path))
@@ -108,15 +143,36 @@ class AgentRunner:
             result.usage["validation_independence_reason"]=chosen.reason if author_provider else None
             result.usage["routing_selection_mode"]=chosen.selection_mode
             result.usage["task_type"]=kind; result.usage["task_complexity"]=difficulty
+            result.usage["task_id"]=task_id
+            if policy:
+                result.usage.update({"ponytail_enabled":policy.ponytail_enabled,"caveman_enabled":policy.caveman_enabled,
+                    "policy_source":policy.policy_source,"policy_overhead_estimate":policy.policy_overhead_estimate,
+                    "policy_enabled_reason":policy.policy_enabled_reason})
+            if decision:
+                chosen_cost=next((item for item in decision["candidates"] if item["provider"]==chosen.provider and item["model"]==chosen.model),None)
+                result.usage.update({"cost_aware_recommendation":decision["cost_aware_recommendation"],"cost_aware_mode":decision["mode"],
+                    "escalation_level":next((item["level"] for item in decision["candidates"] if item["provider"]==chosen.provider and item["model"]==chosen.model),None),
+                    "escalation_reason":decision["astra_escalation_reason"],
+                    "estimated_cost":chosen_cost["expected_cost"] if chosen_cost else None})
             if self.store:
-                eid=self.store.record_provider_execution(result,prompt,attempt=attempt,invocation_id=invocation_id,workflow_id=self.workflow_id,task_id=task_id,task_type=kind,task_complexity=difficulty,
-                    outcome={"success":result.success,"first_pass_success":result.success and attempt==1,"attempts":attempt,"blocked":bool(result.error and result.error.startswith(("BUDGET_EXCEEDED","SCOPE_VIOLATION","PARTIAL_WRITE"))),"provider_failure":bool(result.error and result.error.startswith("PROVIDER_FAILURE"))})
+                eid=self.store.record_provider_execution(result,effective_prompt,attempt=attempt,invocation_id=invocation_id,workflow_id=self.workflow_id,task_id=task_id,task_type=kind,task_complexity=difficulty,
+                    outcome={"success":result.success,"first_pass_success":result.success and attempt==1,"attempts":attempt,"blocked":bool(result.error and result.error.startswith(("BUDGET_EXCEEDED","SCOPE_VIOLATION","PARTIAL_WRITE"))),"provider_failure":bool(result.error and result.error.startswith("PROVIDER_FAILURE")),
+                        "task_risk":profile.risk,"task_scope":profile.scope,"input_tokens":result.usage.get("input_tokens"),"output_tokens":result.usage.get("output_tokens"),
+                        "total_tokens":result.usage.get("total_tokens"),"reported_cost":result.usage.get("reported_cost"),"estimated_cost":result.usage.get("estimated_cost"),
+                        "ponytail_enabled":result.usage.get("ponytail_enabled"),"caveman_enabled":result.usage.get("caveman_enabled"),"policy_source":result.usage.get("policy_source"),
+                        "escalation_level":result.usage.get("escalation_level"),"escalation_reason":result.usage.get("escalation_reason")})
                 result.usage["execution_id"]=eid
             return result
         result=execute(route,1)
         provider_failure=(result.error or "").startswith("PROVIDER_FAILURE") or (result.error is None and result.exit_code not in {None,0})
         if not result.success and fallback and provider_failure:
             second = self.router.route(role, exclude=route_excludes | {route.provider}, author_provider=author_provider)
+            if self.cost_router and second.provider!="unavailable":
+                second_decision=self.cost_router.assess(role,second,task,author_provider,(),override_model=None)
+                second=second_decision["actual_route"]
+                decision=second_decision
+            fallback_error=cost_safety_error(second,decision)
+            if fallback_error: return AgentResult(second.provider,second.model,role,False,error=fallback_error)
             if second.provider != "unavailable":
                 if self.on_fallback and not self.on_fallback(role,second.provider,second.model):
                     result.error="PROVIDER_FAILURE: interactive fallback aborted"

@@ -94,6 +94,34 @@ Historical rates use exponential decay: a result aged `d` days has weight `2^(-d
 
 `observe` is the default: it calculates a historical recommendation and keeps the policy selection. `assist` lets mature evidence influence selection. Exploration in `assist` chooses a sufficiently close alternative at the configured rate, only when more than one compatible provider exists. It is disabled for constitution changes, high risk or blocked tasks, and manual overrides. Every route records `selection_mode=exploitation|exploration`. Historical scores are evidence from local executions, not an assertion that one model is universally better.
 
+## Cost and execution policies
+
+`CostAwareRouter` wraps `ModelRouter`: the existing route and independence filter remain the base policy. It derives a deterministic `TaskProfile` with task type, complexity, risk and scope, then evaluates only models present in the current discovered catalog. The configured normal ladder is Luna → Sol → Sonnet 4.6 → Astra; OpenCode economical coding models compete at the starting level. Opus 4.6 is an extraordinary fallback and has a zero automatic budget by default. Model IDs in the configuration are desired matches, never assertions that a CLI has them installed.
+
+Eligibility comes before ranking. A known model capability or context limit can reject a candidate. LOW and MEDIUM work starts at the economical level; HIGH can start at Sol. Repeated attributable implementation, validation, review or structured output failures unlock the next level. Timeouts, rate limits, authentication, CLI failures, lint and infrastructure errors do not count as evidence of model inadequacy. Astra needs an auditable `astra_escalation_reason` or failures at Luna, Sol and Sonnet; it never follows merely from HIGH complexity. Per-task and per-workflow budgets cap Sol, Sonnet, Astra and Opus. When an independent provider is available only at a higher normal level, independence can unlock that level without opening Astra or Opus.
+
+Among eligible models the router orders by escalation level, then by the transparent adjusted score:
+
+```text
+quality = (1 - historical_confidence) × configured_or_heuristic_prior
+        + historical_confidence × (0.65 × success_rate + 0.35 × first_pass_success_rate)
+retry_risk = 1 - quality
+adjusted_score = 100 × quality + 0.03 × base_score - 15 × retry_risk
+                 - 3 × escalation_level - comparable_cost_penalty
+```
+
+The historical confidence and time decay come from the existing empirical router. Initial quality numbers are **heuristic priors**, not measured success probabilities. `expected_cost` is calculated only if the model has manually configured input and output prices *and* the task has estimated input and output tokens. `comparable_cost_penalty` is `min(30, expected_cost × cost_penalty_per_unit)` only when **all eligible candidates** have comparable estimates; otherwise it is zero for all. Unknown cost is never treated as free or expensive. Savings and marginal cost are `unknown` without prices for both compared routes. The ladder is a conservative cost proxy until comparable real prices exist. `route explain` shows capability fit, quality source, confidence, retry risk, base and adjusted scores, eligibility, marginal quality and cost, plus `WHY_ASTRA` and `WHY_OPUS`. Measured cost and token ROI is reported only for contextual groups that meet the minimum sample count.
+
+`cost_optimization.mode: observe` is the default. It records `selected_by_policy` and `cost_aware_recommendation` but does not replace the selected route. `assist` or `adaptive` can apply the recommendation when explicitly configured. A separate `ExecutionPolicyRouter` enables Ponytail for Coder and Refactorer and Caveman for agent prose. The short Ponytail prompt asks for the smallest correct diff while retaining requirements, tests, error handling, security and accessibility. Caveman preserves mandatory schemas, JSON, code, commands, paths, IDs, errors and verification evidence. Native skill support is never assumed. The checked-in `prompt_fallback: true` explicitly enables compact prompt versions when no provider skill is reported; LOW/LOCAL tasks use fewer prompt tokens. The decision records source, overhead estimate and reason. These policies never change SDD/TDD gates or deterministic verification.
+
+```sh
+python -m orchestrator route explain coder
+python -m orchestrator route explain coder --task T018
+python -m orchestrator run --feature "Feature simples" --dry-run
+```
+
+Configure `cost_optimization.profile` as `economical`, `balanced` (default) or `quality`. Even `quality` keeps Astra as a last resort. Set `cost_optimization.quality_priors`, per-model `cost_per_million_input_tokens` and `cost_per_million_output_tokens` in `models.yaml`, and task `estimated_input_tokens`/`estimated_output_tokens` only when you have defensible figures. `strong_model_budgets` and `capability_failures_to_escalate` control escalation. For a deliberate Astra use, supply `astra_escalation_reason` in the task metadata; Opus requires a manual model override or an explicitly enabled extraordinary rule with a positive budget. CLI default and missing model catalogs remain possible when discovery cannot resolve an ID.
+
 ```yaml
 routing:
   adaptive_routing_mode: observe
@@ -121,7 +149,7 @@ python -m orchestrator abort WORKFLOW_ID
 
 Agent validation uses structured results (`PASS`, `REVISE`, `BLOCKED`). TestDesigner must return `task_id`, linked requirement and acceptance criterion IDs, `created_tests`, and task-specific `test_commands`. Python rejects a full-suite RED/GREEN command or a test ID that does not point to a changed test file. RED requires test discovery, a linked assertion failure and an independent semantic validation. Its classification is `EXPECTED_FAILURE`, `INVALID_TEST`, `INFRASTRUCTURE_FAILURE` or `UNEXPECTED_FAILURE`; only the first advances to GREEN. GREEN runs declared task tests first, then regression tests. Any change to protected test or fixture hashes is `TEST_TAMPERING` and blocks GREEN. TestValidator can approve a correction only with `REVISE` and `RETURN_TO_RED`; the task then enters `RED_GENERATE`, and the workflow stops for a formal new RED cycle. A non-TDD exception requires an independent approval and recorded alternative verification.
 
-Each task writes `tdd.json` and `tdd.md` under `.orchestrator/runs/<workflow>/<task>/`. SQLite stores `TraceabilityRecord` entries linking requirement, acceptance criteria, plan decisions, task, test IDs, production files, verification results and final status. `trace [REQUIREMENT_ID]` queries them. `metrics` summarizes provider/model/role runs, success, retries, latency, structured output failures and validator rejections, plus RED/GREEN/regression/tampering rates. Routing behavior remains unchanged by these new metrics.
+Each task writes `tdd.json` and `tdd.md` under `.orchestrator/runs/<workflow>/<task>/`. SQLite stores `TraceabilityRecord` entries linking requirement, acceptance criteria, plan decisions, task, test IDs, production files, verification results and final status. `trace [REQUIREMENT_ID]` queries them. `metrics` summarizes provider/model/role runs, success, retries, latency, structured output failures and validator rejections, plus RED/GREEN/regression/tampering rates. In the default `observe` mode, these metrics inform recommendations without changing the actual route.
 
 ## Verification harness and safety
 

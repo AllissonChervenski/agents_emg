@@ -83,7 +83,8 @@ class StateStore:
         outcome={**{key:None for key in fields},**(outcome or {})}
         outcome["latency"]=result.duration
         safe_result={"provider":result.provider,"model":result.model,"role":result.role,"success":result.success,"exit_code":result.exit_code,"duration":result.duration,
-            "error_code":(result.error or "").split(":",1)[0] or None,"structured_output_present":result.structured_output is not None}
+            "error_code":(result.error or "").split(":",1)[0] or None,"structured_output_present":result.structured_output is not None,
+            "usage":{key:result.usage[key] for key in ("input_tokens","output_tokens","total_tokens","reported_cost") if isinstance(result.usage.get(key),(int,float))}}
         with self.connect() as db:
             db.execute("INSERT INTO provider_executions(id,workflow_id,provider,model,role,prompt_hash,started_at,duration,exit_code,status,result_json,attempt,invocation_id,task_type,task_complexity,task_id,outcome_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (rid,workflow_id,result.provider,result.model,result.role,digest,now,result.duration,result.exit_code,"PASS" if result.success else "FAIL",json.dumps(safe_result),attempt,invocation_id,task_type,task_complexity,task_id,json.dumps(outcome)))
             db.execute("INSERT INTO metrics VALUES(?,?,?,?,?,?,?)", (str(uuid.uuid4()),result.provider,result.model,result.role,"success",1.0 if result.success else 0.0,now))
@@ -113,6 +114,45 @@ class StateStore:
                 "red_attempts":outcome.get("red_attempts",0),"green_attempts":outcome.get("green_attempts",0),
                 "first_pass_green":outcome.get("first_pass_green",False),"refactor_regression":outcome.get("refactor_regression",False),
                 "test_tampering":outcome.get("test_tampering",False),"review_accepted":outcome.get("review_accepted",True)})
+            results[-1].update({key:outcome.get(key) for key in ("task_risk","task_scope","input_tokens","output_tokens","total_tokens","reported_cost","estimated_cost","ponytail_enabled","caveman_enabled","policy_source","escalation_level","escalation_reason","model_failure_category","model_failure_reason")})
+        return results
+
+    def count_provider_model_calls(self, workflow_id, provider, model, task_id=None):
+        query="SELECT COUNT(*) FROM provider_executions WHERE workflow_id=? AND provider=? AND model=?"
+        params=[workflow_id,provider,model]
+        if task_id is not None: query+=" AND task_id=?"; params.append(task_id)
+        with self.connect() as db: return db.execute(query,params).fetchone()[0]
+
+    def model_failure_events(self, workflow_id, task_id=None, role=None):
+        with self.connect() as db:
+            rows=db.execute("SELECT provider,model,role,task_id,outcome_json FROM provider_executions WHERE workflow_id=? ORDER BY started_at",(workflow_id,)).fetchall()
+        events=[]
+        for provider,model,recorded_role,recorded_task,payload in rows:
+            if task_id and recorded_task!=task_id or role and recorded_role!=role: continue
+            data=json.loads(payload or "{}")
+            if data.get("model_failure_category"):
+                events.append({"provider":provider,"model":model,"role":recorded_role,"task_id":recorded_task,
+                               "category":data["model_failure_category"],"reason":data.get("model_failure_reason")})
+        return events
+
+    def cost_roi(self, minimum_samples=10, role=None):
+        groups={}
+        for row in self.routing_history(role=role):
+            key=(row["provider"],row["model"],row["role"],row["task_type"],row["task_complexity"],row.get("task_risk"))
+            groups.setdefault(key,[]).append(row)
+        results=[]
+        for key,rows in groups.items():
+            if len(rows)<minimum_samples: continue
+            successful=sum(bool(row.get("success")) for row in rows)
+            first_green=sum(bool(row.get("first_pass_green")) for row in rows)
+            costs=[row.get("reported_cost") for row in rows]
+            tokens=[row.get("total_tokens") for row in rows]
+            costs_complete=all(isinstance(value,(int,float)) for value in costs)
+            tokens_complete=all(isinstance(value,(int,float)) for value in tokens)
+            results.append({"provider":key[0],"model":key[1],"role":key[2],"task_type":key[3],"complexity":key[4],"risk":key[5],"runs":len(rows),
+                "cost_per_success":sum(costs)/successful if costs_complete and successful else None,
+                "tokens_per_success":sum(tokens)/successful if tokens_complete and successful else None,
+                "cost_per_first_pass_green":sum(costs)/first_green if costs_complete and first_green else None})
         return results
 
     def agent_call_counts(self, workflow_id):

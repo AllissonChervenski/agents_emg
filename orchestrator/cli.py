@@ -13,6 +13,8 @@ from orchestrator.providers import PROVIDERS
 from orchestrator.storage.sqlite import StateStore
 from orchestrator.verification.harness import VerificationHarness, final_verification_pass
 from orchestrator.agents.history import summarize, confidence
+from orchestrator.agents.cost import CostAwareRouter, TaskProfile
+from orchestrator.agents.execution_policy import ExecutionPolicyRouter
 
 
 def _router(root, cfg):
@@ -126,6 +128,7 @@ def run(args):
         cfg.real_run["safety_mode"]="strict"
         cfg.routing["adaptive_routing_mode"]="observe"
         router.config["routing"]={**cfg.routing}
+        cfg.cost_optimization["mode"]="observe"
         args.interactive=True
     feature=args.feature or (Path(args.feature_file).read_text() if args.feature_file else "")
     if not feature.strip(): raise SystemExit("Provide --feature or --feature-file")
@@ -134,9 +137,25 @@ def run(args):
     print("Workflow: Constitution → Spec → Plan → Tasks → Cross validation → TDD (Analyze/Red/Green/Refactor/Review) → Final verification")
     print("Roles:", ", ".join(roles))
     route_plan=build_route_plan(router,roles,{"coder":getattr(args,"coder_provider",None)} if getattr(args,"coder_provider",None) else {})
+    cost_router=CostAwareRouter(router,cfg.cost_optimization)
+    policy_router=ExecutionPolicyRouter(cfg.execution_policies,caps)
+    ladder=[item for item in cfg.cost_optimization.get("ladder",[]) if caps.get(item.get("provider")) and item.get("model") in caps[item["provider"]].models]
+    ladder_text=" → ".join(f"{item['level']} ({item['provider']}/{item['model']})" for item in ladder) or "no configured models discovered"
     for role in roles:
         route=route_plan[role]
         print("  "+format_route(role,route))
+        cost=cost_router.assess(role,route)
+        policy=policy_router.select(role,route.provider,TaskProfile.derive(role))
+        print(f"    task_profile: {cost['task_profile']['task_type']}/{cost['task_profile']['complexity']}/{cost['task_profile']['risk']}/{cost['task_profile']['scope']}; routing_profile={cost['routing_profile']}")
+        print(f"    cost_aware_recommendation: {cost['cost_aware_recommendation'] or 'none'}; preferred_starting_level: {cost['recommended_escalation_level'] or 'unknown'}; mode={cost['mode']}; estimated_savings={cost['estimated_savings'] if cost['estimated_savings'] is not None else 'unknown'}")
+        ponytail_source=policy.policy_source if policy.ponytail_enabled else "off"
+        caveman_source=policy.policy_source if policy.caveman_enabled else "off"
+        print(f"    ponytail: {policy.ponytail_mode} ({ponytail_source}); caveman: {policy.caveman_mode} ({caveman_source}); policy_overhead_estimate={policy.policy_overhead_estimate} tokens")
+        if cost["cost_aware_recommendation"]!=cost["selected_by_policy"]: print(f"    policy_difference: selected_by_policy={cost['selected_by_policy']}; recommendation={cost['reason']}")
+        if route.model and any(item.get("level")=="ASTRA" and item.get("provider")==route.provider and item.get("model")==route.model for item in cfg.cost_optimization.get("ladder",[])):
+            print(f"    WHY_ASTRA: {cost['astra_escalation_reason'] or 'missing; real agent call blocked until justified'}")
+    print("Escalation ladder:",ladder_text)
+    print("Extraordinary fallback:",json.dumps(cfg.cost_optimization.get("extraordinary_fallback",{})))
     print("Validation gates: artifacts; cross-artifact; test validation; RED expected failure; GREEN; regression; review; deterministic final verification")
     print("Task tests: selected from TestDesigner.created_tests and test_commands per task")
     detected=harness.detect()
@@ -173,7 +192,8 @@ def run(args):
         provider_instances["opencode"].agent_map=cfg.providers.get("opencode",{}).get("agent_map",{})
     # Refresh per-adapter discovered flags used to safely construct commands.
     for provider in provider_instances.values(): provider.discover()
-    runner=AgentRunner(provider_instances,router,store,workflow_id=wid,safety=cfg.real_run)
+    runner=AgentRunner(provider_instances,router,store,workflow_id=wid,safety=cfg.real_run,
+        cost_router=CostAwareRouter(router,cfg.cost_optimization,store,wid),execution_policy_router=policy_router)
     from orchestrator.interactive import InteractiveGate
     interactive_gate=InteractiveGate(workspace=root) if getattr(args,"interactive",False) else None
     if interactive_gate:
@@ -255,6 +275,9 @@ def metrics(args):
         print(f"{provider}/{model or 'CLI default'} | {role} | {stats['runs']} | {stats['success_rate']:.2f} | {stats['first_pass_success_rate']:.2f} | {stats['average_attempts']-1:.2f} | {stats['average_latency']:.2f}s | {stats['review_rejection_rate']:.2f} | {stats['regression_failure_rate']:.2f} | {conf:.2f}")
     if not grouped: print("No real execution history recorded")
     print("TDD:",json.dumps(store.summarize_metrics()["tdd"]))
+    roi=store.cost_roi(int(cfg.routing.get("historical_min_samples",10)),getattr(args,"role",None))
+    roi=[item for item in roi if (not getattr(args,"provider",None) or item["provider"]==args.provider) and (not getattr(args,"model",None) or item["model"]==args.model)]
+    print("Cost ROI (contextual minimum samples):",json.dumps(roi))
 
 
 def route_explain(args):
@@ -273,14 +296,24 @@ def route_explain(args):
             except (ValueError,AttributeError): found=None
             if found: task=found; source=str(path); break
     report=router.explain(args.role,task); report["task_metadata_source"]=source if source!="role_default" else ("id_only" if args.task else "role_default")
+    cost=CostAwareRouter(router,cfg.cost_optimization).assess(args.role,router.route(args.role,task=task),task,escalation_reason=getattr(args,"escalation_reason",None))
+    report["cost_aware"]={key:value for key,value in cost.items() if key!="actual_route"}
     if args.json:
         print(json.dumps(report,indent=2)); return
     print(f"Role: {report['role']} | Task: {report['task_type']}/{report['task_complexity']} ({report['task_metadata_source']})")
     print(f"Selected: {report['selected']} | Policy: {report['selected_by_policy']} | Historical: {report['historical_recommendation']} | Mode: {report['selection_mode']}")
+    print(f"Task profile: {cost['task_profile']['task_type']}/{cost['task_profile']['complexity']}/{cost['task_profile']['risk']}/{cost['task_profile']['scope']} | Routing profile: {cost['routing_profile']} | Cost mode: {cost['mode']}")
+    print(f"Cost recommendation: {cost['cost_aware_recommendation'] or 'none'} | Level: {cost['recommended_escalation_level'] or 'none'} | Marginal quality: {cost['marginal_quality_gain'] if cost['marginal_quality_gain'] is not None else 'unknown'} | Marginal cost: {cost['marginal_cost'] if cost['marginal_cost'] is not None else 'unknown'}")
+    print("Reason:",cost["reason"])
     print("Provider/Model | Tier | Base | History | Confidence | Penalties | Final | Capabilities")
     for candidate in report["candidates"]:
         penalties=",".join(f"{name}={value:.1f}" for name,value in candidate["penalties"].items()) or "none"
         print(f"{candidate['provider']}/{candidate['model'] or 'CLI default'} | {candidate['tier']} ({candidate['tier_source']}) | {candidate['base_score']:.1f} | {candidate['historical_score']:.1f} | {candidate['historical_confidence']:.2f} | {penalties} | {candidate['final_score']:.1f} | {','.join(candidate['capabilities'])}")
+    print("Cost candidates: Provider/Model | Level | Capability fit | Quality (source) | Confidence | Expected cost | Retry risk | Base | Adjusted | Eligibility")
+    for item in cost["candidates"]:
+        print(f"{item['provider']}/{item['model']} | {item['level']} | {item['capability_fit']:.1f} | {item['expected_quality']:.2f} ({item['quality_source']}) | {item['historical_confidence']:.2f} | {item['expected_cost'] if item['expected_cost'] is not None else 'unknown'} | {item['retry_risk']:.2f} | {item['base_score']:.1f} | {item['cost_adjusted_score']:.1f} | {item['eligibility']}: {', '.join(item['eligibility_reasons']) or 'sufficient'}")
+        if item["level"]=="ASTRA": print("  WHY_ASTRA:",item["WHY_ASTRA"] or "not eligible without audited escalation reason")
+        if item["level"]=="OPUS": print("  WHY_OPUS:",item["WHY_OPUS"])
 
 
 def resume(args):
@@ -296,12 +329,15 @@ def resume(args):
         cfg.real_run["safety_mode"]="strict"
         cfg.routing["adaptive_routing_mode"]="observe"
         router.config["routing"]={**cfg.routing}
+        cfg.cost_optimization["mode"]="observe"
     harness=VerificationHarness(root,cfg.verification)
     gate=InteractiveGate(workspace=root) if args.interactive or item["state"].get("first_real_run") else None
     def continue_run():
         providers={name:cls() for name,cls in PROVIDERS.items()}
         for provider in providers.values(): provider.discover()
-        runner=AgentRunner(providers,router,store,workflow_id=args.workflow_id,safety=cfg.real_run)
+        runner=AgentRunner(providers,router,store,workflow_id=args.workflow_id,safety=cfg.real_run,
+            cost_router=CostAwareRouter(router,cfg.cost_optimization,store,args.workflow_id),
+            execution_policy_router=ExecutionPolicyRouter(cfg.execution_policies,router.capabilities))
         if gate: runner.on_call=lambda role,provider,model,task,files,outputs: gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task)
         def command_event(event,payload):
             if event=="started":
@@ -362,7 +398,7 @@ def configure(args):
         roles={name:{"tier":spec.tier,"required_capabilities":list(spec.required_capabilities),"preferred_capabilities":list(spec.preferred_capabilities),"preferred_providers":list(spec.preferred_providers)} for name,spec in ROLES.items()}
         for role,author in {"constitution_validator":"constitution","specification_validator":"specification","plan_validator":"planning","tasks_validator":"tasks","test_validator":"test_designer","coder":"test_designer","code_reviewer":"coder","final_reviewer":"coder"}.items():
             roles[role]["prefer_different_provider_from"]=[author]
-        data={"providers":{"preference":["codex","opencode","agy"]},"roles":roles,"timeouts":{"provider":600,"verification":600},"retries":{"artifact_generation":3,"implementation":3,"review":2},"routing":Config().routing,"real_run":Config().real_run,"human_gates":{"mode":"interactive","constitution_change":True},"verification":{key:[{"name":item["name"],"command":item["command"]} for item in suggestions[key]] if key!="requirements" else [] for key in suggestions},"git":{"checkpoint_per_task":True},"logging":{"level":"INFO"}}
+        data={"providers":{"preference":["codex","opencode","agy"]},"roles":roles,"timeouts":{"provider":600,"verification":600},"retries":{"artifact_generation":3,"implementation":3,"review":2},"routing":Config().routing,"cost_optimization":Config().cost_optimization,"execution_policies":Config().execution_policies,"real_run":Config().real_run,"human_gates":{"mode":"interactive","constitution_change":True},"verification":{key:[{"name":item["name"],"command":item["command"]} for item in suggestions[key]] if key!="requirements" else [] for key in suggestions},"git":{"checkpoint_per_task":True},"logging":{"level":"INFO"}}
         config_path.write_text(("# Generated suggestions. Review commands before running workflows.\n"+yaml.safe_dump(data,sort_keys=False)) if yaml else json.dumps(data,indent=2)+"\n")
         print(f"Generated {config_path.name}")
     if not models_path.exists():
@@ -391,7 +427,7 @@ def main():
     p=sub.add_parser("trace"); p.add_argument("requirement_id",nargs="?"); p.set_defaults(func=trace)
     p=sub.add_parser("metrics"); p.add_argument("--role"); p.add_argument("--provider"); p.add_argument("--model"); p.add_argument("--config",default="orchestrator.yaml"); p.set_defaults(func=metrics)
     p=sub.add_parser("route"); route_sub=p.add_subparsers(dest="route_command",required=True)
-    q=route_sub.add_parser("explain"); q.add_argument("role"); q.add_argument("--task"); q.add_argument("--workflow-id"); q.add_argument("--json",action="store_true"); q.add_argument("--config",default="orchestrator.yaml"); q.set_defaults(func=route_explain)
+    q=route_sub.add_parser("explain"); q.add_argument("role"); q.add_argument("--task"); q.add_argument("--workflow-id"); q.add_argument("--escalation-reason"); q.add_argument("--json",action="store_true"); q.add_argument("--config",default="orchestrator.yaml"); q.set_defaults(func=route_explain)
     p=sub.add_parser("verify"); p.add_argument("--config",default="orchestrator.yaml"); p.set_defaults(func=verify)
     p=sub.add_parser("validate"); p.add_argument("artifact"); p.add_argument("--requirement",action="append"); p.set_defaults(func=validate)
     p=sub.add_parser("configure"); p.set_defaults(func=configure)
