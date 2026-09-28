@@ -83,10 +83,21 @@ class StateStore:
         with self.connect() as db:
             row = db.execute("SELECT id,feature,stage,current_task,state_json,created_at,updated_at FROM workflows WHERE id=?", (workflow_id,)).fetchone()
         if not row: return None
-        return dict(zip(("workflow_id","feature","stage","current_task","state","created_at","updated_at"), (*row[:4], json.loads(row[4]), *row[5:])))
+        state = json.loads(row[4])
+        wf = dict(zip(("workflow_id","feature","stage","current_task","state","created_at","updated_at"), (*row[:4], state, *row[5:])))
+        if state.get("last_validation_result"):
+            wf["last_validation_result"] = state["last_validation_result"]
+        return wf
     def list_workflows(self):
-        with self.connect() as db: rows=db.execute("SELECT id,feature,stage,current_task,updated_at FROM workflows ORDER BY updated_at DESC").fetchall()
-        return [dict(zip(("workflow_id","feature","stage","current_task","updated_at"),r)) for r in rows]
+        with self.connect() as db: rows=db.execute("SELECT id,feature,stage,current_task,updated_at,state_json FROM workflows ORDER BY updated_at DESC").fetchall()
+        result = []
+        for r in rows:
+            st = json.loads(r[5] or "{}") if len(r) > 5 else {}
+            item = dict(zip(("workflow_id","feature","stage","current_task","updated_at"), r[:5]))
+            if st.get("last_validation_result"):
+                item["last_validation_result"] = st["last_validation_result"]
+            result.append(item)
+        return result
     def record_provider_execution(self, result, prompt, attempt=1, invocation_id=None, workflow_id=None, task_id=None, task_type=None, task_complexity=None, outcome=None):
         rid = str(uuid.uuid4()); now = datetime.now(timezone.utc).isoformat(); digest=hashlib.sha256(prompt.encode()).hexdigest()
         fields=("success","first_pass_success","attempts","latency","structured_output_valid","validator_accepted","regression_passed","final_verification_passed","blocked","provider_failure","red_valid","red_attempts","green_attempts","first_pass_green","refactor_regression","test_tampering","review_accepted")
@@ -297,6 +308,40 @@ class StateStore:
             command.append(re.sub(r"(?i)(token|api[_-]?key|password|secret)=.+",r"\1=[REDACTED]",part))
         with self.connect() as db:
             db.execute("INSERT INTO verifications VALUES(?,?,?,?)",(str(uuid.uuid4()),workflow_id,json.dumps({"command":command,"category":result.category,"name":result.name,"status":result.status,"exit_code":result.exit_code,"duration":result.duration}),datetime.now(timezone.utc).isoformat()))
+
+    def record_validation(self, workflow_id, entry):
+        rid = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        payload = dict(entry)
+        if "id" not in payload: payload["id"] = rid
+        if "workflow_id" not in payload: payload["workflow_id"] = workflow_id
+        if "timestamp" not in payload: payload["timestamp"] = now
+        with self.connect() as db:
+            db.execute("INSERT INTO validations(id,workflow_id,result_json,created_at) VALUES(?,?,?,?)",
+                       (rid, workflow_id, json.dumps(payload), now))
+            row = db.execute("SELECT state_json FROM workflows WHERE id=?", (workflow_id,)).fetchone()
+            if row:
+                state = json.loads(row[0] or "{}")
+                results = list(state.get("validation_results") or [])
+                results.append(payload)
+                state["validation_results"] = results
+                state["last_validation_result"] = payload
+                db.execute("UPDATE workflows SET state_json=?, updated_at=? WHERE id=?",
+                           (json.dumps(state), now, workflow_id))
+                workspace = state.get("workspace")
+                if workspace:
+                    try:
+                        report_path = Path(workspace) / ".orchestrator" / "reports" / f"{workflow_id}.json"
+                        report_path.parent.mkdir(parents=True, exist_ok=True)
+                        report_path.write_text(json.dumps(state, indent=2))
+                    except Exception:
+                        pass
+        return payload
+
+    def list_validations(self, workflow_id):
+        with self.connect() as db:
+            rows = db.execute("SELECT result_json FROM validations WHERE workflow_id=? ORDER BY created_at", (workflow_id,)).fetchall()
+        return [json.loads(row[0]) for row in rows]
 
     def list_resume_reports(self, workflow_id):
         with self.connect() as db: rows=db.execute("SELECT report_json FROM resume_reports WHERE workflow_id=? ORDER BY created_at",(workflow_id,)).fetchall()

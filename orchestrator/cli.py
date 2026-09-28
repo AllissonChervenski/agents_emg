@@ -224,13 +224,16 @@ def run(args):
         with store.workflow_lock(wid):
             result=run_sdd_workflow(feature,root,runner,harness,cfg,run_dir,approve_constitution,store=store,gate_callback=gate_callback,
                                     clarification_callback=interactive_gate.ask_clarifications if interactive_gate else None)
-        prior=store.get_workflow(wid)["state"]
+        current=store.get_workflow(wid)
+        prior=current["state"] if current else {}
         state={**prior,"stage":"COMPLETE","completed_tasks":result["completed_tasks"],"traceability":result["traceability"],"verification_results":result["final_verification"],"requirement_verification":result["requirement_verification"]}
         store.update_workflow(wid,"COMPLETE",state)
+        (root/".orchestrator"/"reports"/f"{wid}.json").write_text(json.dumps(state,indent=2))
         print(f"Workflow complete: {wid}")
     except WorkflowBlocked as exc:
         stage="ABORTED" if "aborted" in str(exc).lower() else "BLOCKED"
-        state={**store.get_workflow(wid)["state"],"stage":stage,"reason":str(exc)}
+        current=store.get_workflow(wid)
+        state={**(current["state"] if current else {}),"stage":stage,"reason":str(exc)}
         store.update_workflow(wid,stage,state)
         (root/".orchestrator"/"reports"/f"{wid}.json").write_text(json.dumps(state,indent=2))
         print(f"Workflow BLOCKED: {exc}\nWorkflow ID: {wid}")
@@ -249,7 +252,12 @@ def inspect(args):
     store=StateStore(Path.cwd()/".orchestrator"/"state"/"orchestrator.sqlite3")
     item=store.get_workflow(args.workflow_id)
     if not item: raise SystemExit("Workflow not found")
-    print(json.dumps({"workflow":item,"checkpoints":store.checkpoints(args.workflow_id),"resume_reports":store.list_resume_reports(args.workflow_id)},indent=2))
+    print(json.dumps({
+        "workflow": item,
+        "checkpoints": store.checkpoints(args.workflow_id),
+        "resume_reports": store.list_resume_reports(args.workflow_id),
+        "validations": store.list_validations(args.workflow_id),
+    }, indent=2))
 
 
 def checkpoints(args):
@@ -362,10 +370,14 @@ def resume(args):
             result=run_sdd_workflow(item["feature"],root,runner,harness,cfg,root/".orchestrator"/"runs"/args.workflow_id,approve_constitution=approve_constitution,store=store,gate_callback=gate_callback,resume=True,
                                     clarification_callback=gate.ask_clarifications if gate else None)
             current=store.get_workflow(args.workflow_id)
-            store.update_workflow(args.workflow_id,"COMPLETE",{**current["state"],"completed_tasks":result["completed_tasks"],"traceability":result["traceability"],"verification_results":result["final_verification"]})
+            state={**(current["state"] if current else {}),"stage":"COMPLETE","completed_tasks":result["completed_tasks"],"traceability":result["traceability"],"verification_results":result["final_verification"]}
+            store.update_workflow(args.workflow_id,"COMPLETE",state)
+            (root/".orchestrator"/"reports"/f"{args.workflow_id}.json").write_text(json.dumps(state,indent=2))
         except WorkflowBlocked as exc:
             current=store.get_workflow(args.workflow_id)
-            store.update_workflow(args.workflow_id,"BLOCKED",{**current["state"],"reason":str(exc)},current["current_task"])
+            state={**(current["state"] if current else {}),"stage":"BLOCKED","reason":str(exc)}
+            store.update_workflow(args.workflow_id,"BLOCKED",state,current["current_task"] if current else None)
+            (root/".orchestrator"/"reports"/f"{args.workflow_id}.json").write_text(json.dumps(state,indent=2))
     try:
         report=resume_workflow(store,args.workflow_id,root,harness,interactive=gate,continue_fn=continue_run)
     except (ValueError,RuntimeError) as exc: raise SystemExit(str(exc)) from exc

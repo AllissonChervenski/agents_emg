@@ -1,12 +1,15 @@
+from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from string import Template
-from orchestrator.agents.roles import ROLES
-from orchestrator.config.models import AgentResult
 from uuid import uuid4
 import hashlib
+from orchestrator.agents.roles import ROLES
+from orchestrator.config.models import AgentResult
 from orchestrator.agents.history import classify_task
 from orchestrator.agents.cost import TaskProfile
 from orchestrator.agents.skills import SkillDispatcher
+from orchestrator.validation.parser import sanitize_text
 
 
 def load_prompt(role: str, **values: str) -> str:
@@ -27,6 +30,7 @@ class AgentRunner:
         self.execution_policy_router=execution_policy_router
         self.skill_dispatcher=skill_dispatcher or SkillDispatcher(providers)
         self.model_feedback=[]
+        self.validation_results=[]
         self.calls=0
         self.task_calls={}
         self.active_elapsed=0.0
@@ -59,18 +63,75 @@ class AgentRunner:
         if active>=float(self.safety.get("max_wall_time",7200)): return "BUDGET_EXCEEDED: active execution time"
         return None
 
-    def record_validation(self, agent_result, validation_result):
-        malformed=validation_result.summary in ("Could not parse strict validation output","Malformed issue schema")
+    def record_validation(self, agent_result, validation_result, stage=None, evidence=None, raw_response=None):
+        role = getattr(agent_result, "role", "unknown")
+        provider = getattr(agent_result, "provider", "unknown")
+        model = getattr(agent_result, "model", None)
+        if not stage:
+            stage_map = {
+                "constitution_validator": "CONSTITUTION_VALIDATE",
+                "specification_validator": "SPECIFICATION_VALIDATE",
+                "plan_validator": "PLAN_VALIDATE",
+                "tasks_validator": "TASKS_VALIDATE",
+                "test_validator": "RED_VALIDATE",
+                "code_reviewer": "CODE_REVIEW",
+                "final_reviewer": "FINAL_REVIEW",
+            }
+            stage = stage_map.get(role, role.upper())
+
+        status = getattr(validation_result, "status", "BLOCKED")
+        if status not in {"PASS", "REVISE", "BLOCKED", "PARSE_ERROR"}:
+            status = "BLOCKED"
+
+        summary = getattr(validation_result, "summary", "") or ""
+        issues_raw = getattr(validation_result, "issues", []) or []
+        issues = []
+        for issue in issues_raw:
+            if hasattr(issue, "__dataclass_fields__"):
+                iss_dict = asdict(issue)
+            elif hasattr(issue, "__dict__"):
+                iss_dict = dict(issue.__dict__)
+            elif isinstance(issue, dict):
+                iss_dict = dict(issue)
+            else:
+                iss_dict = {"description": str(issue)}
+            for k, v in iss_dict.items():
+                if isinstance(v, str):
+                    iss_dict[k] = sanitize_text(v)
+            issues.append(iss_dict)
+
+        raw = raw_response or getattr(validation_result, "raw_output", "") or getattr(agent_result, "stdout", "") or ""
+        sanitized_raw = sanitize_text(raw)
+        timestamp = getattr(validation_result, "timestamp", "") or datetime.now(timezone.utc).isoformat()
+
+        entry = {
+            "stage": stage,
+            "role": role,
+            "provider": provider,
+            "model": model,
+            "status": status,
+            "reason": sanitize_text(summary),
+            "issues": issues,
+            "evidence": evidence or {},
+            "raw_response": sanitized_raw,
+            "timestamp": timestamp,
+        }
+
+        self.validation_results.append(entry)
+        if self.store and self.workflow_id:
+            self.store.record_validation(self.workflow_id, entry)
+
+        malformed = status == "PARSE_ERROR" or summary in ("Could not parse strict validation output", "Malformed issue schema")
         if malformed:
-            self.record_model_feedback(agent_result,"STRUCTURED_OUTPUT_FAILURE",validation_result.summary)
+            self.record_model_feedback(agent_result, "STRUCTURED_OUTPUT_FAILURE", summary)
         if not self.store: return
-        execution_id=agent_result.usage.get("execution_id")
+        execution_id = agent_result.usage.get("execution_id") if hasattr(agent_result, "usage") and isinstance(agent_result.usage, dict) else None
         if execution_id:
-            self.store.update_execution_outcome(execution_id,structured_output_valid=not malformed,validator_accepted=validation_result.status=="PASS",blocked=validation_result.status=="BLOCKED")
+            self.store.update_execution_outcome(execution_id, structured_output_valid=not malformed, validator_accepted=status == "PASS", blocked=status in {"BLOCKED", "PARSE_ERROR"})
         if malformed:
-            self.store.record_metric(agent_result.provider,agent_result.model,agent_result.role,"structured_output_failure")
-        elif validation_result.status!="PASS":
-            self.store.record_metric(agent_result.provider,agent_result.model,agent_result.role,"validator_rejection")
+            self.store.record_metric(provider, model, role, "structured_output_failure")
+        elif status != "PASS":
+            self.store.record_metric(provider, model, role, "validator_rejection")
 
     def record_model_feedback(self, agent_result, category, reason=""):
         """Only attributable failures can unlock the next cost escalation level."""

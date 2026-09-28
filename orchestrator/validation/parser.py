@@ -19,14 +19,29 @@ def _extract(text: str):
     return None
 
 
+def sanitize_text(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = re.sub(r"(?is)<(thought|thinking|reasoning)>.*?</\1>", "", text)
+    cleaned = re.sub(r"(?is)^<(thought|thinking|reasoning)>.*", "", cleaned)
+    cleaned = re.sub(
+        r"(?i)\b(api[_-]?key|token|password|secret|authorization)\s*[:=]\s*['\"]?[^\s,'\"]+['\"]?",
+        r"\1=[REDACTED]",
+        cleaned,
+    )
+    cleaned = re.sub(r"(?i)\bbearer\s+[a-zA-Z0-9_\-\.]{8,}", "Bearer [REDACTED]", cleaned)
+    cleaned = re.sub(r"\b(ghp_[a-zA-Z0-9]{20,}|sk-[a-zA-Z0-9]{20,}|AIza[a-zA-Z0-9_\-]{30,})", "[REDACTED]", cleaned)
+    return cleaned.strip()
+
+
 def parse_validation(text: str, validator: str, model=None):
     obj = _extract(text)
     if not isinstance(obj, dict) or obj.get("status") not in {"PASS", "REVISE", "BLOCKED"} or not isinstance(obj.get("issues", []), list):
-        return validation_result("BLOCKED", [], "Could not parse strict validation output", validator, model, text)
+        return validation_result("PARSE_ERROR", [], "Could not parse strict validation output", validator, model, text)
     issues = []
     try:
         for item in obj.get("issues", []):
             issues.append(ValidationIssue(str(item["id"]), str(item["severity"]), str(item.get("artifact", "")), str(item.get("location", "")), str(item.get("requirement", "")), str(item["description"]), str(item.get("suggested_action", ""))))
     except (KeyError, TypeError):
-        return validation_result("BLOCKED", [], "Malformed issue schema", validator, model, text)
+        return validation_result("PARSE_ERROR", [], "Malformed issue schema", validator, model, text)
     return validation_result(obj["status"], issues, str(obj.get("summary", "")), validator, model, text)

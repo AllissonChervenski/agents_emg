@@ -1,8 +1,10 @@
 """Sequential deterministic SDD driver; semantic work stays with provider agents."""
 import json
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from orchestrator.agents.runner import load_prompt
+from orchestrator.config.models import ValidationResult
 from orchestrator.validation.parser import parse_validation
 from orchestrator.workflow.tdd import TDDTask
 from orchestrator.workflow.transitions import TDDPhase
@@ -31,6 +33,15 @@ ARTIFACTS = [
 class WorkflowBlocked(RuntimeError): pass
 
 
+def _record_validation(runner, result, validation, stage=None, evidence=None):
+    if not hasattr(runner, "record_validation"):
+        return
+    try:
+        runner.record_validation(result, validation, stage=stage, evidence=evidence)
+    except TypeError:
+        runner.record_validation(result, validation)
+
+
 def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=None):
     """Dispatch a declared SpecKit skill while retaining legacy test doubles."""
     skill_name=ROLES[role].skill_name
@@ -40,7 +51,19 @@ def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=No
     else:
         result=runner.run(role,prompt,cwd=cwd,timeout=timeout,exclude_providers=exclude,
                           allowed_paths=allowed_paths)
-    if not result.success: raise WorkflowBlocked(f"{role} provider failed: {result.error or result.stderr}")
+    if not result.success:
+        if ("validator" in role or "reviewer" in role):
+            v_res = ValidationResult(
+                status="PARSE_ERROR" if not result.error else "BLOCKED",
+                issues=[],
+                summary=result.error or result.stderr or f"{role} provider failed",
+                validator=role,
+                model=result.model,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                raw_output=result.stdout or result.stderr or result.error or ""
+            )
+            _record_validation(runner, result, v_res, stage=role.upper())
+        raise WorkflowBlocked(f"{role} provider failed: {result.error or result.stderr}")
     return result
 
 
@@ -73,17 +96,23 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
         if gate_callback and not gate_callback(validator_role.upper(),validator_role,[],[]): raise WorkflowBlocked(f"Interactive gate aborted before {validator_role}")
         reviewer=_generate(runner,validator_role,load_prompt(validator_role,artifact=path.read_text(),feature=prompt),cwd,timeout,{author.provider})
         validation=parse_validation(reviewer.stdout,validator_role,reviewer.model)
-        runner.record_validation(reviewer,validation)
+        stage_map = {"specification_validator": "SPECIFICATION_VALIDATE", "plan_validator": "PLAN_VALIDATE", "tasks_validator": "TASKS_VALIDATE"}
+        stage_name = stage_map.get(validator_role, validator_role.upper())
+        _record_validation(runner, reviewer, validation, stage=stage_name, evidence={"artifact": str(path), "attempt": attempt})
         if getattr(runner,"store",None) and author.usage.get("execution_id"):
-            runner.store.update_execution_outcome(author.usage["execution_id"],validator_accepted=validation.status=="PASS",blocked=validation.status=="BLOCKED")
+            runner.store.update_execution_outcome(author.usage["execution_id"],validator_accepted=validation.status=="PASS",blocked=validation.status in {"BLOCKED", "PARSE_ERROR"})
         if validation.status!="PASS" and hasattr(runner,"record_model_feedback"):
-            runner.record_model_feedback(author,"VALIDATOR_REJECTION",validation.summary)
+            runner.record_model_feedback(author,"VALIDATOR_REJECTION" if validation.status!="PARSE_ERROR" else "STRUCTURED_OUTPUT_FAILURE",validation.summary)
         last=validation
         if validation.status=="PASS": return author,validation
         if validation.status=="BLOCKED":
             if getattr(runner,"store",None) and author.usage.get("execution_id"):
                 runner.store.update_execution_outcome(author.usage["execution_id"],blocked=True,success=False)
             raise WorkflowBlocked(f"{validator_role} BLOCKED: {validation.summary}; raw={validation.raw_output}")
+        if validation.status=="PARSE_ERROR":
+            if getattr(runner,"store",None) and author.usage.get("execution_id"):
+                runner.store.update_execution_outcome(author.usage["execution_id"],blocked=True,success=False)
+            raise WorkflowBlocked(f"{validator_role} PARSE_ERROR: {validation.summary}; raw={validation.raw_output}")
         prompt += "\nRevise based on these issues: "+json.dumps([issue.__dict__ for issue in validation.issues])
     if getattr(runner,"store",None) and author.usage.get("execution_id"):
         runner.store.update_execution_outcome(author.usage["execution_id"],blocked=True,success=False)
@@ -99,6 +128,10 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
     """Run SDD artifacts and TDD tasks sequentially, stopping on any failed gate."""
     root=Path(workspace).resolve(); out=Path(workflow_dir); out.mkdir(parents=True,exist_ok=True)
     workflow_id=out.name
+    if not getattr(runner, "workflow_id", None):
+        runner.workflow_id = workflow_id
+    if not getattr(runner, "store", None) and store:
+        runner.store = store
     try: layout=ArtifactLayout.discover(root,feature,out)
     except ArtifactDiscoveryError as exc: raise WorkflowBlocked(str(exc)) from exc
     prior={row["transition_id"] for row in store.checkpoints(workflow_id)} if store and resume else set()
@@ -128,9 +161,12 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
     elif constitution.exists():
         if gate_callback and not gate_callback("CONSTITUTION_VALIDATE","constitution_validator",[],[]): raise WorkflowBlocked("Interactive gate aborted before constitution validation")
         cap=runner.run("constitution_validator",load_prompt("constitution_validator",feature=feature,artifact=constitution.read_text()),cwd=root,timeout=config.timeouts.get("provider"))
-        parsed=parse_validation(cap.stdout,"constitution_validator",cap.model) if cap.success else None
-        if parsed: runner.record_validation(cap,parsed)
-        if not parsed or parsed.status!="PASS": raise WorkflowBlocked("Existing constitution did not pass independent validation")
+        if cap.success:
+            parsed=parse_validation(cap.stdout,"constitution_validator",cap.model)
+        else:
+            parsed=ValidationResult("PARSE_ERROR" if not cap.error else "BLOCKED",[],cap.error or cap.stderr or "constitution_validator provider failed","constitution_validator",cap.model,datetime.now(timezone.utc).isoformat(),cap.stdout or cap.stderr or cap.error or "")
+        _record_validation(runner,cap,parsed,stage="CONSTITUTION_VALIDATE",evidence={"artifact":str(constitution)})
+        if parsed.status!="PASS": raise WorkflowBlocked(f"constitution_validator {parsed.status}: {parsed.summary}")
     else:
         if not approve_constitution or not approve_constitution(): raise WorkflowBlocked("Constitution generation requires human approval")
         before=constitution.read_bytes() if constitution.is_file() else None
@@ -142,8 +178,8 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         if gate_callback and not gate_callback("CONSTITUTION_VALIDATE","constitution_validator",[],[]): raise WorkflowBlocked("Interactive gate aborted before constitution validation")
         result=_generate(runner,"constitution_validator",load_prompt("constitution_validator",feature=feature,artifact=generated.stdout),root,config.timeouts.get("provider"),{generated.provider})
         verdict=parse_validation(result.stdout,"constitution_validator",result.model)
-        runner.record_validation(result,verdict)
-        if verdict.status!="PASS": raise WorkflowBlocked(f"Constitution validation: {verdict.status}")
+        _record_validation(runner,result,verdict,stage="CONSTITUTION_VALIDATE",evidence={"artifact":str(constitution)})
+        if verdict.status!="PASS": raise WorkflowBlocked(f"constitution_validator {verdict.status}: {verdict.summary}")
     checkpoint("CONSTITUTION_VALIDATED")
     authors={}
     for author,validator,filename in ARTIFACTS[:1]:
@@ -350,12 +386,12 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         if gate_callback and not gate_callback("FINAL_REVIEW","final_reviewer",[],[]): raise WorkflowBlocked("Interactive gate aborted before final review")
         final_review=_generate(runner,"final_reviewer",load_prompt("final_reviewer",task="whole feature",artifact=json.dumps({"traceability":traceability,"verification":final_results})),root,config.timeouts.get("provider"),{last_coder_provider} if last_coder_provider else None)
         final_verdict=parse_validation(final_review.stdout,"final_reviewer",final_review.model)
-        runner.record_validation(final_review,final_verdict)
+        _record_validation(runner,final_review,final_verdict,stage="FINAL_REVIEW",evidence={"final_results":final_results})
         for record in traceability:
             record["final_status"]="PASS" if final_verdict.status=="PASS" else "BLOCKED"
             if store: store.upsert_traceability(out.name,TraceabilityRecord(**record))
         (out/"traceability.json").write_text(json.dumps(traceability,indent=2))
         (out/"final-review.json").write_text(json.dumps({"status":final_verdict.status,"provider":final_review.provider,"model":final_review.model},indent=2))
-        if final_verdict.status!="PASS": raise WorkflowBlocked(f"Final reviewer: {final_verdict.status}; deterministic checks had passed")
+        if final_verdict.status!="PASS": raise WorkflowBlocked(f"final_reviewer {final_verdict.status}: {final_verdict.summary}; deterministic checks had passed")
         checkpoint("FINAL_REVIEWED")
     return {"completed_tasks":sorted(completed),"traceability":traceability,"final_verification":[r["status"] for r in final_results],"requirement_verification":[asdict(item) for item in harness.requirement_results]}

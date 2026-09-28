@@ -1,0 +1,16 @@
+{
+  "stage": "BLOCKED",
+  "workspace": "/home/allisson/Projects/agents_emg",
+  "first_real_run": true,
+  "attempts": {},
+  "completed_tasks": [],
+  "blocked_tasks": [],
+  "validation_results": [],
+  "verification_results": [],
+  "state_schema_version": 3,
+  "running_role": "constitution_validator",
+  "running_task": null,
+  "running_provider": "codex",
+  "running_model": "gpt-6-luna",
+  "reason": "Existing constitution did not pass independent validation"
+}
