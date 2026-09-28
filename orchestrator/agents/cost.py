@@ -97,12 +97,13 @@ class CostAwareRouter:
         def failed(level):
             return [item for item in failures if self._level(item.get("provider"),item.get("model"),profile)==level]
         retry_limit=max(1,int(self.config.get("capability_failures_to_escalate",2)))
+        coding_economy_fail=len(failed("CODING_ECONOMY"))>=retry_limit
         luna_fail=len(failed("LUNA"))>=retry_limit
         sol_fail=len(failed("SOL"))>=retry_limit
         sonnet_fail=len(failed("SONNET"))>=retry_limit
         max_level=1 if profile.complexity=="HIGH" else 0
         if routing_profile=="quality" and profile.complexity=="HIGH": max_level=2
-        if luna_fail: max_level=max(max_level,1)
+        if coding_economy_fail or luna_fail: max_level=max(max_level,1)
         if sol_fail: max_level=max(max_level,2)
         why_astra=escalation_reason or ("Luna, Sol and Sonnet had repeated attributable failures" if luna_fail and sol_fail and sonnet_fail else None)
         if why_astra: max_level=3
@@ -132,7 +133,7 @@ class CostAwareRouter:
                 reasons.append("extraordinary_fallback_requires_override")
             if level=="ASTRA" and not why_astra: reasons.append("WHY_ASTRA required: no attributable escalation evidence")
             if level_index>max_level and level not in {"OPUS"}: reasons.append(f"level {level} not unlocked")
-            if level in {"LUNA","SOL","SONNET"} and len(failed(level))>=retry_limit:
+            if level in {"LUNA","SOL","SONNET","CODING_ECONOMY"} and len(failed(level))>=retry_limit:
                 reasons.append(f"{level} had repeated attributable failures")
             limits={**DEFAULT_BUDGETS.get(level,{}),**self.config.get("strong_model_budgets",{}).get(level.lower(),{})}
             counts=(usage_counts or {}).get(level)
@@ -145,7 +146,7 @@ class CostAwareRouter:
             if level in DEFAULT_BUDGETS and not manual_opus:
                 if counts.get("task",0)>=limits.get("task",999999) or counts.get("workflow",0)>=limits.get("workflow",999999):
                     reasons.append(f"{level} call budget exhausted")
-            configured_prior=self.config.get("quality_priors",{}).get(level)
+            configured_prior=self.config.get("quality_priors",{}).get(model) or self.config.get("quality_priors",{}).get(level)
             prior=configured_prior or DEFAULT_QUALITY.get(level,DEFAULT_QUALITY["OTHER"])
             expected_quality=float(prior.get(profile.complexity,DEFAULT_QUALITY["OTHER"][profile.complexity]))
             stats=source.get("historical_metrics") or {}

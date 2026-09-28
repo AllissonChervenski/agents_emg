@@ -1,19 +1,55 @@
 {
   "models": {
     "agy": {
-      "gemini-3.8-flash-low": {"tiers": ["fast"], "tier_source": "config"},
-      "gemini-3.8-flash-medium": {"tiers": ["balanced"], "tier_source": "config"},
-      "gemini-3.1-pro-high": {"tiers": ["strong"], "tier_source": "config"},
-      "claude-sonnet-4-6": {"tiers": ["coding_strong"], "tier_source": "config"}
+      "gemini-3.8-flash-low": {
+        "tiers": ["fast"],
+        "tier_source": "config",
+        "capabilities": ["reasoning", "validation", "document_generation"]
+      },
+      "gemini-3.8-flash-medium": {
+        "tiers": ["balanced"],
+        "tier_source": "config",
+        "capabilities": ["reasoning", "validation", "planning", "review", "document_generation"]
+      },
+      "gemini-3.1-pro-high": {
+        "tiers": ["strong"],
+        "tier_source": "config",
+        "capabilities": ["reasoning_strong", "architecture", "complex_validation"]
+      },
+      "claude-sonnet-4-6": {
+        "tiers": ["coding_strong", "balanced"],
+        "tier_source": "config",
+        "capabilities": ["coding", "refactoring", "code_review"]
+      }
     },
     "opencode": {
-      "opencode-go/qwen3.8-flash": {"tiers": ["fast"], "tier_source": "config"},
-      "opencode-go/kimi-k2.7-code": {"tiers": ["coding_strong"], "tier_source": "config"}
+      "opencode-go/qwen3.8-flash": {
+        "tiers": ["fast", "coding_strong"],
+        "tier_source": "config",
+        "capabilities": ["coding", "testing", "implementation", "basic_refactoring"]
+      },
+      "opencode-go/kimi-k2.7-code": {
+        "tiers": ["coding_strong", "balanced"],
+        "tier_source": "config",
+        "capabilities": ["coding", "testing", "implementation", "refactoring", "code_review"]
+      }
     },
     "codex": {
-      "gpt-6-luna": {"tiers": ["fast"], "tier_source": "config"},
-      "gpt-6-sol": {"tiers": ["balanced", "coding_strong"], "tier_source": "config"},
-      "gpt-6-astra": {"tiers": ["strong"], "tier_source": "config"}
+      "gpt-6-luna": {
+        "tiers": ["fast", "balanced", "coding_strong"],
+        "tier_source": "config",
+        "capabilities": ["reasoning", "validation", "planning", "review", "coding"]
+      },
+      "gpt-6-sol": {
+        "tiers": ["balanced", "coding_strong", "strong"],
+        "tier_source": "config",
+        "capabilities": ["reasoning_strong", "coding_strong", "architecture", "complex_validation"]
+      },
+      "gpt-6-astra": {
+        "tiers": ["strong"],
+        "tier_source": "config",
+        "capabilities": ["reasoning_strong", "architecture", "extreme_fallback"]
+      }
     }
   }
 }

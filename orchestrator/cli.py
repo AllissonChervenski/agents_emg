@@ -55,8 +55,11 @@ def doctor(args):
         for model_id in cap.models:
             tiers,source=describe_model(cap,name,model_id,cfg.models)
             detail=next((item for item in cap.model_details if item.model_id==model_id),None)
+            cfg_entry=(cfg.models or {}).get("models",{}).get(name,{}).get(model_id,{})
+            cfg_caps=cfg_entry.get("capabilities",[])
             known=[] if not detail else [field.removeprefix("supports_") for field in ("supports_coding","supports_reasoning","supports_structured_output","supports_file_editing","supports_shell","supports_agentic_work") if getattr(detail,field) is True]
-            print(f"    {model_id}: {','.join(tiers)} tier_source={source}; model_capabilities={','.join(known) or 'unknown'}")
+            all_caps=list(dict.fromkeys(known + cfg_caps))
+            print(f"    {model_id}: {','.join(tiers)} tier_source={source}; model_capabilities={','.join(all_caps) or 'unknown'}")
         if not cap.models: print(f"  {name}: not detected ({cap.metadata.get('model_discovery_error') or 'no catalog returned'})")
     print("\nVerification:")
     harness=VerificationHarness(root,cfg.verification)
@@ -78,7 +81,7 @@ def doctor(args):
     for module,kind in (("ruff","lint"),("mypy","type")):
         if cfg.verification.get(kind) and importlib.util.find_spec(module) is None:
             warnings.append(f"{kind} configured but {module} is not installed in this Python environment")
-    plan=build_route_plan(router,["constitution","constitution_validator","specification","specification_validator","planning","plan_validator","tasks","tasks_validator","test_designer","test_validator","coder","code_reviewer","final_reviewer"])
+    plan=build_route_plan(router,["constitution","constitution_validator","specification","specification_validator","planning","plan_validator","tasks","tasks_validator","consistency_agent","test_designer","test_validator","coder","code_reviewer","final_reviewer"])
     for role,route in plan.items():
         if route.tier_source=="cli_default": warnings.append(f"{role} uses CLI default: {route.reason}")
         elif route.tier_source=="heuristic": warnings.append(f"{role} uses heuristic tier: {route.provider}/{route.model}")
@@ -115,10 +118,13 @@ def models(args):
             tiers,source=describe_model(cap,name,model_id,cfg.models,history)
             metric=history.get((name,model_id),{})
             detail=next((item for item in cap.model_details if item.model_id==model_id),None)
+            cfg_entry=(cfg.models or {}).get("models",{}).get(name,{}).get(model_id,{})
+            cfg_caps=cfg_entry.get("capabilities",[])
             known=[] if not detail else [field.removeprefix("supports_") for field in ("supports_coding","supports_reasoning","supports_structured_output","supports_file_editing","supports_shell","supports_agentic_work") if getattr(detail,field) is True]
+            all_caps=list(dict.fromkeys(known + cfg_caps))
             def fmt(value): return "unknown" if value is None else f"{value:.2f}" if isinstance(value,float) else str(value)
             available="unknown" if detail is None else str(detail.available).lower()
-            print(f"{name} | {model_id} | {available} | {','.join(tiers)} | {source} | {','.join(known) or 'unknown'} | {fmt(metric.get('success_rate'))} | {fmt(metric.get('average_retries'))} | {fmt(metric.get('average_latency'))}")
+            print(f"{name} | {model_id} | {available} | {','.join(tiers)} | {source} | {','.join(all_caps) or 'unknown'} | {fmt(metric.get('success_rate'))} | {fmt(metric.get('average_retries'))} | {fmt(metric.get('average_latency'))}")
     print("Selection report: .orchestrator/model-selection.md")
 
 
@@ -133,8 +139,8 @@ def run(args):
     feature=args.feature or (Path(args.feature_file).read_text() if args.feature_file else "")
     if not feature.strip(): raise SystemExit("Provide --feature or --feature-file")
     harness=VerificationHarness(root,cfg.verification)
-    roles=["constitution","constitution_validator","specification","specification_validator","planning","plan_validator","tasks","tasks_validator","cross_artifact_validator","test_designer","test_validator","coder","refactorer","code_reviewer","final_reviewer"]
-    print("Workflow: Constitution → Spec → Plan → Tasks → Cross validation → TDD (Analyze/Red/Green/Refactor/Review) → Final verification")
+    roles=["constitution","constitution_validator","specification","specification_validator","planning","plan_validator","tasks","tasks_validator","consistency_agent","test_designer","test_validator","coder","refactorer","code_reviewer","final_reviewer"]
+    print("Workflow: Constitution → Spec → Clarify → Checklist → Plan → Tasks → Analysis (speckit-analyze) → TDD (Red/Green/Refactor/Review) → Converge → Final verification")
     print("Roles:", ", ".join(roles))
     route_plan=build_route_plan(router,roles,{"coder":getattr(args,"coder_provider",None)} if getattr(args,"coder_provider",None) else {})
     cost_router=CostAwareRouter(router,cfg.cost_optimization)
@@ -206,7 +212,7 @@ def run(args):
             if item: store.update_workflow(wid,"RUNNING_VERIFICATION",{**item["state"],"running_command":payload["command"]},item["current_task"])
         else: store.record_verification(wid,payload)
     harness.on_command=command_event
-    def gate_callback(stage, role, files=(), commands=()):
+    def gate_callback(stage, role, files=(), commands=(), attempt=1):
         if not interactive_gate: return True
         route=route_plan.get(role)
         return interactive_gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands)
@@ -216,7 +222,8 @@ def run(args):
         return input("Create constitution.md? This is a human-gated project change. Type 'approve': ").strip()=="approve"
     try:
         with store.workflow_lock(wid):
-            result=run_sdd_workflow(feature,root,runner,harness,cfg,run_dir,approve_constitution,store=store,gate_callback=gate_callback)
+            result=run_sdd_workflow(feature,root,runner,harness,cfg,run_dir,approve_constitution,store=store,gate_callback=gate_callback,
+                                    clarification_callback=interactive_gate.ask_clarifications if interactive_gate else None)
         prior=store.get_workflow(wid)["state"]
         state={**prior,"stage":"COMPLETE","completed_tasks":result["completed_tasks"],"traceability":result["traceability"],"verification_results":result["final_verification"],"requirement_verification":result["requirement_verification"]}
         store.update_workflow(wid,"COMPLETE",state)
@@ -352,7 +359,8 @@ def resume(args):
         def approve_constitution():
             return bool(gate and gate_callback("CONSTITUTION_CREATE","constitution",["constitution.md"],[]))
         try:
-            result=run_sdd_workflow(item["feature"],root,runner,harness,cfg,root/".orchestrator"/"runs"/args.workflow_id,approve_constitution=approve_constitution,store=store,gate_callback=gate_callback,resume=True)
+            result=run_sdd_workflow(item["feature"],root,runner,harness,cfg,root/".orchestrator"/"runs"/args.workflow_id,approve_constitution=approve_constitution,store=store,gate_callback=gate_callback,resume=True,
+                                    clarification_callback=gate.ask_clarifications if gate else None)
             current=store.get_workflow(args.workflow_id)
             store.update_workflow(args.workflow_id,"COMPLETE",{**current["state"],"completed_tasks":result["completed_tasks"],"traceability":result["traceability"],"verification_results":result["final_verification"]})
         except WorkflowBlocked as exc:
@@ -395,8 +403,8 @@ def configure(args):
     suggestions=VerificationHarness(root).detect()
     if not config_path.exists():
         from orchestrator.agents.roles import ROLES
-        roles={name:{"tier":spec.tier,"required_capabilities":list(spec.required_capabilities),"preferred_capabilities":list(spec.preferred_capabilities),"preferred_providers":list(spec.preferred_providers)} for name,spec in ROLES.items()}
-        for role,author in {"constitution_validator":"constitution","specification_validator":"specification","plan_validator":"planning","tasks_validator":"tasks","test_validator":"test_designer","coder":"test_designer","code_reviewer":"coder","final_reviewer":"coder"}.items():
+        roles={name:{"tier":spec.tier,"required_capabilities":list(spec.required_capabilities),"preferred_capabilities":list(spec.preferred_capabilities),"preferred_providers":list(spec.preferred_providers)} for name,spec in ROLES.items() if not getattr(spec, "deprecated", False)}
+        for role,author in {"constitution_validator":"constitution","specification_validator":"specification","plan_validator":"planning","tasks_validator":"tasks","consistency_agent":"tasks","test_validator":"test_designer","coder":"test_designer","code_reviewer":"coder","final_reviewer":"coder"}.items():
             roles[role]["prefer_different_provider_from"]=[author]
         data={"providers":{"preference":["codex","opencode","agy"]},"roles":roles,"timeouts":{"provider":600,"verification":600},"retries":{"artifact_generation":3,"implementation":3,"review":2},"routing":Config().routing,"cost_optimization":Config().cost_optimization,"execution_policies":Config().execution_policies,"real_run":Config().real_run,"human_gates":{"mode":"interactive","constitution_change":True},"verification":{key:[{"name":item["name"],"command":item["command"]} for item in suggestions[key]] if key!="requirements" else [] for key in suggestions},"git":{"checkpoint_per_task":True},"logging":{"level":"INFO"}}
         config_path.write_text(("# Generated suggestions. Review commands before running workflows.\n"+yaml.safe_dump(data,sort_keys=False)) if yaml else json.dumps(data,indent=2)+"\n")

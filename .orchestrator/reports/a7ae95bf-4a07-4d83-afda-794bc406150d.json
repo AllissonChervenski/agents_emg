@@ -1,0 +1,12 @@
+{
+  "state_schema_version": 2,
+  "stage": "BLOCKED",
+  "workspace": "/home/allisson/Projects/agents_emg",
+  "first_real_run": true,
+  "attempts": {},
+  "completed_tasks": [],
+  "blocked_tasks": [],
+  "validation_results": [],
+  "verification_results": [],
+  "reason": "Constitution generation requires human approval"
+}

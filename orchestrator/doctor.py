@@ -35,8 +35,9 @@ def write_selection_report(root, capabilities, router):
     lines = ["# Model selection report", "", "Routing uses configured tiers, CLI metadata, history, then low-confidence heuristics. No model is claimed superior without measured evidence.", "", "| Role | Provider | Model | Tier | Tier source | Independence | Reason |", "|---|---|---|---|---|---|---|"]
     from orchestrator.agents.roles import ROLES
     from orchestrator.agents.plan import build_route_plan
-    plan=build_route_plan(router,list(ROLES))
-    for name, role in ROLES.items():
+    canonical_roles = {name: role for name, role in ROLES.items() if not getattr(role, "deprecated", False)}
+    plan=build_route_plan(router,list(canonical_roles))
+    for name, role in canonical_roles.items():
         route=plan[name]
         independence="n/a" if route.independence is None else str(route.independence).lower()
         lines.append(f"| `{name}` | `{route.provider}` | `{route.model or 'CLI default'}` | `{route.tier}` | `{route.tier_source}` | `{independence}` | {route.reason} |")

@@ -25,17 +25,17 @@ flowchart TD
   GV --> RF[Refactor]
   RF --> RV[Regression verification]
   RV --> CR[Independent code review]
-  CR --> B[Build and full tests]
-  B --> LS[Ruff, mypy and syntax checks]
-  LS --> Q[Requirement checks]
-  Q --> H[Final reviewer after deterministic PASS]
+  CR --> B[Configured deterministic verification]
+  B --> CV[SpecKit converge]
+  CV -->|remaining tasks, within limit| D
+  CV -->|converged| H[Final reviewer after deterministic PASS]
   H --> CP[Durable checkpoint and next task]
   CP --> RES[Resume: fingerprint and last gate revalidation]
   RES -->|clean or safe| CP
   RES -->|unsafe| STOP[Inspect, abort or explicit reconciliation]
 ```
 
-The TDD state machine is explicit in `orchestrator/workflow/transitions.py`; `TDDGate` enforces task evidence in `orchestrator/tdd.py`. The workflow completes only after the final deterministic harness and reviewer pass. SHA-256 snapshots protect tests, fixtures and test configuration during GREEN and refactoring. Test types include `UNIT`, `INTEGRATION`, `HARDWARE`, and `NOT_AUTOMATABLE`; hardware work must not be reported as PASS without target evidence.
+The TDD state machine is explicit in `orchestrator/workflow/transitions.py`; `TDDGate` enforces task evidence in `orchestrator/tdd.py`. Python's task-level TDD engine is the sole implementation authority: it selects one tasks.md contract and dispatches the installed `speckit-implement` skill to the routed worker for that GREEN task. The worker is told to handle only that task; it cannot select tasks, mark checklist items, or advance phases. Python performs the task tests, protected-hash checks, regression, refactor and checkpoints. After configured deterministic verification, `speckit-converge` may append tasks.md work; only newly appended task contracts re-enter that same TDD engine. `real_run.max_convergence_iterations` bounds verify/converge cycles (default 3). A deterministic failure blocks before semantic convergence and cannot be overridden by a model. SHA-256 snapshots protect tests, fixtures and test configuration during GREEN and refactoring. Test types include `UNIT`, `INTEGRATION`, `HARDWARE`, and `NOT_AUTOMATABLE`; hardware work must not be reported as PASS without target evidence.
 
 ## Install
 
@@ -183,6 +183,7 @@ real_run:
   max_agent_calls_per_workflow: 100
   max_retries: 3
   max_wall_time: 7200
+  max_convergence_iterations: 3
   file_scopes:
     test_designer: [tests/, fixtures/]
     coder: task

@@ -139,6 +139,27 @@ def test_resume_reconciles_interrupted_coder_only_after_scope_and_tests_pass(tmp
     assert json.loads((task_dir/"tdd.json").read_text())["coder_provider"]=="opencode"
 
 
+def test_resume_reconciles_speckit_markdown_task_contract(tmp_path):
+    root=_repo(tmp_path); store=_store(root); wid=store.create_workflow("feature")
+    folder=root/".orchestrator"/"runs"/wid; task_dir=folder/"T001"; task_dir.mkdir(parents=True)
+    feature_dir=root/"specs"/"feature"; feature_dir.mkdir(parents=True)
+    (root/".specify").mkdir()
+    (root/".specify"/"feature.json").write_text(json.dumps({"feature_directory":"specs/feature"}))
+    metadata={"requirements":["FR-001"],"acceptance_criteria":["AC-001"],"plan_decisions":["D-001"],
+              "dependencies":[],"test_type":"UNIT","allowed_files":["src/feature.py"],
+              "tdd_phases":["RED","GREEN","REFACTOR"]}
+    (feature_dir/"tasks.md").write_text("# Tasks: Feature\n- [ ] T001 [US1] Implement in src/feature.py\n"
+                                   f"  <!-- harness-task {json.dumps(metadata)} -->\n")
+    (task_dir/"tdd.json").write_text(json.dumps({"phase":"GREEN_IMPLEMENT","test_design":{
+        "created_tests":["tests/test_x.py::test_x"],"test_commands":[["pytest","-q","tests/test_x.py::test_x"]]}}))
+    store.create_checkpoint(wid,"RED_VALIDATED:T001:1","RED_VALIDATED",WorkspaceFingerprint(root).capture(wid,"T001"),"T001")
+    store.update_workflow(wid,"RUNNING_AGENT",{"workspace":str(root),"running_role":"coder","running_provider":"codex"},"T001")
+    (root/"src").mkdir(); (root/"src"/"feature.py").write_text("implementation")
+    report=resume_workflow(store,wid,root,Harness(),interactive=SimpleNamespace(input_fn=lambda prompt:"reconcile"))
+    assert report["reconciliation"]["accepted"] is True
+    assert report["reconciled_checkpoint"]=="GREEN_VALIDATED"
+
+
 def test_resume_rejects_failed_regression_and_never_marks_task_complete(tmp_path):
     root=_repo(tmp_path); store=_store(root); wid=store.create_workflow("feature")
     task_dir=root/".orchestrator"/"runs"/wid/"T1"; task_dir.mkdir(parents=True)
@@ -160,7 +181,8 @@ def test_legacy_sqlite_workflow_migrates_with_integrity_warning(tmp_path):
         db.execute("INSERT INTO workflows VALUES(?,?,?,?,?,?,?)",("old","feature","BLOCKED",None,"{}","2025-01-01T00:00:00+00:00","2025-01-01T00:00:00+00:00"))
     store=StateStore(db_path)
     state=store.get_workflow("old")["state"]
-    assert state["state_schema_version"]==2
+    assert state["state_schema_version"]==StateStore.SCHEMA_VERSION
+    assert state["migrated_from_state_version"]==1
     assert state["resume_integrity"]=="LEGACY_NO_FINGERPRINT"
     assert store.checkpoints("old")==[]
 
@@ -208,9 +230,12 @@ def test_resume_driver_skips_validated_artifacts_completed_tasks_and_review(tmp_
     from orchestrator.workflow.driver import run_sdd_workflow
     root=_repo(tmp_path); store=_store(root); wid=store.create_workflow("feature")
     folder=root/".orchestrator"/"runs"/wid; (folder/"T1").mkdir(parents=True)
-    (root/"constitution.md").write_text("approved")
-    for name in ("constitution.md","spec.md","plan.md"): (folder/name).write_text("approved")
-    (folder/"tasks.md").write_text(json.dumps({"tasks":[{"id":"T1","requirements":["FR-1"],"acceptance_criteria":["AC-1"],"dependencies":[]}]}))
+    feature_dir=root/"specs"/"feature"; feature_dir.mkdir(parents=True)
+    memory=root/".specify"/"memory"; memory.mkdir(parents=True)
+    (root/".specify"/"feature.json").write_text(json.dumps({"feature_directory":"specs/feature"}))
+    (memory/"constitution.md").write_text("approved")
+    for name in ("spec.md","plan.md"): (feature_dir/name).write_text("approved")
+    (feature_dir/"tasks.md").write_text(json.dumps({"tasks":[{"id":"T1","requirements":["FR-1"],"acceptance_criteria":["AC-1"],"dependencies":[]}]}))
     (folder/"T1"/"tdd.json").write_text(json.dumps({"phase":"COMPLETE","requirement":["FR-1"],"acceptance_criteria":["AC-1"],"coder_provider":"opencode"}))
     (folder/"traceability.json").write_text("[]")
     (folder/"final-verification.json").write_text(json.dumps([{"status":"PASS","command":["pytest"]}]))
@@ -228,3 +253,61 @@ def test_resume_driver_skips_validated_artifacts_completed_tasks_and_review(tmp_
     assert result["completed_tasks"]==["T1"]
     assert result["final_verification"]==["PASS"]
     assert len(store.checkpoints(wid))==8
+
+
+def test_driver_skips_constitution_generation_when_canonical_constitution_exists_and_valid(tmp_path):
+    from orchestrator.config.models import AgentResult, Config
+    from orchestrator.workflow.driver import run_sdd_workflow
+
+    root = _repo(tmp_path)
+    store = _store(root)
+    wid = store.create_workflow("feature")
+    folder = root / ".orchestrator" / "runs" / wid
+    memory = root / ".specify" / "memory"
+    memory.mkdir(parents=True)
+    (memory / "constitution.md").write_text("existing canonical constitution")
+
+    roles_called = []
+    class StopWorkflow(Exception): pass
+
+    class RunnerMock:
+        def run(self, role, prompt, *args, **kwargs):
+            roles_called.append(role)
+            if role == "constitution_validator":
+                return AgentResult(
+                    "codex",
+                    "gpt-6-luna",
+                    role,
+                    True,
+                    stdout=json.dumps({"status": "PASS", "issues": [], "summary": "Valid"}),
+                )
+            if role == "specification":
+                raise StopWorkflow()
+            raise AssertionError(f"Unexpected run call: {role}")
+
+        def record_validation(self, *args, **kwargs):
+            pass
+
+    approve_called = []
+
+    def approve():
+        approve_called.append(True)
+        return True
+
+    with pytest.raises(StopWorkflow):
+        run_sdd_workflow(
+            "feature",
+            root,
+            RunnerMock(),
+            SimpleNamespace(requirement_results=[]),
+            Config(),
+            folder,
+            approve_constitution=approve,
+            store=store,
+        )
+
+    assert approve_called == []
+    assert "constitution" not in roles_called
+    assert "constitution_validator" in roles_called
+    assert any(c["stage"] == "CONSTITUTION_VALIDATED" for c in store.checkpoints(wid))
+

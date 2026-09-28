@@ -3,6 +3,8 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
+from orchestrator.workflow.task_adapter import TaskContractError, parse_speckit_tasks
+from orchestrator.workflow.artifacts import ArtifactDiscoveryError, ArtifactLayout
 
 
 SAFE_PREFIXES = (".orchestrator/state/", ".orchestrator/logs/", ".orchestrator/reports/", ".orchestrator/build/", ".orchestrator/runs/")
@@ -37,7 +39,15 @@ class WorkspaceFingerprint:
         artifacts=list(artifact_paths or [])
         if workflow_id:
             folder=self.root/".orchestrator"/"runs"/workflow_id
-            artifacts.extend(["constitution.md",str(folder/"constitution.md"),str(folder/"spec.md"),str(folder/"plan.md"),str(folder/"tasks.md")])
+            # SDD artifacts live in SpecKit's canonical locations. A TDD
+            # report remains operational data and is protected separately.
+            if not artifact_paths:
+                try:
+                    artifacts.extend(ArtifactLayout.discover(self.root,workflow_dir=folder).fingerprint_paths())
+                except ArtifactDiscoveryError:
+                    # Old checkpoints supply their saved paths during resume;
+                    # never invent a replacement feature directory.
+                    pass
             if task_id:
                 report=folder/task_id/"tdd.json"
                 if report.is_file():
@@ -138,12 +148,17 @@ def reconcile_interrupted_task(store, workflow_id, checkpoint, current, differen
         return None,"Divergence includes fields outside production code"
     folder=Path(root)/".orchestrator"/"runs"/workflow_id
     report_path=folder/checkpoint["task_id"]/"tdd.json"
-    tasks_path=folder/"tasks.md"
+    try:
+        tasks_path=ArtifactLayout.discover(root,workflow_dir=folder).tasks
+    except ArtifactDiscoveryError:
+        # Read-only compatibility for workflow reports created before the
+        # SpecKit artifact migration. New workflows never write this file.
+        tasks_path=folder/"tasks.md"
     if not report_path.is_file() or not tasks_path.is_file(): return None,"Missing task report or tasks artifact"
     try:
-        task=next(item for item in json.loads(tasks_path.read_text())["tasks"] if item["id"]==checkpoint["task_id"])
+        task=next(item for item in parse_speckit_tasks(tasks_path.read_text()) if item["id"]==checkpoint["task_id"])
         report=json.loads(report_path.read_text())
-    except (ValueError,KeyError,StopIteration): return None,"Task metadata cannot be read"
+    except (TaskContractError,ValueError,KeyError,StopIteration): return None,"Task metadata cannot be read"
     allowed=task.get("allowed_files") or task.get("production_files") or []
     changed=set()
     for entry in differences:

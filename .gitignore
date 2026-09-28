@@ -8,3 +8,4 @@ dist/
 .orchestrator/state/orchestrator.sqlite3
 feature.md
 first-real-run.log
+logs/

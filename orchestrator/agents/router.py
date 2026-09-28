@@ -161,9 +161,10 @@ class ModelRouter:
         self.rng=rng or random.Random()
 
     def route(self, role: str, tier: str | None=None, exclude: set[str] | None=None, override_provider: str | None=None, override_model: str | None=None, author_provider: str | None=None, task: dict | None=None, high_risk=False, blocked=False) -> Route:
-        from orchestrator.agents.roles import ROLES
-        spec=ROLES.get(role)
-        role_cfg=self.config.get("roles",{}).get(role,{})
+        from orchestrator.agents.roles import ROLES, ROLE_ALIASES
+        canonical_role = ROLE_ALIASES.get(role, role)
+        spec=ROLES.get(canonical_role) or ROLES.get(role)
+        role_cfg=self.config.get("roles",{}).get(canonical_role) or self.config.get("roles",{}).get(role,{})
         tier=(tier or role_cfg.get("tier") or (spec.tier if spec else "balanced")).lower()
         if tier not in TIERS: tier="balanced"
         required=set(role_cfg.get("required_capabilities",spec.required_capabilities if spec else ()))
@@ -191,7 +192,12 @@ class ModelRouter:
         global_index={p:i for i,p in enumerate(global_pref)}
         routing=self.config.get("routing",{})
         mode=routing.get("adaptive_routing_mode","observe")
-        task_type,complexity=classify_task(role,task)
+        task_type,complexity=classify_task(canonical_role,task)
+        if complexity=="HIGH" and (role_cfg.get("complex_preferred_models") or (spec and spec.complex_preferred_models)):
+            preferred_models=tuple(role_cfg.get("complex_preferred_models") or (spec.complex_preferred_models if spec else ()))
+        else:
+            preferred_models=tuple(role_cfg.get("preferred_models") or (spec.preferred_models if spec else ()))
+        model_pref_index={m:i for i,m in enumerate(preferred_models)}
         minimum=max(1,int(routing.get("historical_min_samples",10)))
         scored=[]
         for provider,cap,actual in candidates:
@@ -207,20 +213,27 @@ class ModelRouter:
                 idx=pref_index.get(provider,len(pref_index)+1)
                 aggregate=self.metrics.get((provider,model),{}) or {}
                 failures=float(aggregate.get("recent_failures",0))
+                m_idx=model_pref_index.get(model)
+                role_model_pref=max(0.0,60.0-12.0*m_idx) if m_idx is not None else (0.0 if preferred_models else 0.0)
                 breakdown={
                     "required_capabilities":100.0,
                     "preferred_capabilities":5.0*len(preferred_caps & actual),
-                    # A preference is meaningful without permanently overriding
-                    # substantial observed failures in assist mode.
                     "role_provider_preference":max(0.0,80.0-18.0*idx),
                     "global_provider_preference":max(0.0,4.0-2.0*global_index.get(provider,len(global_index))),
+                    "role_model_preference":role_model_pref,
                     "independence":16.0 if author_provider and provider!=author_provider else (-32.0 if author_provider else 0.0),
                     "model_tier_fit":model_fit + {"config":24,"provider_metadata":15,"history":7}.get(tier_source,0),
                     "explicit_model":-150.0 if model is None else 0.0,
                     "recent_failures":-min(20.0,failures*4.0),
                 }
+                if model:
+                    lowered=model.lower()
+                    if "astra" in lowered and not override_model:
+                        breakdown["extreme_fallback"]=-100.0
+                    if "opus" in lowered and not override_model:
+                        breakdown["extraordinary_fallback"]=-150.0
                 base=sum(breakdown.values())
-                matched=[row for row in self.history if row.get("provider")==provider and row.get("model")==model and row.get("role")==role]
+                matched=[row for row in self.history if row.get("provider")==provider and row.get("model")==model and row.get("role") in {canonical_role, role}]
                 contextual=[row for row in matched if row.get("task_type")==task_type and row.get("task_complexity")==complexity]
                 chosen=contextual if len(contextual)>=minimum else matched
                 stats=summarize(chosen,float(routing.get("decay_half_life_days",30)))
@@ -228,12 +241,16 @@ class ModelRouter:
                 historical=float(stats["historical_score"])
                 influence=0.0 if mode=="observe" else (0.5 if mode=="assist" else 1.0)
                 total=base+historical*conf*influence
-                reason=(f"capabilities {', '.join(sorted(required))} matched; role preference #{idx+1}; "
+                model_pref_text=f"model preference #{m_idx+1} ({model}); " if m_idx is not None else ""
+                reason=(f"capabilities {', '.join(sorted(required))} matched; role preference #{idx+1}; {model_pref_text}"
                         f"{model_reason}; base={base:.1f}, historical={historical:.1f}, confidence={conf:.2f}, mode={mode}; score={total:.1f}")
                 if author_provider:
                     reason+=f"; {'different from' if provider!=author_provider else 'same as'} author provider {author_provider}"
                     if not independence: reason+=" (no other compatible provider; self-validation permitted)"
-                scored.append({"final_score":total,"base_score":base,"provider":provider,"model":model,"reason":reason,"score_breakdown":breakdown,"tier_source":tier_source,"tier":tier,"capabilities":sorted(actual),"historical_score":historical,"historical_confidence":conf,"historical_metrics":stats,"penalties":{key:value for key,value in breakdown.items() if value<0}})
+                model_cfg_entry=(self.config.get("models_config",{}) or {}).get("models",{}).get(provider,{}).get(model,{})
+                configured_model_caps=[str(c).upper() for c in model_cfg_entry.get("capabilities",[])]
+                candidate_caps=sorted(actual | set(configured_model_caps))
+                scored.append({"final_score":total,"base_score":base,"provider":provider,"model":model,"reason":reason,"score_breakdown":breakdown,"tier_source":tier_source,"tier":tier,"capabilities":candidate_caps,"historical_score":historical,"historical_confidence":conf,"historical_metrics":stats,"penalties":{key:value for key,value in breakdown.items() if value<0}})
         if not scored and author_provider and not override_provider:
             fallback=self.route(role,tier=tier,exclude=exclude,override_model=override_model,task=task,high_risk=high_risk,blocked=blocked)
             if fallback.provider!="unavailable":
@@ -257,8 +274,13 @@ class ModelRouter:
         return Route(selected["provider"],selected["model"],tier,selected["reason"],selected["final_score"],independence,selected["score_breakdown"],selected["tier_source"],fallback_chain,selection_mode,f"{policy['provider']}/{policy['model'] or 'CLI default'}",f"{historical['provider']}/{historical['model'] or 'CLI default'}",scored)
 
     def explain(self, role, task=None):
+        from orchestrator.agents.roles import ROLE_ALIASES
+        canonical_role = ROLE_ALIASES.get(role, role)
         route=self.route(role,task=task)
-        return {"role":role,"task_type":classify_task(role,task)[0],"task_complexity":classify_task(role,task)[1],"selected":f"{route.provider}/{route.model or 'CLI default'}","selected_by_policy":route.selected_by_policy,"historical_recommendation":route.historical_recommendation,"selection_mode":route.selection_mode,"candidates":route.candidates}
+        result={"role":role,"task_type":classify_task(canonical_role,task)[0],"task_complexity":classify_task(canonical_role,task)[1],"selected":f"{route.provider}/{route.model or 'CLI default'}","selected_by_policy":route.selected_by_policy,"historical_recommendation":route.historical_recommendation,"selection_mode":route.selection_mode,"candidates":route.candidates}
+        if canonical_role != role:
+            result["alias_for"] = canonical_role
+        return result
 
     def independent_route(self, role: str, author_provider: str, tier: str | None=None) -> tuple[Route,bool]:
         route=self.route(role,tier=tier,author_provider=author_provider)

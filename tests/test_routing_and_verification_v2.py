@@ -121,6 +121,19 @@ def test_dry_run_warns_when_model_cannot_be_resolved(tmp_path,monkeypatch,capsys
     assert "tier_source=cli_default" in output and "WARNING: model not explicitly resolved" in output
 
 
+def test_dry_run_workflow_summary_displays_canonical_stages(tmp_path,monkeypatch,capsys):
+    from argparse import Namespace
+    from orchestrator import cli
+    from orchestrator.agents.router import ModelRouter
+    monkeypatch.chdir(tmp_path)
+    capability=cap("agy",[])
+    monkeypatch.setattr(cli,"_router",lambda root,config:(ModelRouter({"agy":capability}),{"agy":capability}))
+    cli.run(Namespace(config="orchestrator.yaml",feature="Feature de teste",feature_file=None,coder_provider=None,dry_run=True))
+    output=capsys.readouterr().out
+    expected_summary = "Workflow: Constitution → Spec → Clarify → Checklist → Plan → Tasks → Analysis (speckit-analyze) → TDD (Red/Green/Refactor/Review) → Converge → Final verification"
+    assert expected_summary in output
+
+
 def test_json_syntax_yaml_loads_without_pyyaml_and_legacy_tests_survive(tmp_path):
     from orchestrator.config.loader import load_config
     (tmp_path/"orchestrator.yaml").write_text(json.dumps({"verification":{"tests":["python -m pytest -q"]}}))

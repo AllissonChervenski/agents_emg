@@ -5,9 +5,9 @@ AUTHOR_ROLES={
     "tasks_validator":"tasks",
     "cross_artifact_validator":"tasks",
     "test_validator":"test_designer",
-    "coder":"test_designer",
     "code_reviewer":"coder",
     "final_reviewer":"coder",
+    "consistency_agent":"tasks",
 }
 
 
@@ -17,11 +17,12 @@ def build_route_plan(router, roles, provider_overrides=None):
     for role in roles:
         role_cfg=router.config.get("roles",{}).get(role,{})
         constraint=role_cfg.get("prefer_different_provider_from")
-        if constraint is None and role_cfg.get("prefer_different_provider_from_author",True) is False: author_role=None
+        if role in {"coder","implementation_agent","refactorer"}: author_role=None
+        elif constraint is None and role_cfg.get("prefer_different_provider_from_author",True) is False: author_role=None
         elif isinstance(constraint,list): author_role=next((name for name in constraint if name in routes),None)
         elif isinstance(constraint,str): author_role=constraint
         else: author_role=AUTHOR_ROLES.get(role)
-        author=routes.get(author_role)
+        author=routes.get(author_role) or (routes.get("task_agent") if author_role=="tasks" else (routes.get("tasks") if author_role=="task_agent" else None))
         routes[role]=router.route(role,author_provider=author.provider if author else None,override_provider=provider_overrides.get(role))
     return routes
 

@@ -27,6 +27,13 @@ class OpenCodeProvider(AgentProvider):
         cmd.append(prompt)
         return cmd
     def run(self, prompt, role, model=None, cwd=None, timeout=None, permissions=None): return execute(self.name, model, role, self.build_command(prompt, role, model, cwd, permissions), cwd, timeout)
+    def run_skill(self, skill, arguments, role, model=None, cwd=None, timeout=None, permissions=None, policy_prefix=""):
+        if skill.delivery != "native":
+            return super().run_skill(skill, arguments, role, model, cwd, timeout, permissions, policy_prefix)
+        cmd=self.build_command(arguments,role,model,cwd,permissions)
+        cmd[2:2]=["--command",skill.command]
+        if policy_prefix: cmd[-1]=f"{arguments}\n\n{policy_prefix}"
+        return execute(self.name,model,role,cmd,cwd,timeout)
     def build_smoke_command(self, prompt, model=None, cwd=None, structured=False):
         cmd=["opencode","run","--format","json"]
         if model and "--model" in self._run_help: cmd += ["--model",model]

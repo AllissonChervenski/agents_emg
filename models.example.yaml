@@ -8,4 +8,5 @@ models:
 #   actual-model-id:
 #     tiers: [balanced, strong]
 #     tier_source: config
+#     capabilities: [coding, testing, implementation]
 #     available: true

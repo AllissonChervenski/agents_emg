@@ -1,5 +1,6 @@
 """Policy-level TDD enforcement helpers used by workflow drivers."""
 from pathlib import Path
+from orchestrator.agents.roles import ROLES
 from orchestrator.workflow.tdd import TDDTask
 from orchestrator.workflow.transitions import TDDPhase
 from orchestrator.tdd_contract import parse_test_design, hash_test_files, changed_test_hashes
@@ -67,7 +68,7 @@ def _test_or_fixture(path):
     return "tests" in p.parts or p.name.startswith("test_") or p.name in {"conftest.py", "pytest.ini", "tox.ini"}
 
 
-def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_command=None, regression_commands=None, max_attempts=3, workflow_dir=None, gate_callback=None, checkpoint_callback=None, task_data=None, resume_stage=None):
+def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_command=None, regression_commands=None, max_attempts=3, workflow_dir=None, gate_callback=None, checkpoint_callback=None, task_data=None, resume_stage=None, artifact_paths=None):
     """Run a bounded TDD cycle. Python alone advances phases and evaluates checks."""
     import json
     import time
@@ -76,8 +77,11 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     from orchestrator.workflow.transitions import TDDPhase
     gate=TDDGate(task,max_attempts)
     root=Path(workspace)
+    # TDD reports are operational data, while the protected SDD artifacts are
+    # the canonical SpecKit files.  Keep the old locations only for direct
+    # callers that have not supplied a layout yet.
     artifact_root=Path(workflow_dir) if workflow_dir else root
-    artifact_paths={"constitution":str(root/"constitution.md"),"specification":str(artifact_root/"spec.md"),"plan":str(artifact_root/"plan.md"),"tasks":str(artifact_root/"tasks.md")}
+    artifact_paths=artifact_paths or {"constitution":str(root/"constitution.md"),"specification":str(artifact_root/"spec.md"),"plan":str(artifact_root/"plan.md"),"tasks":str(artifact_root/"tasks.md")}
     def artifact_hashes():
         import hashlib
         return {name:hashlib.sha256(str(Path(path).readlink()).encode() if Path(path).is_symlink() else Path(path).read_bytes()).hexdigest() for name,path in artifact_paths.items() if Path(path).is_file() or Path(path).is_symlink()}
@@ -86,6 +90,15 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     def invoke(role, extra="", author_provider=None):
         options={"task":task_data,"task_id":task.task} if task_data else {}
         if task_data and role in {"coder","refactorer"}: options["allowed_paths"]=task_data.get("allowed_files") or task_data.get("production_files") or []
+        if role == "coder":
+            # Python's task-level TDD machine is the only implementation
+            # authority. SpecKit implement is dispatched as the worker skill
+            # for this GREEN task, with an explicit one-task boundary.
+            skill_name=ROLES[role].skill_name
+            options["skill_name"]=skill_name
+            extra=(f"Use the installed {skill_name} skill for task {task.task} only. "
+                   "Do not process any other task, edit tasks.md, mark checklist items, "
+                   "or advance the TDD phase; Python owns task selection and phase gates.\n"+extra)
         result=runner.run(role, ctx+"\n"+extra, cwd=root, author_provider=author_provider,**options)
         if result.usage.get("execution_id"):
             task.evidence.setdefault("executions",[]).append({"role":role,"id":result.usage["execution_id"]})

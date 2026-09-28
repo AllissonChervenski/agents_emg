@@ -4,10 +4,9 @@ from orchestrator.agents.roles import ROLES
 from orchestrator.config.models import AgentResult
 from uuid import uuid4
 import hashlib
-import time
-from datetime import datetime, timezone
 from orchestrator.agents.history import classify_task
 from orchestrator.agents.cost import TaskProfile
+from orchestrator.agents.skills import SkillDispatcher
 
 
 def load_prompt(role: str, **values: str) -> str:
@@ -17,24 +16,23 @@ def load_prompt(role: str, **values: str) -> str:
 
 
 class AgentRunner:
-    def __init__(self, providers, router, store=None, workflow_id=None, safety=None, cost_router=None, execution_policy_router=None):
+    def __init__(self, providers, router, store=None, workflow_id=None, safety=None, cost_router=None, execution_policy_router=None, skill_dispatcher=None):
         self.providers, self.router, self.store = providers, router, store
         self.on_fallback=None
         self.on_call=None
+        self.on_call_complete=None
         self.workflow_id=workflow_id
         self.safety=safety or {}
         self.cost_router=cost_router
         self.execution_policy_router=execution_policy_router
+        self.skill_dispatcher=skill_dispatcher or SkillDispatcher(providers)
         self.model_feedback=[]
-        self.started_at=time.monotonic()
         self.calls=0
         self.task_calls={}
-        self.elapsed_prior=0.0
+        self.active_elapsed=0.0
         if store and workflow_id:
             self.calls,self.task_calls=store.agent_call_counts(workflow_id)
-            item=store.get_workflow(workflow_id)
-            if item:
-                self.elapsed_prior=max(0.0,(datetime.now(timezone.utc)-datetime.fromisoformat(item["created_at"])).total_seconds())
+            self.active_elapsed=store.active_execution_seconds(workflow_id)
 
     @staticmethod
     def _snapshot(root):
@@ -44,7 +42,10 @@ class AgentRunner:
         def relevant(path):
             parts=path.relative_to(base).parts
             if any(part in ignored for part in parts): return False
-            return parts[0]!=".orchestrator" or len(parts)>1 and parts[1]=="runs"
+            # Operational state and reports are written by the Python harness,
+            # not by SpecKit workers.  They must not silently expand a worker's
+            # write scope or become duplicate SDD artifacts.
+            return parts[0] != ".orchestrator"
         return {str(p.relative_to(base)):hashlib.sha256(str(p.readlink()).encode() if p.is_symlink() else p.read_bytes()).hexdigest() for p in base.rglob("*") if (p.is_file() or p.is_symlink()) and relevant(p)}
 
     @staticmethod
@@ -54,7 +55,8 @@ class AgentRunner:
     def _budget_error(self, task_id):
         if self.calls>=int(self.safety.get("max_agent_calls_per_workflow",100)): return "BUDGET_EXCEEDED: workflow agent calls"
         if task_id and self.task_calls.get(task_id,0)>=int(self.safety.get("max_agent_calls_per_task",12)): return "BUDGET_EXCEEDED: task agent calls"
-        if time.monotonic()-self.started_at+self.elapsed_prior>=float(self.safety.get("max_wall_time",7200)): return "BUDGET_EXCEEDED: wall time"
+        active=self.store.active_execution_seconds(self.workflow_id) if self.store and self.workflow_id else self.active_elapsed
+        if active>=float(self.safety.get("max_wall_time",7200)): return "BUDGET_EXCEEDED: active execution time"
         return None
 
     def record_validation(self, agent_result, validation_result):
@@ -78,7 +80,17 @@ class AgentRunner:
         if self.store and agent_result.usage.get("execution_id"):
             self.store.update_execution_outcome(agent_result.usage["execution_id"],model_failure_category=category,model_failure_reason=reason)
 
-    def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None):
+    def run_skill(self, role, provider, model, skill_name, arguments, cwd, execution_policy=None,
+                  timeout=None, fallback=True, task=None, task_id=None, allowed_paths=None,
+                  expected_outputs=None, exclude_providers=None):
+        """Run a skill through the normal router, safety, retry, and telemetry path."""
+        return self.run(role, arguments, cwd=cwd, timeout=timeout, override_provider=provider,
+                        override_model=model, fallback=fallback, task=task, task_id=task_id,
+                        allowed_paths=allowed_paths, expected_outputs=expected_outputs,
+                        skill_name=skill_name, execution_policy=execution_policy,
+                        exclude_providers=exclude_providers)
+
+    def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None, skill_name=None, execution_policy=None):
         invocation_id=str(uuid4())
         route_excludes=set(exclude_providers or ())
         if author_provider is None and exclude_providers and len(exclude_providers)==1:
@@ -107,10 +119,11 @@ class AgentRunner:
             return None
         route_error=cost_safety_error(route,decision)
         if route_error: return AgentResult(route.provider,route.model,role,False,error=route_error)
-        if self.safety.get("safety_mode")=="strict" and role in {"coder","refactorer"} and not allowed_paths:
-            return AgentResult(route.provider,route.model,role,False,error="SCOPE_VIOLATION: production files are not declared for this task")
         configured_scope=self.safety.get("file_scopes",{}).get(role)
         permitted=list(allowed_paths or (configured_scope if isinstance(configured_scope,list) else (["tests/","fixtures/","conftest.py","pytest.ini","tox.ini"] if role=="test_designer" else [])))
+        if self.safety.get("safety_mode")=="strict" and ROLES[role].edits_files and not permitted:
+            return AgentResult(route.provider,route.model,role,False,
+                               error="SCOPE_VIOLATION: writable paths are not declared for this role")
         def execute(chosen,attempt):
             budget=self._budget_error(task_id)
             if budget: return AgentResult(chosen.provider,chosen.model,role,False,error=budget)
@@ -123,9 +136,14 @@ class AgentRunner:
             if self.store and self.workflow_id:
                 item=self.store.get_workflow(self.workflow_id)
                 if item: self.store.update_workflow(self.workflow_id,"RUNNING_AGENT",{**item["state"],"running_role":role,"running_task":task_id,"running_provider":chosen.provider,"running_model":chosen.model},task_id)
-            policy=self.execution_policy_router.select(role,chosen.provider,profile) if self.execution_policy_router else None
+            policy=execution_policy if execution_policy is not None else (self.execution_policy_router.select(role,chosen.provider,profile) if self.execution_policy_router else None)
             effective_prompt=(policy.prefix+"\n\n"+prompt) if policy and policy.prefix else prompt
-            result=self.providers[chosen.provider].run(effective_prompt,role,chosen.model,cwd,timeout,"read" if ROLES[role].validation else None)
+            permissions="read" if ROLES[role].validation else None
+            if skill_name:
+                result=self.skill_dispatcher.run_skill(role,chosen.provider,chosen.model,skill_name,prompt,cwd,policy,timeout,permissions)
+                effective_prompt=f"skill:{skill_name}\n{effective_prompt}"
+            else:
+                result=self.providers[chosen.provider].run(effective_prompt,role,chosen.model,cwd,timeout,permissions)
             if self.safety.get("safety_mode")=="strict":
                 after=self._snapshot(cwd)
                 changed=sorted(path for path in set(before)|set(after) if before.get(path)!=after.get(path))
@@ -139,6 +157,8 @@ class AgentRunner:
                 if changed and not result.success and not violations:
                     result.error="PARTIAL_WRITE: provider failed after modifying "+", ".join(changed)
                     result.usage["partial_files"]=changed
+            self.active_elapsed+=max(0.0,result.duration)
+            if self.on_call_complete: self.on_call_complete(result)
             result.usage["validation_independence"]=chosen.independence
             result.usage["validation_independence_reason"]=chosen.reason if author_provider else None
             result.usage["routing_selection_mode"]=chosen.selection_mode

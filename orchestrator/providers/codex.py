@@ -50,6 +50,12 @@ class CodexProvider(AgentProvider):
         cmd.append(prompt)
         return cmd
     def run(self, prompt, role, model=None, cwd=None, timeout=None, permissions=None): return execute(self.name, model, role, self.build_command(prompt, role, model, cwd, permissions), cwd, timeout)
+    def run_skill(self, skill, arguments, role, model=None, cwd=None, timeout=None, permissions=None, policy_prefix=""):
+        if skill.delivery != "native":
+            return super().run_skill(skill, arguments, role, model, cwd, timeout, permissions, policy_prefix)
+        prompt=f"${skill.name} {arguments}".rstrip()
+        if policy_prefix: prompt=f"{prompt}\n\n{policy_prefix}"
+        return self.run(prompt, role, model, cwd, timeout, permissions)
     def build_smoke_command(self, prompt, model=None, cwd=None, structured=False):
         cmd=["codex","exec"]
         if "--sandbox" in self._exec_help: cmd += ["--sandbox","read-only"]

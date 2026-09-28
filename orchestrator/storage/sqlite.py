@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 class StateStore:
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
     def __init__(self, db_path):
         self.db_path = Path(db_path); self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
@@ -49,6 +49,15 @@ class StateStore:
                 hostname TEXT NOT NULL, owner TEXT NOT NULL, acquired_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resume_reports(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL,
                 report_json TEXT NOT NULL, created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS human_gate_decisions(
+                id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, resume_id TEXT,
+                checkpoint_transition_id TEXT NOT NULL, stage TEXT NOT NULL, role TEXT NOT NULL,
+                task_id TEXT, attempt INTEGER NOT NULL DEFAULT 1, provider TEXT, model TEXT, decision TEXT NOT NULL,
+                status TEXT NOT NULL, approved_at TEXT, workspace_fingerprint_json TEXT,
+                started_at TEXT, completed_at TEXT, execution_success INTEGER,
+                checkpoint_id TEXT, created_at TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS human_gate_lookup ON human_gate_decisions
+                (workflow_id, checkpoint_transition_id, stage, role, created_at);
             """)
             version=db.execute("SELECT value FROM schema_meta WHERE key='state_schema_version'").fetchone()
             if version and int(version[0]) > self.SCHEMA_VERSION:
@@ -56,19 +65,20 @@ class StateStore:
             db.execute("INSERT OR REPLACE INTO schema_meta VALUES('state_schema_version',?)",(str(self.SCHEMA_VERSION),))
             for wid,payload in db.execute("SELECT id,state_json FROM workflows").fetchall():
                 state=json.loads(payload or "{}")
-                if "state_schema_version" not in state:
+                if int(state.get("state_schema_version",1))<self.SCHEMA_VERSION:
+                    previous=int(state.get("state_schema_version",1))
                     state["state_schema_version"]=self.SCHEMA_VERSION
-                    state["migrated_from_state_version"]=1
-                    state["resume_integrity"]="LEGACY_NO_FINGERPRINT"
+                    state["migrated_from_state_version"]=previous
+                    if previous==1: state["resume_integrity"]="LEGACY_NO_FINGERPRINT"
                     db.execute("UPDATE workflows SET state_json=? WHERE id=?",(json.dumps(state),wid))
     def connect(self): return sqlite3.connect(self.db_path)
     def create_workflow(self, feature, state=None):
         wid = str(uuid.uuid4()); now = datetime.now(timezone.utc).isoformat()
-        payload={"state_schema_version":self.SCHEMA_VERSION,**(state or {})}
+        payload={**(state or {}),"state_schema_version":self.SCHEMA_VERSION}
         with self.connect() as db: db.execute("INSERT INTO workflows VALUES(?,?,?,?,?,?,?)", (wid, feature, "PLANNED", None, json.dumps(payload), now, now))
         return wid
     def update_workflow(self, workflow_id, stage, state, current_task=None):
-        with self.connect() as db: db.execute("UPDATE workflows SET stage=?,current_task=?,state_json=?,updated_at=? WHERE id=?", (stage,current_task,json.dumps({"state_schema_version":self.SCHEMA_VERSION,**state}),datetime.now(timezone.utc).isoformat(),workflow_id))
+        with self.connect() as db: db.execute("UPDATE workflows SET stage=?,current_task=?,state_json=?,updated_at=? WHERE id=?", (stage,current_task,json.dumps({**state,"state_schema_version":self.SCHEMA_VERSION}),datetime.now(timezone.utc).isoformat(),workflow_id))
     def get_workflow(self, workflow_id):
         with self.connect() as db:
             row = db.execute("SELECT id,feature,stage,current_task,state_json,created_at,updated_at FROM workflows WHERE id=?", (workflow_id,)).fetchone()
@@ -164,11 +174,16 @@ class StateStore:
     def create_checkpoint(self, workflow_id, transition_id, stage, fingerprint, task_id=None, attempt=1, substage=None):
         now=datetime.now(timezone.utc).isoformat(); fp=fingerprint
         with self.connect() as db:
-            db.execute("INSERT OR IGNORE INTO checkpoints VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(
+            previous=db.execute("SELECT transition_id FROM checkpoints WHERE workflow_id=? ORDER BY rowid DESC LIMIT 1",(workflow_id,)).fetchone()
+            inserted=db.execute("INSERT OR IGNORE INTO checkpoints VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(
                 str(uuid.uuid4()),workflow_id,transition_id,stage,substage,task_id,attempt,now,
                 fp.get("git_commit_base"),fp.get("branch"),fp.get("head"),json.dumps(fp),
                 json.dumps(fp.get("artifact_hashes",{})),json.dumps(fp.get("test_hashes",{})),self.SCHEMA_VERSION))
             row=db.execute("SELECT id FROM checkpoints WHERE workflow_id=? AND transition_id=?",(workflow_id,transition_id)).fetchone()
+            if inserted.rowcount and previous:
+                db.execute("""UPDATE human_gate_decisions SET status='CHECKPOINTED',checkpoint_id=?
+                    WHERE workflow_id=? AND checkpoint_transition_id=? AND status='EXECUTION_COMPLETED'""",
+                    (row[0],workflow_id,previous[0]))
         return row[0]
 
     def checkpoints(self, workflow_id):
@@ -190,6 +205,87 @@ class StateStore:
     def update_resume_report(self, report):
         with self.connect() as db:
             db.execute("UPDATE resume_reports SET report_json=? WHERE id=?",(json.dumps(report),report["resume_id"]))
+
+    def active_execution_seconds(self, workflow_id):
+        """Count work, not time spent waiting for a human or a later resume."""
+        with self.connect() as db:
+            agent=db.execute("SELECT COALESCE(SUM(duration),0) FROM provider_executions WHERE workflow_id=?",(workflow_id,)).fetchone()[0]
+            rows=db.execute("SELECT result_json FROM verifications WHERE workflow_id=?",(workflow_id,)).fetchall()
+        verification=sum(max(0,float(json.loads(payload).get("duration") or 0)) for (payload,) in rows)
+        return max(0,float(agent or 0))+verification
+
+    def latest_human_gate(self, workflow_id, checkpoint_transition_id, stage, role, task_id=None, attempt=1):
+        with self.connect() as db:
+            row=db.execute("""SELECT id,resume_id,checkpoint_transition_id,stage,role,task_id,attempt,provider,model,
+                decision,status,approved_at,workspace_fingerprint_json,started_at,completed_at,
+                execution_success,checkpoint_id,created_at FROM human_gate_decisions
+                WHERE workflow_id=? AND checkpoint_transition_id=? AND stage=? AND role=? AND attempt=?
+                AND (task_id=? OR (task_id IS NULL AND ? IS NULL)) ORDER BY rowid DESC LIMIT 1""",
+                (workflow_id,checkpoint_transition_id,stage,role,attempt,task_id,task_id)).fetchone()
+        if not row: return None
+        keys=("id","resume_id","checkpoint_transition_id","stage","role","task_id","attempt","provider","model",
+              "decision","status","approved_at","workspace_fingerprint","started_at","completed_at",
+              "execution_success","checkpoint_id","created_at")
+        result=dict(zip(keys,row)); result["workspace_fingerprint"]=json.loads(result["workspace_fingerprint"] or "{}")
+        return result
+
+    def approved_human_gate(self, workflow_id, checkpoint_transition_id, role, task_id=None):
+        with self.connect() as db:
+            row=db.execute("""SELECT id FROM human_gate_decisions WHERE workflow_id=? AND
+                checkpoint_transition_id=? AND role=? AND status='APPROVED'
+                AND (task_id=? OR (task_id IS NULL AND ? IS NULL)) ORDER BY rowid DESC LIMIT 1""",
+                (workflow_id,checkpoint_transition_id,role,task_id,task_id)).fetchone()
+        return row[0] if row else None
+
+    def create_human_gate(self, workflow_id, resume_id, checkpoint_transition_id, stage, role, task_id=None, provider=None, model=None, attempt=1):
+        gate_id=str(uuid.uuid4()); now=datetime.now(timezone.utc).isoformat()
+        with self.connect() as db:
+            db.execute("""INSERT INTO human_gate_decisions
+                (id,workflow_id,resume_id,checkpoint_transition_id,stage,role,task_id,attempt,provider,model,
+                 decision,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (gate_id,workflow_id,resume_id,checkpoint_transition_id,stage,role,task_id,attempt,provider,model,"pending","PENDING",now))
+        return gate_id
+
+    def approve_human_gate(self, gate_id, resume_id, fingerprint):
+        now=datetime.now(timezone.utc).isoformat()
+        with self.connect() as db:
+            updated=db.execute("""UPDATE human_gate_decisions SET decision='continue',status='APPROVED',
+                resume_id=?,approved_at=?,workspace_fingerprint_json=? WHERE id=? AND status='PENDING'""",
+                (resume_id,now,json.dumps(fingerprint),gate_id)).rowcount
+        return updated==1
+
+    def reject_human_gate(self, gate_id):
+        with self.connect() as db:
+            db.execute("UPDATE human_gate_decisions SET decision='abort',status='ABORTED' WHERE id=? AND status='PENDING'",(gate_id,))
+
+    def update_human_gate_status(self, gate_id, expected, status, success=None):
+        now=datetime.now(timezone.utc).isoformat()
+        updates={"EXECUTION_STARTED":("started_at",now),"EXECUTION_COMPLETED":("completed_at",now),
+                 "EXECUTION_FAILED":("completed_at",now)}
+        with self.connect() as db:
+            if status in updates:
+                field,value=updates[status]
+                result=db.execute(f"UPDATE human_gate_decisions SET status=?,{field}=?,execution_success=? WHERE id=? AND status=?",
+                    (status,value,None if success is None else int(success),gate_id,expected))
+            else:
+                result=db.execute("UPDATE human_gate_decisions SET status=? WHERE id=? AND status=?",(status,gate_id,expected))
+        return result.rowcount==1
+
+    def checkpoint_human_gates(self, workflow_id, checkpoint_id):
+        with self.connect() as db:
+            db.execute("""UPDATE human_gate_decisions SET status='CHECKPOINTED',checkpoint_id=?
+                WHERE workflow_id=? AND status='EXECUTION_COMPLETED'""",(checkpoint_id,workflow_id))
+
+    def list_human_gates(self, workflow_id):
+        with self.connect() as db:
+            rows=db.execute("""SELECT id,stage,role,task_id,attempt,decision,status,resume_id,checkpoint_transition_id,
+                approved_at,workspace_fingerprint_json,started_at,completed_at,execution_success,checkpoint_id
+                FROM human_gate_decisions WHERE workflow_id=? ORDER BY rowid""",(workflow_id,)).fetchall()
+        fields=("id","stage","role","task_id","attempt","decision","status","resume_id","checkpoint_transition_id",
+                "approved_at","workspace_fingerprint","started_at","completed_at","execution_success","checkpoint_id")
+        result=[dict(zip(fields,row)) for row in rows]
+        for item in result: item["workspace_fingerprint"]=json.loads(item["workspace_fingerprint"] or "{}")
+        return result
 
     def record_verification(self, workflow_id, result):
         command=[]; hide_next=False

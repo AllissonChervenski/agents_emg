@@ -1,0 +1,30 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "implementer": {
+      "description": "Implementa código Python (fase GREEN) seguindo plan.md e tasks.md",
+      "mode": "primary",
+      "model": "opencode-go/kimi-k2.7-code",
+      "prompt": "{file:./.opencode/prompts/implementer.md}"
+    },
+    "tester": {
+      "description": "Escreve testes unitários em pytest (fase RED)",
+      "mode": "primary",
+      "model": "opencode-go/qwen3.8-flash",
+      "prompt": "{file:./.opencode/prompts/tester.md}"
+    },
+    "refactorer": {
+      "description": "Refatora código Python sem alterar comportamento (fase REFACTOR)",
+      "mode": "primary",
+      "model": "opencode-go/kimi-k2.7-code",
+      "prompt": "{file:./.opencode/prompts/refactorer.md}"
+    },
+    "tracker": {
+      "description": "Atualiza checkboxes em tasks.md e sugere mensagens de commit",
+      "mode": "primary",
+      "model": "opencode-go/qwen3.8-flash",
+      "prompt": "{file:./.opencode/prompts/tracker.md}",
+      "tools": { "bash": false }
+    }
+  }
+}
