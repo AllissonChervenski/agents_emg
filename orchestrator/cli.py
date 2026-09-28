@@ -205,7 +205,8 @@ def run(args):
     if interactive_gate:
         runner.on_fallback=lambda role,provider,model: interactive_gate.confirm("PROVIDER_FALLBACK",role,provider,model,[],[])
         if getattr(args,"first_real_run",False):
-            runner.on_call=lambda role,provider,model,task_id,files,outputs,artifacts=(): interactive_gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task_id,artifacts=artifacts)
+            runner.on_call=lambda role,provider,model,task_id,files,outputs,artifacts=(),attempt=1: interactive_gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task_id,attempt=attempt,artifacts=artifacts)
+            runner.on_call_complete=lambda result: interactive_gate.agent_call_completed(result)
 
     def command_event(event, payload):
         if event=="started":

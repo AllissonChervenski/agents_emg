@@ -218,15 +218,15 @@ class AgentRunner:
 
     def run_skill(self, role, provider, model, skill_name, arguments, cwd, execution_policy=None,
                   timeout=None, fallback=True, task=None, task_id=None, allowed_paths=None,
-                  expected_outputs=None, exclude_providers=None, artifacts=None):
+                  expected_outputs=None, exclude_providers=None, artifacts=None, attempt=1):
         """Run a skill through the normal router, safety, retry, and telemetry path."""
         return self.run(role, arguments, cwd=cwd, timeout=timeout, override_provider=provider,
                         override_model=model, fallback=fallback, task=task, task_id=task_id,
                         allowed_paths=allowed_paths, expected_outputs=expected_outputs,
                         skill_name=skill_name, execution_policy=execution_policy,
-                        exclude_providers=exclude_providers, artifacts=artifacts)
+                        exclude_providers=exclude_providers, artifacts=artifacts, attempt=attempt)
 
-    def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None, skill_name=None, execution_policy=None, artifacts=None):
+    def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None, skill_name=None, execution_policy=None, artifacts=None, attempt=1):
         artifacts_list = list(artifacts or ())
         if (
             self.active_stage_role == role
@@ -289,9 +289,12 @@ class AgentRunner:
             outputs=expected_outputs or (["structured validation JSON"] if ROLES[role].validation else (["task tests"] if role=="test_designer" else (["declared production files"] if role in {"coder","refactorer"} else ["SDD artifact or structured task output"])))
             if self.on_call:
                 try:
-                    on_call_ok = self.on_call(role,chosen.provider,chosen.model,task_id,permitted,outputs,artifacts=artifacts_list)
+                    on_call_ok = self.on_call(role,chosen.provider,chosen.model,task_id,permitted,outputs,artifacts=artifacts_list,attempt=attempt)
                 except TypeError:
-                    on_call_ok = self.on_call(role,chosen.provider,chosen.model,task_id,permitted,outputs)
+                    try:
+                        on_call_ok = self.on_call(role,chosen.provider,chosen.model,task_id,permitted,outputs,artifacts=artifacts_list)
+                    except TypeError:
+                        on_call_ok = self.on_call(role,chosen.provider,chosen.model,task_id,permitted,outputs)
                 if not on_call_ok:
                     return AgentResult(chosen.provider,chosen.model,role,False,error="INTERACTIVE_ABORT")
 
@@ -371,7 +374,7 @@ class AgentRunner:
                         "escalation_level":result.usage.get("escalation_level"),"escalation_reason":result.usage.get("escalation_reason")})
                 result.usage["execution_id"]=eid
             return result
-        result=execute(route,1)
+        result=execute(route,attempt)
         provider_failure=(result.error or "").startswith("PROVIDER_FAILURE") or (result.error is None and result.exit_code not in {None,0})
         if not result.success and fallback and provider_failure:
             second = self.router.route(role, exclude=route_excludes | {route.provider}, author_provider=author_provider)
@@ -385,7 +388,7 @@ class AgentRunner:
                 if self.on_fallback and not self.on_fallback(role,second.provider,second.model):
                     result.error="PROVIDER_FAILURE: interactive fallback aborted"
                     return result
-                result=execute(second,2)
+                result=execute(second,attempt)
         if self.active_stage_role == role:
             self.active_stage_name = None
             self.active_stage_role = None

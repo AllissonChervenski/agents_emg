@@ -65,7 +65,7 @@ def _record_validation(runner, result, validation, stage=None, evidence=None):
         runner.record_validation(result, validation)
 
 
-def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=None, artifacts=None):
+def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=None, artifacts=None, attempt=1):
     """Dispatch a declared SpecKit skill while retaining legacy test doubles."""
     stage_role={
         "constitution": "constitution_agent", "specification": "specification_agent",
@@ -87,10 +87,10 @@ def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=No
         )
     if skill_name and hasattr(runner,"run_skill"):
         result=runner.run_skill(role,None,None,skill_name,prompt,cwd,timeout=timeout,
-                                allowed_paths=allowed_paths,exclude_providers=exclude,artifacts=artifacts)
+                                allowed_paths=allowed_paths,exclude_providers=exclude,artifacts=artifacts,attempt=attempt)
     else:
         result=runner.run(role,prompt,cwd=cwd,timeout=timeout,exclude_providers=exclude,
-                          allowed_paths=allowed_paths,artifacts=artifacts)
+                          allowed_paths=allowed_paths,artifacts=artifacts,attempt=attempt)
     if not result.success:
         if ("validator" in role or "reviewer" in role):
             v_res = ValidationResult(
@@ -113,7 +113,7 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
         if not _call_gate(gate_callback, author_role.upper(), author_role, [str(path)] if path else list(allowed_paths or ()), [], attempt=attempt, runner=runner): raise WorkflowBlocked(f"Interactive gate aborted before {author_role}")
         before=artifact_snapshot(path) if path else None
         candidates = {item: artifact_snapshot(item) for item in Path(cwd).glob("specs/*/spec.md")} if path is None else {}
-        author=_generate(runner,author_role,prompt,cwd,timeout,allowed_paths=allowed_paths)
+        author=_generate(runner,author_role,prompt,cwd,timeout,allowed_paths=allowed_paths,attempt=attempt)
         if path is None and artifact_resolver:
             try:
                 path=Path(artifact_resolver())
@@ -144,9 +144,9 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
                 supplied = [str(path.resolve().relative_to(Path(cwd).resolve()))]
             except ValueError:
                 supplied = [str(path)]
-        if not _call_gate(gate_callback, validator_role.upper(), validator_role, [], [], artifacts=supplied, runner=runner):
+        if not _call_gate(gate_callback, validator_role.upper(), validator_role, [], [], artifacts=supplied, attempt=attempt, runner=runner):
             raise WorkflowBlocked(f"Interactive gate aborted before {validator_role}")
-        reviewer=_generate(runner,validator_role,load_prompt(validator_role,artifact=path.read_text(),feature=prompt),cwd,timeout,{author.provider},allowed_paths=[],artifacts=supplied)
+        reviewer=_generate(runner,validator_role,load_prompt(validator_role,artifact=path.read_text(),feature=prompt),cwd,timeout,{author.provider},allowed_paths=[],artifacts=supplied,attempt=attempt)
 
         validation=parse_validation(reviewer.stdout,validator_role,reviewer.model,provider=getattr(reviewer,"provider",None))
         stage_map = {"specification_validator": "SPECIFICATION_VALIDATE", "plan_validator": "PLAN_VALIDATE", "tasks_validator": "TASKS_VALIDATE"}

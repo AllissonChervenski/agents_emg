@@ -135,6 +135,9 @@ class InteractiveGate:
                     if not self.store.approve_human_gate(gate_id,self.resume_id,self._fingerprint()):
                         raise HumanGateRecoveryRequired(f"APPROVAL_CONFLICT: {stage}")
                     self.ready_gate_id=gate_id; self.ready_role=role; self.ready_task_id=task_id
+                    if stage == "AGENT_CALL":
+                        self.store.update_human_gate_status(gate_id, "APPROVED", "EXECUTION_STARTED")
+                        self.active_gate_id = gate_id
                     self._set_workflow_stage("READY",summary)
                     self._event("approval_persisted",gate_id=gate_id,stage=stage)
                 return True
