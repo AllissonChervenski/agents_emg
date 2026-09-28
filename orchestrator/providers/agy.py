@@ -39,17 +39,23 @@ def parse_model_details(output: str) -> list[ModelCapabilities]:
 
 class AgyProvider(AgentProvider):
     name = "agy"
-    def __init__(self): self._models: list[str] = []
+    def __init__(self):
+        self._models: list[str] = []
+        self._skip_permissions: bool = False
     def discover(self):
         ok, version, err = probe("agy", ["--version"])
         help_ok, help_text, help_err = probe("agy", ["--help"])
+        self._skip_permissions = "--dangerously-skip-permissions" in help_text
         model_ok, model_text, model_err = probe("agy", ["--output-format", "json", "models"],timeout=90)
         if not model_ok or not parse_models(model_text):
             model_ok, model_text, model_err = probe("agy", ["models"],timeout=90)
         self._models = parse_models(model_text) if model_ok else []
         return ProviderCapabilities(self.name, ok, version if ok else None, self._models, "--print" in help_text or "-p" in help_text, "json" in help_text, "--continue" in help_text or "--conversation" in help_text, "--model" in help_text, "--agent" in help_text, True, "terminal" in help_text, metadata={"help": help_text, "errors": [x for x in (err, help_err, model_err) if x], "model_discovery_error": model_err if not model_ok else None}, model_details=parse_model_details(model_text) if model_ok else [])
     def build_command(self, prompt, role, model=None, cwd=None, permissions=None):
-        cmd = ["agy", "--output-format", "json"]
+        cmd = ["agy"]
+        if getattr(self, "_skip_permissions", False) and permissions != "read":
+            cmd += ["--dangerously-skip-permissions"]
+        cmd += ["--output-format", "json"]
         if model: cmd += ["--model", model]
         if permissions == "read": cmd += ["--mode", "plan"]
         # --print consumes the following argument as its prompt.

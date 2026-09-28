@@ -11,6 +11,10 @@ def test_agy_command_uses_discovered_print_syntax():
     structured=AgyProvider().build_smoke_command('{"ok":true}',"m",structured=True)
     assert basic[-2:]==["--print","AGY_SMOKE_OK"] and "--output-format" not in basic
     assert structured[-2:]==["--print",'{"ok":true}'] and "--output-format" in structured
+    with_perms = AgyProvider()
+    with_perms._skip_permissions = True
+    assert "--dangerously-skip-permissions" in with_perms.build_command("hi","coder","m")
+    assert "--dangerously-skip-permissions" not in with_perms.build_command("hi","test_validator","m",permissions="read")
 
 
 def test_opencode_command():
