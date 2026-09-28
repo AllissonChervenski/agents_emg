@@ -34,8 +34,8 @@ Commands and features designed for inspection, reporting, or summary (such as `p
 - They MUST NOT introduce unnecessary architectural layers or external dependencies when existing project abstractions suffice.
 
 ### IV. CLI Ergonomics, Text/JSON Duality & Failure Containment
-Every user-facing CLI command MUST provide predictable, robust interfaces:
-- Dual-format output: Commands MUST provide a standard human-readable text output and a pure machine-readable JSON output via `--json`. When `--json` is supplied, stdout MUST contain exclusively parseable JSON without extraneous logs or banners.
+New or modified user-facing CLI commands (such as `provider-summary`) MUST provide predictable, robust interfaces:
+- Dual-format output: Commands designed for dual-format reporting MUST provide a standard human-readable text output and a pure machine-readable JSON output via `--json`. When `--json` is supplied, stdout MUST contain exclusively parseable JSON without extraneous logs or banners. Existing commands outside feature scope (such as `doctor`) MUST preserve their established behavior and MUST NOT be modified unless explicitly required by a dedicated feature.
 - Error handling: Expected operational errors MUST exit with a non-zero exit code, print clear diagnostics to stderr, and suppress unhandled stack traces during normal operation.
 
 ### V. SpecKit Traceability & Living Documentation Supremacy
