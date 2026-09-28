@@ -118,13 +118,42 @@ def revalidate_checkpoint(checkpoint, root, harness):
             results += [harness.run_command(item["command"],item.get("name","regression"),"regression_tests") if isinstance(item,dict) else harness.run_command(item,category="regression_tests") for item in regression]
         if stage=="TASK_COMPLETE" and evidence.get("phase")!="COMPLETE": return False,"TASK_REPORT_NOT_COMPLETE"
         return bool(results) and all(item.success for item in results),[item.status for item in results]
-    if stage in {"SPEC_VALIDATED","PLAN_VALIDATED","TASKS_VALIDATED","CONSTITUTION_VALIDATED","CROSS_VALIDATED"}:
+    if stage in {"SPEC_VALIDATED","PLAN_VALIDATED","TASKS_VALIDATED","CONSTITUTION_VALIDATED","CROSS_VALIDATED","CONSTITUTION_CREATED","CHECKLIST_COMPLETE","CLARIFICATION_COMPLETE","ANALYSIS_COMPLETE"}:
+        from orchestrator.workflow.postconditions import verify_stage_postcondition, PostconditionError
         artifacts=checkpoint["workspace_fingerprint"].get("artifact_hashes",{})
-        required={"CONSTITUTION_VALIDATED":{"constitution.md"},"SPEC_VALIDATED":{"constitution.md","spec.md"},
+        required={"CONSTITUTION_CREATED":{"constitution.md"},"CONSTITUTION_VALIDATED":{"constitution.md"},"SPEC_VALIDATED":{"constitution.md","spec.md"},
             "PLAN_VALIDATED":{"constitution.md","spec.md","plan.md"},"TASKS_VALIDATED":{"constitution.md","spec.md","plan.md","tasks.md"},
-            "CROSS_VALIDATED":{"constitution.md","spec.md","plan.md","tasks.md"}}[stage]
+            "CROSS_VALIDATED":{"constitution.md","spec.md","plan.md","tasks.md"},
+            "CHECKLIST_COMPLETE":{"constitution.md","spec.md"},
+            "CLARIFICATION_COMPLETE":{"constitution.md","spec.md"},
+            "ANALYSIS_COMPLETE":{"constitution.md","spec.md","plan.md","tasks.md"}}[stage]
         present={Path(path).name for path,value in artifacts.items() if value is not None}
-        return required.issubset(present),"ARTIFACT_HASHES_OK" if required.issubset(present) else "MISSING_VALIDATED_ARTIFACT"
+        if not required.issubset(present):
+            return False, "MISSING_VALIDATED_ARTIFACT"
+        const = Path(root) / ".specify" / "memory" / "constitution.md"
+        try:
+            if stage in {"CONSTITUTION_CREATED", "CONSTITUTION_VALIDATED"}:
+                verify_stage_postcondition("CONSTITUTION_CREATED", constitution_path=const)
+            elif stage in {"SPEC_VALIDATED", "CLARIFICATION_COMPLETE"}:
+                layout = ArtifactLayout.discover(root, workflow_dir=folder)
+                verify_stage_postcondition("SPEC_VALIDATED", spec_path=layout.spec)
+            elif stage == "CHECKLIST_COMPLETE":
+                layout = ArtifactLayout.discover(root, workflow_dir=folder)
+                verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=layout.require_feature_dir() / "checklists", allow_legacy_absent=True)
+            elif stage == "PLAN_VALIDATED":
+                layout = ArtifactLayout.discover(root, workflow_dir=folder)
+                verify_stage_postcondition("PLAN_VALIDATED", plan_path=layout.plan)
+            elif stage == "TASKS_VALIDATED":
+                layout = ArtifactLayout.discover(root, workflow_dir=folder)
+                verify_stage_postcondition("TASKS_VALIDATED", tasks_path=layout.tasks)
+            elif stage == "ANALYSIS_COMPLETE":
+                report = (folder / "analysis-report.md") if folder else None
+                if not report or not report.is_file():
+                    return False, "MISSING_ANALYSIS_REPORT"
+                verify_stage_postcondition("ANALYSIS_COMPLETE", report_path=report)
+        except (PostconditionError, ArtifactDiscoveryError) as exc:
+            return False, f"ARTIFACT_POSTCONDITION_FAILED: {exc}"
+        return True, "ARTIFACT_HASHES_OK"
     if stage=="WORKFLOW_PLANNED": return True,"INITIAL_WORKSPACE_MATCH"
     if stage in {"FINAL_VERIFIED","FINAL_REVIEWED"}:
         from orchestrator.verification.harness import final_verification_pass

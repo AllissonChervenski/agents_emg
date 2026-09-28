@@ -47,8 +47,10 @@ class InteractiveGate:
         self.store.update_workflow(self.workflow_id,stage,state,item["current_task"])
 
     def _summary(self, stage, role, provider, model, files, commands, task_id, artifacts=()):
+        from orchestrator.agents.roles import ROLES
+        skill = ROLES[role].skill_name if role in ROLES else None
         summary={"workflow_id":self.workflow_id,"stage":stage,"role":role,"provider":provider,
-                 "model":model or "CLI default","task":task_id,
+                 "model":model or "CLI default","skill":skill,"task":task_id,
                  "files_allowed":list(files),"files_expected_to_change":list(files),
                  "commands_or_expected_outputs":list(commands),
                  "artifacts_supplied":list(artifacts or ()),

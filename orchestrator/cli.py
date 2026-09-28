@@ -201,7 +201,7 @@ def run(args):
     runner=AgentRunner(provider_instances,router,store,workflow_id=wid,safety=cfg.real_run,
         cost_router=CostAwareRouter(router,cfg.cost_optimization,store,wid),execution_policy_router=policy_router)
     from orchestrator.interactive import InteractiveGate
-    interactive_gate=InteractiveGate(workspace=root) if getattr(args,"interactive",False) else None
+    interactive_gate=InteractiveGate(workspace=root, store=store, workflow_id=wid) if getattr(args,"interactive",False) else None
     if interactive_gate:
         runner.on_fallback=lambda role,provider,model: interactive_gate.confirm("PROVIDER_FALLBACK",role,provider,model,[],[])
         if getattr(args,"first_real_run",False):
@@ -218,7 +218,7 @@ def run(args):
         return interactive_gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands,attempt=attempt,artifacts=artifacts)
 
     def approve_constitution():
-        if interactive_gate: return gate_callback("CONSTITUTION_CREATE","constitution",["constitution.md"],[])
+        if interactive_gate: return gate_callback("CONSTITUTION_CREATE","constitution",[".specify/memory/constitution.md"],[])
         if not sys.stdin.isatty(): return False
         return input("Create constitution.md? This is a human-gated project change. Type 'approve': ").strip()=="approve"
     try:
@@ -347,7 +347,7 @@ def resume(args):
         router.config["routing"]={**cfg.routing}
         cfg.cost_optimization["mode"]="observe"
     harness=VerificationHarness(root,cfg.verification)
-    gate=InteractiveGate(workspace=root) if args.interactive or item["state"].get("first_real_run") else None
+    gate=InteractiveGate(workspace=root, store=store, workflow_id=args.workflow_id) if args.interactive or item["state"].get("first_real_run") else None
     def continue_run():
         providers={name:cls() for name,cls in PROVIDERS.items()}
         for provider in providers.values(): provider.discover()

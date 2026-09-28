@@ -17,11 +17,11 @@ from orchestrator.workflow.artifacts import ArtifactDiscoveryError, ArtifactLayo
 from orchestrator.workflow.constitution import classify_constitution
 from orchestrator.agents.roles import ROLES
 from orchestrator.workflow.quality_gates import (
-    analyze_has_critical_findings,
     clarification_questions,
     convergence_outcome,
     run_convergence_loop,
 )
+from orchestrator.workflow.postconditions import verify_stage_postcondition, PostconditionError
 
 
 ARTIFACTS = [
@@ -91,21 +91,34 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
             except ArtifactDiscoveryError: path=None
         if path is None:
             raise WorkflowBlocked(f"{author_role} did not create a discoverable SpecKit artifact")
-        if author_role=="tasks":
+        if author_role in {"tasks", "task_agent"}:
             # SpecKit writes tasks.md itself and reports a summary on stdout.
             # Legacy stdout artifacts remain accepted while prior runs migrate.
             if not path.is_file() or path.read_bytes()==before:
                 try: parse_speckit_tasks(author.stdout)
                 except TaskContractError as exc: raise WorkflowBlocked(f"tasks skill produced no valid tasks.md: {exc}") from exc
                 path.write_text(author.stdout)
-            try: parse_speckit_tasks(path.read_text())
-            except TaskContractError as exc: raise WorkflowBlocked(f"Invalid tasks.md: {exc}") from exc
+            try:
+                verify_stage_postcondition("TASKS_VALIDATED", tasks_path=path)
+            except PostconditionError as exc:
+                raise WorkflowBlocked(f"tasks postcondition failure: {exc}") from exc
         elif (not path.is_file() or path.read_bytes()==before) and author.stdout.strip():
             # Native SpecKit skills write their canonical artifact themselves;
             # legacy providers may still return the artifact on stdout.
             path.parent.mkdir(parents=True,exist_ok=True)
             path.write_text(author.stdout)
         if not path.exists(): raise WorkflowBlocked(f"{author_role} produced no artifact at {path}")
+
+        if author_role in {"specification", "specification_agent"}:
+            try:
+                verify_stage_postcondition("SPEC_VALIDATED", spec_path=path)
+            except PostconditionError as exc:
+                raise WorkflowBlocked(f"specification postcondition failure: {exc}") from exc
+        elif author_role in {"planning", "architect_agent"}:
+            try:
+                verify_stage_postcondition("PLAN_VALIDATED", plan_path=path)
+            except PostconditionError as exc:
+                raise WorkflowBlocked(f"planning postcondition failure: {exc}") from exc
         supplied = []
         if path:
             try:
@@ -198,6 +211,10 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         if (not constitution.is_file() or constitution.read_bytes()==before) and generated.stdout.strip():
             constitution.parent.mkdir(parents=True,exist_ok=True)
             constitution.write_text(generated.stdout)
+        try:
+            verify_stage_postcondition("CONSTITUTION_CREATED", constitution_path=constitution)
+        except PostconditionError as exc:
+            raise WorkflowBlocked(f"Constitution postcondition failure: {exc}") from exc
         checkpoint("CONSTITUTION_CREATED")
         constitution_rel = str(constitution.relative_to(root)) if constitution.is_relative_to(root) else str(constitution)
         if not _call_gate(gate_callback, "CONSTITUTION_VALIDATE", "constitution_validator", [], [], artifacts=[constitution_rel]):
@@ -219,12 +236,11 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
             except ArtifactDiscoveryError as exc:
                 raise WorkflowBlocked(str(exc)) from exc
             artifact_resolver=None
-        prompt=load_prompt(author,feature=feature,artifact=str(layout.feature_dir))
         stage={"specification":"SPEC_VALIDATED","planning":"PLAN_VALIDATED","tasks":"TASKS_VALIDATED"}[author]
         if resume and validated(stage):
-            if not path.is_file(): raise WorkflowBlocked(f"Missing validated artifact {path}")
+            if not path or not path.is_file() or not path.read_text().strip(): raise WorkflowBlocked(f"Missing validated artifact {path}")
             continue
-        if author=="tasks": prompt += '\nGenerate the official SpecKit tasks.md checklist using the installed tasks-template override. Include adjacent harness-task metadata for every checklist item. TestDesigner declares task-specific tests and commands during RED.'
+        prompt=load_prompt(author,feature=feature,artifact=constitution.read_text() if constitution.is_file() else "")
         scope=layout.stage_scope({"specification":"SPECIFICATION","planning":"PLAN","tasks":"TASKS"}[author])
         author_result,_=_create_and_validate(runner,author,validator,path,prompt,root,config.timeouts.get("provider"),max(1,min(config.retries.get("artifact_generation",3),config.real_run.get("max_retries",3))),gate_callback,scope,artifact_resolver)
         authors[author]=author_result.provider
@@ -248,37 +264,58 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
                 arguments="\n".join(f"Question: {question}\nHuman answer: {answer}" for question,answer in zip(questions,answers))
                 clarify_prompt=("Use the installed speckit-clarify skill to integrate these human answers into the active spec. "
                                 "Do not ask for more input; preserve the skill's artifact conventions.\n\n"+arguments)
-                if gate_callback and not gate_callback("CLARIFICATION","clarifier_agent",layout.stage_scope("CLARIFICATION"),[]):
+                spec_rel = str(layout.spec.relative_to(root)) if layout.spec.is_relative_to(root) else str(layout.spec)
+                if not _call_gate(gate_callback, "CLARIFICATION", "clarifier_agent", layout.stage_scope("CLARIFICATION"), [], artifacts=[spec_rel]):
                     raise WorkflowBlocked("Interactive gate aborted before clarification")
                 clarify=_generate(runner,"clarifier_agent",clarify_prompt,root,config.timeouts.get("provider"),
                                   allowed_paths=layout.stage_scope("CLARIFICATION"))
                 if not clarify.success: raise WorkflowBlocked(f"speckit-clarify failed: {clarify.error or clarify.stderr}")
-                if clarification_questions(layout.spec.read_text()):
-                    raise WorkflowBlocked("speckit-clarify left unresolved [NEEDS CLARIFICATION] markers")
+        try:
+            verify_stage_postcondition("CLARIFICATION_COMPLETE", spec_path=layout.spec)
+        except PostconditionError as exc:
+            raise WorkflowBlocked(f"Clarification postcondition failure: {exc}") from exc
         checkpoint("CLARIFICATION_COMPLETE")
+    else:
+        try:
+            verify_stage_postcondition("CLARIFICATION_COMPLETE", spec_path=layout.spec)
+        except PostconditionError as exc:
+            raise WorkflowBlocked(f"Resume artifact validation failed: {exc}") from exc
     if not (resume and validated("CHECKLIST_COMPLETE")):
         checklist_prompt=("Use the installed speckit-checklist skill to generate a requirements-quality checklist "
                           "from the active feature artifacts. Focus on requirement completeness, clarity, consistency, "
                           "and testability. Use the skill's documented defaults and do not wait for interactive input.")
-        if gate_callback and not gate_callback("REQUIREMENTS_CHECKLIST","requirements_reviewer",layout.stage_scope("REQUIREMENTS_CHECKLIST"),[]):
+        spec_rel = str(layout.spec.relative_to(root)) if layout.spec.is_relative_to(root) else str(layout.spec)
+        if not _call_gate(gate_callback, "REQUIREMENTS_CHECKLIST", "requirements_reviewer", layout.stage_scope("REQUIREMENTS_CHECKLIST"), [], artifacts=[spec_rel]):
             raise WorkflowBlocked("Interactive gate aborted before requirements checklist")
         checklist=_generate(runner,"requirements_reviewer",checklist_prompt,root,config.timeouts.get("provider"),
                             allowed_paths=layout.stage_scope("REQUIREMENTS_CHECKLIST"))
         if not checklist.success: raise WorkflowBlocked(f"speckit-checklist failed: {checklist.error or checklist.stderr}")
         checklist_dir=layout.require_feature_dir()/"checklists"
-        if not checklist_dir.is_dir() or not any(checklist_dir.glob("*.md")):
-            raise WorkflowBlocked("speckit-checklist did not create a checklist under the feature's checklists/")
+        try:
+            verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=checklist_dir)
+        except PostconditionError as exc:
+            raise WorkflowBlocked(f"Checklist postcondition failure: {exc}") from exc
         checkpoint("CHECKLIST_COMPLETE")
+    else:
+        try:
+            verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=layout.require_feature_dir() / "checklists", allow_legacy_absent=True)
+        except PostconditionError as exc:
+            raise WorkflowBlocked(f"Resume artifact validation failed: {exc}") from exc
     for author,validator,filename in ARTIFACTS[1:]:
         try: path={"spec.md":layout.spec,"plan.md":layout.plan,"tasks.md":layout.tasks}[filename]
         except ArtifactDiscoveryError as exc:
             raise WorkflowBlocked(str(exc)) from exc
-        prompt=load_prompt(author,feature=feature,artifact=str(layout.feature_dir))
         stage={"specification":"SPEC_VALIDATED","planning":"PLAN_VALIDATED","tasks":"TASKS_VALIDATED"}[author]
         if resume and validated(stage):
-            if not path.is_file(): raise WorkflowBlocked(f"Missing validated artifact {path}")
+            if not path or not path.is_file() or not path.read_text().strip(): raise WorkflowBlocked(f"Missing validated artifact {path}")
             continue
-        if author=="tasks": prompt += '\nGenerate the official SpecKit tasks.md checklist using the installed tasks-template override. Include adjacent harness-task metadata for every checklist item. TestDesigner declares task-specific tests and commands during RED.'
+        if author=="planning":
+            artifact_text = layout.spec.read_text() if layout.spec.is_file() else ""
+            prompt=load_prompt(author,feature=feature,artifact=artifact_text)
+        elif author=="tasks":
+            artifact_text = layout.plan.read_text() if layout.plan.is_file() else ""
+            prompt=load_prompt(author,feature=feature,artifact=artifact_text)
+            prompt += '\nGenerate the official SpecKit tasks.md checklist using the installed tasks-template override. Include adjacent harness-task metadata for every checklist item. TestDesigner declares task-specific tests and commands during RED.'
         scope=layout.stage_scope({"specification":"SPECIFICATION","planning":"PLAN","tasks":"TASKS"}[author])
         author_result,_=_create_and_validate(runner,author,validator,path,prompt,root,config.timeouts.get("provider"),max(1,min(config.retries.get("artifact_generation",3),config.real_run.get("max_retries",3))),gate_callback,scope)
         authors[author]=author_result.provider
@@ -287,15 +324,28 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         analyze_prompt=("Use the installed speckit-analyze skill to assess consistency across the active spec.md, "
                         "plan.md, and tasks.md. Produce its documented read-only analysis report. "
                         "Do not apply remediation edits.")
-        if gate_callback and not gate_callback("ANALYSIS","consistency_agent",[],[]):
+        analysis_artifacts = [
+            str(layout.spec.relative_to(root)) if layout.spec.is_relative_to(root) else str(layout.spec),
+            str(layout.plan.relative_to(root)) if layout.plan.is_relative_to(root) else str(layout.plan),
+            str(layout.tasks.relative_to(root)) if layout.tasks.is_relative_to(root) else str(layout.tasks),
+        ]
+        if not _call_gate(gate_callback, "ANALYSIS", "consistency_agent", [], [], artifacts=analysis_artifacts):
             raise WorkflowBlocked("Interactive gate aborted before SpecKit analysis")
         analysis=_generate(runner,"consistency_agent",analyze_prompt,root,config.timeouts.get("provider"),
                            {authors["tasks"]} if authors.get("tasks") else None,allowed_paths=[])
         if not analysis.success: raise WorkflowBlocked(f"speckit-analyze failed: {analysis.error or analysis.stderr}")
-        (out/"analysis-report.md").write_text(analysis.stdout)
-        if analyze_has_critical_findings(analysis.stdout):
-            raise WorkflowBlocked("speckit-analyze reported critical cross-artifact findings")
+        report_path = out / "analysis-report.md"
+        report_path.write_text(analysis.stdout)
+        try:
+            verify_stage_postcondition("ANALYSIS_COMPLETE", report_path=report_path)
+        except PostconditionError as exc:
+            raise WorkflowBlocked(f"Analysis postcondition failure: {exc}") from exc
         checkpoint("ANALYSIS_COMPLETE")
+    else:
+        try:
+            verify_stage_postcondition("ANALYSIS_COMPLETE", report_path=out / "analysis-report.md", allow_legacy_absent=True)
+        except PostconditionError as exc:
+            raise WorkflowBlocked(str(exc)) from exc
     tasks=_parse_tasks(layout.tasks.read_text())
     if not tasks: raise WorkflowBlocked("tasks.md must contain valid SpecKit checklist tasks and harness metadata")
     completed={row["task_id"] for row in store.checkpoints(workflow_id) if row["stage"]=="TASK_COMPLETE"} if store and resume else set()
