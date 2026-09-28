@@ -1,7 +1,7 @@
 import json
 import re
 from typing import Any
-from orchestrator.config.models import ValidationIssue, ValidationResult
+from orchestrator.config.models import ValidationResult
 from .schemas import validation_result
 
 
@@ -62,15 +62,25 @@ def _is_codex_jsonl(text: str) -> bool:
 
 def _parse_contract(text: str, validator: str, model: str | None = None) -> ValidationResult:
     obj = _extract(text)
-    if not isinstance(obj, dict) or obj.get("status") not in {"PASS", "REVISE", "BLOCKED"} or not isinstance(obj.get("issues", []), list):
+    if not isinstance(obj, dict):
         return validation_result("PARSE_ERROR", [], "Could not parse strict validation output", validator, model, text)
-    issues = []
-    try:
-        for item in obj.get("issues", []):
-            issues.append(ValidationIssue(str(item["id"]), str(item["severity"]), str(item.get("artifact", "")), str(item.get("location", "")), str(item.get("requirement", "")), str(item["description"]), str(item.get("suggested_action", ""))))
-    except (KeyError, TypeError):
-        return validation_result("PARSE_ERROR", [], "Malformed issue schema", validator, model, text)
-    return validation_result(obj["status"], issues, str(obj.get("summary", "")), validator, model, text)
+    status = obj.get("status")
+    if status not in {"PASS", "REVISE", "BLOCKED"}:
+        return validation_result("PARSE_ERROR", [], "Could not parse strict validation output", validator, model, text)
+    raw_issues = obj.get("issues")
+    if not isinstance(raw_issues, list):
+        return validation_result("PARSE_ERROR", [], "Could not parse strict validation output", validator, model, text)
+    issues: list[str] = []
+    for item in raw_issues:
+        if not isinstance(item, str):
+            return validation_result("PARSE_ERROR", [], "Malformed issue schema", validator, model, text)
+        issues.append(item)
+    summary_val = obj.get("summary")
+    if summary_val is None:
+        summary_val = obj.get("reason", "")
+    if not isinstance(summary_val, str):
+        return validation_result("PARSE_ERROR", [], "Could not parse strict validation output", validator, model, text)
+    return validation_result(status, issues, summary_val, validator, model, text)
 
 
 def parse_codex_validation(text: str, validator: str, model: str | None = None) -> ValidationResult:

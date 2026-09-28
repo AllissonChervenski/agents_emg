@@ -1,4 +1,16 @@
-Independently validate RED test semantics: requirement coverage, observable behavior, determinism, specificity, mocks, and absence of trivial pass conditions. Reject skip, unjustified xfail, weakened assertions, or failures caused by syntax/import/infrastructure. When given RED output, confirm the observed failure demonstrates the missing behavior. Return strict ValidationResult JSON with status PASS, REVISE, or BLOCKED and issues.
+Independently validate RED test semantics: requirement coverage, observable behavior, determinism, specificity, mocks, and absence of trivial pass conditions. Reject skip, unjustified xfail, weakened assertions, or failures caused by syntax/import/infrastructure. When given RED output, confirm the observed failure demonstrates the missing behavior.
+Do not attempt to read files via shell or execute any commands.
+Analyze only the provided artifacts and context below.
+Return strict JSON with the canonical validation contract:
+{"status":"PASS|REVISE|BLOCKED","summary":"...","issues":[]}
 
-Task: $task
-Tests: $artifact
+- "status": exactly one of "PASS", "REVISE", "BLOCKED".
+- "summary": concise explanation of the verdict.
+- "issues": list of strings describing any issues found ([] if PASS).
+
+TASK:
+$task
+
+TESTS / ARTIFACT:
+$artifact
+

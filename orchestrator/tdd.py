@@ -6,6 +6,7 @@ from orchestrator.config.models import ValidationResult
 from orchestrator.workflow.tdd import TDDTask
 from orchestrator.workflow.transitions import TDDPhase
 from orchestrator.tdd_contract import parse_test_design, hash_test_files, changed_test_hashes
+from orchestrator.agents.runner import load_prompt
 
 
 class TDDGate:
@@ -135,11 +136,21 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     def checkpoint(stage):
         save()
         if checkpoint_callback: checkpoint_callback(stage,task.task,task.attempts.get("green",0)+1)
-    def gate_phase(phase, role, files=(), commands=()):
-        if gate_callback and not gate_callback(phase,role,list(files),list(commands)):
+    def gate_phase(phase, role, files=(), commands=(), artifacts=()):
+        if not gate_callback:
+            return True
+        try:
+            ok = gate_callback(phase, role, list(files), list(commands), artifacts=list(artifacts))
+        except TypeError:
+            try:
+                ok = gate_callback(phase, role, list(files), list(commands))
+            except TypeError:
+                ok = True
+        if not ok:
             task.evidence["gate_abort"]=phase
             task.advance(TDDPhase.BLOCKED); save(); return False
         return True
+
     if resume_stage in {"RED_VALIDATED","GREEN_VALIDATED","REFACTOR_VALIDATED"}:
         from types import SimpleNamespace
         report=Path(workflow_dir)/task.task/"tdd.json"
@@ -184,8 +195,8 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
             task.advance(TDDPhase.BLOCKED); save(); return task
         task.evidence["test_design"]={"task_id":design.task_id,"requirement_ids":design.requirement_ids,"acceptance_criteria_ids":design.acceptance_criteria_ids,"created_tests":design.created_tests,"test_commands":design.test_commands}
         test_sources={path:(root/path).read_text(errors="replace")[:12000] for path in task.evidence["test_files_changed"] if (root/path).is_file()}
-        if not gate_phase("RED_VALIDATE","test_validator",task.evidence["test_files_changed"]): return task
-        validator, raw=invoke("test_validator", f"Review declared task tests, sources and commands before RED.\n{json.dumps({'design':task.evidence['test_design'],'sources':test_sources})}", author_provider=designer.provider)
+        if not gate_phase("RED_VALIDATE","test_validator",[],[],artifacts=task.evidence["test_files_changed"]): return task
+        validator, raw=invoke("test_validator", load_prompt("test_validator", task=json.dumps(task.evidence['test_design']), artifact=json.dumps(test_sources, indent=2)), author_provider=designer.provider)
         if validator.success:
             vr=parse_validation(raw or "", "test_validator", validator.model, provider=getattr(validator,"provider",None))
         else:
@@ -205,7 +216,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         task.evidence["red_expected_failure_confirmed"]=red_status=="EXPECTED_FAILURE"
         task.evidence["red_attempts"]=1
         if red_status=="EXPECTED_FAILURE":
-            red_validator,red_raw=invoke("test_validator", "Validate the observed RED failures semantically against the linked acceptance criteria. Return PASS only if each failure demonstrates missing behavior.\n"+json.dumps(task.evidence["red"]),author_provider=designer.provider)
+            red_validator,red_raw=invoke("test_validator", load_prompt("test_validator", task=f"Validate observed RED failures for {task.task}", artifact=json.dumps(task.evidence["red"], indent=2)), author_provider=designer.provider)
             if red_validator.success:
                 red_validation=parse_validation(red_raw or "","test_validator",red_validator.model, provider=getattr(red_validator,"provider",None))
             else:
@@ -234,18 +245,28 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         if changed:
             task.evidence["test_tampering_detected"]=True; task.evidence["test_tampering_files"]=changed; gate.green(False,tampered=True)
             task.evidence["green_attempts"]=task.attempts["green"]
-            tamper_validator,tamper_raw=invoke("test_validator", "TEST_TAMPERING: inspect unauthorized GREEN changes. Return REVISE with suggested_action RETURN_TO_RED only if a legitimate test correction is needed; otherwise BLOCKED. Files: "+json.dumps(changed),author_provider=coder.provider)
+            tamper_prompt = (
+                "TEST_TAMPERING: inspect unauthorized GREEN changes. Return REVISE with 'RETURN_TO_RED' in issues or summary only if a legitimate test correction is needed; otherwise BLOCKED.\n"
+                "Do not attempt to read files via shell or execute any commands.\n"
+                f"Files: {json.dumps(changed)}\n"
+                'Return strict JSON: {"status":"PASS|REVISE|BLOCKED","summary":"...","issues":[]}'
+            )
+            tamper_validator,tamper_raw=invoke("test_validator", tamper_prompt, author_provider=coder.provider)
             if tamper_validator.success:
                 tamper_review=parse_validation(tamper_raw or "","test_validator",tamper_validator.model, provider=getattr(tamper_validator,"provider",None))
             else:
                 tamper_review=ValidationResult("PARSE_ERROR" if not tamper_validator.error else "BLOCKED", [], tamper_validator.error or tamper_validator.stderr or "test_validator failed", "test_validator", tamper_validator.model, datetime.now(timezone.utc).isoformat(), tamper_raw or tamper_validator.stderr or tamper_validator.error or "")
             _record_validation(runner, tamper_validator, tamper_review, stage="TEST_TAMPERING_VALIDATE", evidence={"task_id": task.task, "changed_files": changed})
-            if tamper_review and tamper_review.status=="REVISE" and any(issue.suggested_action=="RETURN_TO_RED" for issue in tamper_review.issues):
+            if tamper_review and tamper_review.status=="REVISE" and (
+                any("RETURN_TO_RED" in str(issue) for issue in tamper_review.issues)
+                or "RETURN_TO_RED" in tamper_review.summary
+            ):
                 task.evidence["test_change_approved"]=True
                 task.evidence["red_restart_required"]=True
                 task.advance(TDDPhase.RED_GENERATE,{"test_change_approved":True})
                 save(); return task
             task.advance(TDDPhase.BLOCKED); save(); return task
+
         if artifact_hashes()!=protected_artifacts:
             task.evidence["artifact_tampering_detected"]=True
             invoke("code_reviewer","ARTIFACT_TAMPERING: Coder modified a protected SDD artifact. Review and require restoration.",author_provider=coder.provider)
@@ -301,8 +322,11 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         if not gate.refactor(True,regression_ok):
             task.advance(TDDPhase.BLOCKED); save(); return task
         checkpoint("REFACTOR_VALIDATED")
-    if not gate_phase("REVIEW","code_reviewer",task.evidence.get("production_files_changed",[])): return task
-    review,raw=invoke("code_reviewer", "Review code and TDD evidence.\n"+json.dumps(task.evidence), author_provider=task.evidence.get("coder_provider"))
+    if not gate_phase("REVIEW","code_reviewer",[],[],artifacts=task.evidence.get("production_files_changed",[])): return task
+    review,raw=invoke("code_reviewer", load_prompt("code_reviewer", task=task.task, artifact=json.dumps(task.evidence, indent=2)), author_provider=task.evidence.get("coder_provider"))
+
+
+
     if review.success:
         review_result=parse_validation(raw or "", "code_reviewer", review.model, provider=getattr(review,"provider",None))
     else:

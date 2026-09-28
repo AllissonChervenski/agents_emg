@@ -27,7 +27,8 @@ class Runner:
             else: (self.root/"feature.py").write_text("VALUE=1\n")
             raw="done"
         elif role=="test_validator" and self.approve_red and "TEST_TAMPERING" in prompt:
-            raw=json.dumps({"status":"REVISE","summary":"test correction required","issues":[{"id":"TV-1","severity":"major","description":"test needs correction","suggested_action":"RETURN_TO_RED"}]})
+            raw=json.dumps({"status":"REVISE","summary":"test correction required","issues":["RETURN_TO_RED: test needs correction"]})
+
         elif role in ("test_validator","code_reviewer"): raw=VALIDATION
         else: raw="analysis" if role=="test_designer" else "done"
         return AgentResult("fake",None,role,True,stdout=raw)

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 import pytest
 
-from orchestrator.config.models import AgentResult, Config, ValidationIssue, ValidationResult
+from orchestrator.config.models import AgentResult, Config, ValidationResult
 from orchestrator.storage.sqlite import StateStore
 from orchestrator.agents.runner import AgentRunner
 from orchestrator.validation.parser import parse_validation, sanitize_text
@@ -106,7 +106,7 @@ def test_revise_persists_before_blocking(tmp_path):
             if role == "specification":
                 return AgentResult("codex", "gpt-6-luna", role, True, stdout="# Spec v" + str(self.call_count))
             self.call_count += 1
-            issues = [{"id": f"ISS-{self.call_count}", "severity": "major", "artifact": "spec.md", "location": "L1", "requirement": "FR-1", "description": f"Missing details {self.call_count}", "suggested_action": "Add details"}]
+            issues = [f"Missing details {self.call_count} in spec.md (FR-1)"]
             return AgentResult("opencode", "gpt-6-luna", role, True, stdout=json.dumps({"status": "REVISE", "issues": issues, "summary": f"Needs revision attempt {self.call_count}"}))
 
         def record_validation(self, agent_res, val_res, stage=None, evidence=None):
@@ -117,7 +117,7 @@ def test_revise_persists_before_blocking(tmp_path):
                 "model": agent_res.model,
                 "status": val_res.status,
                 "reason": val_res.summary,
-                "issues": [issue.__dict__ if hasattr(issue, "__dict__") else issue for issue in val_res.issues],
+                "issues": list(val_res.issues),
                 "evidence": evidence or {},
                 "raw_response": val_res.raw_output,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -153,7 +153,7 @@ def test_blocked_persists_before_blocking_canary_reproduction(tmp_path):
             self.validation_results = []
 
         def run(self, role, prompt, **kwargs):
-            issues = [{"id": "CONST-SEC-1", "severity": "critical", "artifact": "constitution.md", "location": "sec 2", "requirement": "C-1", "description": "Independent verification violated", "suggested_action": "Fix constitution"}]
+            issues = ["Independent verification violated in constitution.md (C-1)"]
             return AgentResult(
                 "codex",
                 "gpt-6-luna",
@@ -170,9 +170,10 @@ def test_blocked_persists_before_blocking_canary_reproduction(tmp_path):
                 "model": agent_res.model,
                 "status": val_res.status,
                 "reason": val_res.summary,
-                "issues": [issue.__dict__ if hasattr(issue, "__dict__") else issue for issue in val_res.issues],
+                "issues": list(val_res.issues),
                 "evidence": evidence or {},
                 "raw_response": val_res.raw_output,
+
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             self.validation_results.append(entry)
@@ -198,7 +199,8 @@ def test_blocked_persists_before_blocking_canary_reproduction(tmp_path):
     assert results[0]["model"] == "gpt-6-luna"
     assert results[0]["reason"] == "Existing constitution violates independent verification requirement"
     assert len(results[0]["issues"]) == 1
-    assert results[0]["issues"][0]["id"] == "CONST-SEC-1"
+    assert results[0]["issues"][0] == "Independent verification violated in constitution.md (C-1)"
+
 
     # Verify report JSON
     report_file = tmp_path / ".orchestrator" / "reports" / f"{wid}.json"
@@ -240,7 +242,7 @@ def test_multiple_results_accumulated_append_only(tmp_path):
     runner.record_validation(r1, v1, stage="CONSTITUTION_VALIDATE")
 
     # 2. Spec validator REVISE
-    r2 = AgentResult("opencode", "gpt-5-turbo", "specification_validator", True, stdout='{"status":"REVISE","issues":[{"id":"1","severity":"minor","artifact":"spec.md","location":"","requirement":"","description":"clarify","suggested_action":"edit"}],"summary":"Clarify FR-1"}')
+    r2 = AgentResult("opencode", "gpt-5-turbo", "specification_validator", True, stdout='{"status":"REVISE","issues":["Clarify FR-1"],"summary":"Clarify FR-1"}')
     v2 = parse_validation(r2.stdout, "specification_validator", r2.model)
     runner.record_validation(r2, v2, stage="SPECIFICATION_VALIDATE")
 
@@ -289,8 +291,7 @@ def test_inspect_shows_issues_and_reason(tmp_path, capsys, monkeypatch):
     store, wid = _setup_store_and_workflow(tmp_path)
     runner = AgentRunner({}, DummyRouter(), store=store, workflow_id=wid)
 
-    issue = ValidationIssue("ISS-42", "major", "plan.md", "L10", "FR-2", "Missing architecture diagram", "Add diagram")
-    v = ValidationResult("REVISE", [issue], "Plan lacks diagrams", "plan_validator", "gpt-6-luna", datetime.now(timezone.utc).isoformat(), "raw")
+    v = ValidationResult("REVISE", ["Missing architecture diagram"], "Plan lacks diagrams", "plan_validator", "gpt-6-luna", datetime.now(timezone.utc).isoformat(), "raw")
     r = AgentResult("codex", "gpt-6-luna", "plan_validator", True, stdout="raw")
     runner.record_validation(r, v, stage="PLAN_VALIDATE")
 
@@ -302,8 +303,7 @@ def test_inspect_shows_issues_and_reason(tmp_path, capsys, monkeypatch):
     val_results = data["workflow"]["state"]["validation_results"]
     assert len(val_results) == 1
     assert val_results[0]["reason"] == "Plan lacks diagrams"
-    assert val_results[0]["issues"][0]["id"] == "ISS-42"
-    assert val_results[0]["issues"][0]["description"] == "Missing architecture diagram"
+    assert val_results[0]["issues"][0] == "Missing architecture diagram"
 
 
 def test_status_shows_last_relevant_result(tmp_path, capsys, monkeypatch):
@@ -317,7 +317,7 @@ def test_status_shows_last_relevant_result(tmp_path, capsys, monkeypatch):
     runner.record_validation(r1, v1, stage="CONSTITUTION_VALIDATE")
 
     # Second result BLOCKED
-    r2 = AgentResult("opencode", "gpt-5-turbo", "specification_validator", True, stdout='{"status":"BLOCKED","issues":[{"id":"1","severity":"critical","artifact":"spec.md","location":"","requirement":"","description":"bad","suggested_action":"fix"}],"summary":"Spec rejected"}')
+    r2 = AgentResult("opencode", "gpt-5-turbo", "specification_validator", True, stdout='{"status":"BLOCKED","issues":["Spec rejected: critical defect"],"summary":"Spec rejected"}')
     v2 = parse_validation(r2.stdout, "specification_validator", r2.model)
     runner.record_validation(r2, v2, stage="SPECIFICATION_VALIDATE")
 
@@ -365,7 +365,7 @@ def test_crash_after_persistence_does_not_lose_diagnosis(tmp_path):
     store, wid = _setup_store_and_workflow(tmp_path)
     runner = AgentRunner({}, DummyRouter(), store=store, workflow_id=wid)
 
-    r = AgentResult("codex", "gpt-6-luna", "constitution_validator", True, stdout='{"status":"BLOCKED","issues":[{"id":"C1","severity":"critical","artifact":"c.md","location":"","requirement":"","description":"Fatal rule violation","suggested_action":"revert"}],"summary":"Fatal constitutional flaw"}')
+    r = AgentResult("codex", "gpt-6-luna", "constitution_validator", True, stdout='{"status":"BLOCKED","issues":["Fatal rule violation: C1"],"summary":"Fatal constitutional flaw"}')
     v = parse_validation(r.stdout, "constitution_validator", r.model)
     runner.record_validation(r, v, stage="CONSTITUTION_VALIDATE")
 
@@ -377,12 +377,13 @@ def test_crash_after_persistence_does_not_lose_diagnosis(tmp_path):
     wf = new_store.get_workflow(wid)
     assert len(wf["state"]["validation_results"]) == 1
     assert wf["state"]["validation_results"][0]["reason"] == "Fatal constitutional flaw"
-    assert wf["state"]["validation_results"][0]["issues"][0]["id"] == "C1"
+    assert wf["state"]["validation_results"][0]["issues"][0] == "Fatal rule violation: C1"
 
     # Report JSON on disk also persisted
     report = json.loads((tmp_path / ".orchestrator" / "reports" / f"{wid}.json").read_text())
     assert len(report["validation_results"]) == 1
     assert report["validation_results"][0]["reason"] == "Fatal constitutional flaw"
+
 
 
 def test_all_seven_validators_covered(tmp_path):
@@ -450,8 +451,9 @@ def test_tdd_test_validator_and_code_reviewer_recorded_in_store(tmp_path):
                 "model": agent_res.model,
                 "status": val_res.status,
                 "reason": val_res.summary,
-                "issues": [issue.__dict__ if hasattr(issue, "__dict__") else issue for issue in val_res.issues],
+                "issues": list(val_res.issues),
                 "evidence": evidence or {},
+
                 "raw_response": val_res.raw_output,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }

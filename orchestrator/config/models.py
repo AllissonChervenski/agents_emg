@@ -73,12 +73,16 @@ class ValidationIssue:
 @dataclass
 class ValidationResult:
     status: str
-    issues: list[ValidationIssue]
+    issues: list[str]
     summary: str
     validator: str
     model: str | None
     timestamp: str
     raw_output: str = ""
+
+    @property
+    def reason(self) -> str:
+        return self.summary
 
 
 @dataclass

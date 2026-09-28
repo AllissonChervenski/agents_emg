@@ -212,10 +212,11 @@ def run(args):
             if item: store.update_workflow(wid,"RUNNING_VERIFICATION",{**item["state"],"running_command":payload["command"]},item["current_task"])
         else: store.record_verification(wid,payload)
     harness.on_command=command_event
-    def gate_callback(stage, role, files=(), commands=(), attempt=1):
+    def gate_callback(stage, role, files=(), commands=(), attempt=1, artifacts=()):
         if not interactive_gate: return True
         route=route_plan.get(role)
-        return interactive_gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands)
+        return interactive_gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands,attempt=attempt,artifacts=artifacts)
+
     def approve_constitution():
         if interactive_gate: return gate_callback("CONSTITUTION_CREATE","constitution",["constitution.md"],[])
         if not sys.stdin.isatty(): return False
@@ -360,10 +361,10 @@ def resume(args):
                 store.update_workflow(args.workflow_id,"RUNNING_VERIFICATION",{**current["state"],"running_command":payload["command"]},current["current_task"])
             else: store.record_verification(args.workflow_id,payload)
         harness.on_command=command_event
-        def gate_callback(stage,role,files=(),commands=()):
+        def gate_callback(stage,role,files=(),commands=(),attempt=1,artifacts=()):
             if not gate: return True
             route=router.route(role) if role in __import__("orchestrator.agents.roles",fromlist=["ROLES"]).ROLES else None
-            return gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands)
+            return gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands,attempt=attempt,artifacts=artifacts)
         def approve_constitution():
             return bool(gate and gate_callback("CONSTITUTION_CREATE","constitution",["constitution.md"],[]))
         try:
@@ -399,8 +400,9 @@ def validate(args):
     text=path.read_text(); required=args.requirement or []
     missing=[req for req in required if req not in text]
     status="PASS" if not missing else "REVISE"
-    result={"status":status,"issues":[{"id":f"missing-{i}","severity":"major","artifact":str(path),"location":"","requirement":req,"description":"Requirement ID missing","suggested_action":"Add explicit requirement mapping"} for i,req in enumerate(missing)],"summary":"Deterministic textual requirement check","validator":"python","model":None}
+    result={"status":status,"issues":[f"Requirement ID missing: {req} in {path}" for req in missing],"summary":"Deterministic textual requirement check","validator":"python","model":None}
     print(json.dumps(result,indent=2))
+
 
 
 def configure(args):

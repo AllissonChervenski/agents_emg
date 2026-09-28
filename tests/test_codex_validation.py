@@ -144,15 +144,7 @@ def test_codex_jsonl_revise():
         {
             "status": "REVISE",
             "issues": [
-                {
-                    "id": "R-101",
-                    "severity": "minor",
-                    "artifact": "spec.md",
-                    "location": "line 42",
-                    "requirement": "FR-002",
-                    "description": "Ambiguous error response format",
-                    "suggested_action": "Clarify error payload structure",
-                }
+                "Ambiguous error response format in spec.md line 42 (FR-002)"
             ],
             "summary": "Clarifications needed in section 2",
         }
@@ -163,10 +155,7 @@ def test_codex_jsonl_revise():
     assert result.status == "REVISE"
     assert result.summary == "Clarifications needed in section 2"
     assert len(result.issues) == 1
-    assert result.issues[0].id == "R-101"
-    assert result.issues[0].severity == "minor"
-    assert result.issues[0].description == "Ambiguous error response format"
-    assert result.issues[0].suggested_action == "Clarify error payload structure"
+    assert result.issues[0] == "Ambiguous error response format in spec.md line 42 (FR-002)"
 
 
 def test_codex_jsonl_blocked():
@@ -174,15 +163,7 @@ def test_codex_jsonl_blocked():
         {
             "status": "BLOCKED",
             "issues": [
-                {
-                    "id": "C-001",
-                    "severity": "critical",
-                    "artifact": "constitution.md",
-                    "location": "Principle 1",
-                    "requirement": "SUPREMACY",
-                    "description": "Rule violation directly conflicts with constitution",
-                    "suggested_action": "Revert the change immediately",
-                }
+                "Rule violation directly conflicts with constitution (SUPREMACY)"
             ],
             "summary": "Fatal constitutional flaw detected",
         }
@@ -194,8 +175,7 @@ def test_codex_jsonl_blocked():
     assert result.status != "PARSE_ERROR"
     assert result.summary == "Fatal constitutional flaw detected"
     assert len(result.issues) == 1
-    assert result.issues[0].id == "C-001"
-    assert result.issues[0].severity == "critical"
+    assert result.issues[0] == "Rule violation directly conflicts with constitution (SUPREMACY)"
     assert result.raw_output == jsonl
 
 
@@ -207,15 +187,7 @@ def test_codex_jsonl_blocked_persists_as_blocked_not_parse_error(tmp_path):
         {
             "status": "BLOCKED",
             "issues": [
-                {
-                    "id": "B-99",
-                    "severity": "critical",
-                    "artifact": "plan.md",
-                    "location": "Architecture",
-                    "requirement": "NO_TAMPERING",
-                    "description": "Unauthorized architecture bypass",
-                    "suggested_action": "Abort workflow",
-                }
+                "Unauthorized architecture bypass: defect B-99 in plan.md"
             ],
             "summary": "Workflow blocked due to critical architectural defect",
         }
@@ -239,12 +211,13 @@ def test_codex_jsonl_blocked_persists_as_blocked_not_parse_error(tmp_path):
     assert results[0]["status"] != "PARSE_ERROR"
     assert results[0]["reason"] == "Workflow blocked due to critical architectural defect"
     assert len(results[0]["issues"]) == 1
-    assert results[0]["issues"][0]["id"] == "B-99"
+    assert results[0]["issues"][0] == "Unauthorized architecture bypass: defect B-99 in plan.md"
     # Preserves sanitized raw_response
     assert "sk-SECRET12345678901234567890" not in results[0]["raw_response"]
     assert "[REDACTED]" in results[0]["raw_response"]
     assert "thread.started" in results[0]["raw_response"]
     assert "turn.completed" in results[0]["raw_response"]
+
 
 
 def test_codex_jsonl_agent_message_final_invalido():

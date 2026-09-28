@@ -34,6 +34,18 @@ ARTIFACTS = [
 class WorkflowBlocked(RuntimeError): pass
 
 
+def _call_gate(gate_callback, stage, role, files=(), commands=(), attempt=1, artifacts=()):
+    if not gate_callback:
+        return True
+    try:
+        return bool(gate_callback(stage, role, files, commands, attempt=attempt, artifacts=artifacts))
+    except TypeError:
+        try:
+            return bool(gate_callback(stage, role, files, commands, attempt=attempt))
+        except TypeError:
+            return bool(gate_callback(stage, role, files, commands))
+
+
 def _record_validation(runner, result, validation, stage=None, evidence=None):
     if not hasattr(runner, "record_validation"):
         return
@@ -71,7 +83,7 @@ def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=No
 def _create_and_validate(runner, author_role, validator_role, artifact_path, prompt, cwd, timeout, retries=3, gate_callback=None, allowed_paths=None, artifact_resolver=None):
     path=Path(artifact_path) if artifact_path else None; last=None
     for attempt in range(1,retries+1):
-        if gate_callback and not gate_callback(author_role.upper(),author_role,[str(path)] if path else list(allowed_paths or ()),[],attempt=attempt): raise WorkflowBlocked(f"Interactive gate aborted before {author_role}")
+        if path and not _call_gate(gate_callback, author_role.upper(), author_role, [str(path)] if path else list(allowed_paths or ()), [], attempt=attempt): raise WorkflowBlocked(f"Interactive gate aborted before {author_role}")
         before=path.read_bytes() if path and path.is_file() else None
         author=_generate(runner,author_role,prompt,cwd,timeout,allowed_paths=allowed_paths)
         if path is None and artifact_resolver:
@@ -94,7 +106,14 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
             path.parent.mkdir(parents=True,exist_ok=True)
             path.write_text(author.stdout)
         if not path.exists(): raise WorkflowBlocked(f"{author_role} produced no artifact at {path}")
-        if gate_callback and not gate_callback(validator_role.upper(),validator_role,[],[]): raise WorkflowBlocked(f"Interactive gate aborted before {validator_role}")
+        supplied = []
+        if path:
+            try:
+                supplied = [str(path.resolve().relative_to(Path(cwd).resolve()))]
+            except ValueError:
+                supplied = [str(path)]
+        if not _call_gate(gate_callback, validator_role.upper(), validator_role, [], [], artifacts=supplied):
+            raise WorkflowBlocked(f"Interactive gate aborted before {validator_role}")
         reviewer=_generate(runner,validator_role,load_prompt(validator_role,artifact=path.read_text(),feature=prompt),cwd,timeout,{author.provider})
         validation=parse_validation(reviewer.stdout,validator_role,reviewer.model,provider=getattr(reviewer,"provider",None))
         stage_map = {"specification_validator": "SPECIFICATION_VALIDATE", "plan_validator": "PLAN_VALIDATE", "tasks_validator": "TASKS_VALIDATE"}
@@ -114,7 +133,8 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
             if getattr(runner,"store",None) and author.usage.get("execution_id"):
                 runner.store.update_execution_outcome(author.usage["execution_id"],blocked=True,success=False)
             raise WorkflowBlocked(f"{validator_role} PARSE_ERROR: {validation.summary}; raw={validation.raw_output}")
-        prompt += "\nRevise based on these issues: "+json.dumps([issue.__dict__ for issue in validation.issues])
+        prompt += "\nRevise based on these issues: "+json.dumps(validation.issues)
+
     if getattr(runner,"store",None) and author.usage.get("execution_id"):
         runner.store.update_execution_outcome(author.usage["execution_id"],blocked=True,success=False)
     raise WorkflowBlocked(f"{validator_role} retry limit exceeded: {last.summary if last else 'no result'}")
@@ -161,7 +181,9 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
     if resume and validated("CONSTITUTION_VALIDATED"):
         if constitution_status != "VALID": raise WorkflowBlocked("Missing validated constitution")
     elif constitution_status == "VALID":
-        if gate_callback and not gate_callback("CONSTITUTION_VALIDATE","constitution_validator",[],[]): raise WorkflowBlocked("Interactive gate aborted before constitution validation")
+        constitution_rel = str(constitution.relative_to(root)) if constitution.is_relative_to(root) else str(constitution)
+        if not _call_gate(gate_callback, "CONSTITUTION_VALIDATE", "constitution_validator", [], [], artifacts=[constitution_rel]):
+            raise WorkflowBlocked("Interactive gate aborted before constitution validation")
         cap=runner.run("constitution_validator",load_prompt("constitution_validator",feature=feature,artifact=constitution.read_text()),cwd=root,timeout=config.timeouts.get("provider"))
         if cap.success:
             parsed=parse_validation(cap.stdout,"constitution_validator",cap.model,provider=getattr(cap,"provider",None))
@@ -177,12 +199,15 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
             constitution.parent.mkdir(parents=True,exist_ok=True)
             constitution.write_text(generated.stdout)
         checkpoint("CONSTITUTION_CREATED")
-        if gate_callback and not gate_callback("CONSTITUTION_VALIDATE","constitution_validator",[],[]): raise WorkflowBlocked("Interactive gate aborted before constitution validation")
+        constitution_rel = str(constitution.relative_to(root)) if constitution.is_relative_to(root) else str(constitution)
+        if not _call_gate(gate_callback, "CONSTITUTION_VALIDATE", "constitution_validator", [], [], artifacts=[constitution_rel]):
+            raise WorkflowBlocked("Interactive gate aborted before constitution validation")
         artifact_text = constitution.read_text() if constitution.is_file() else generated.stdout
         result=_generate(runner,"constitution_validator",load_prompt("constitution_validator",feature=feature,artifact=artifact_text),root,config.timeouts.get("provider"),{generated.provider})
         verdict=parse_validation(result.stdout,"constitution_validator",result.model,provider=getattr(result,"provider",None))
         _record_validation(runner,result,verdict,stage="CONSTITUTION_VALIDATE",evidence={"artifact":str(constitution)})
         if verdict.status!="PASS": raise WorkflowBlocked(f"constitution_validator {verdict.status}: {verdict.summary}")
+
     checkpoint("CONSTITUTION_VALIDATED")
     authors={}
     for author,validator,filename in ARTIFACTS[:1]:
@@ -386,8 +411,9 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         except (TypeError,ValueError) as exc:
             raise WorkflowBlocked(str(exc)) from exc
     if not (resume and validated("FINAL_REVIEWED")):
-        if gate_callback and not gate_callback("FINAL_REVIEW","final_reviewer",[],[]): raise WorkflowBlocked("Interactive gate aborted before final review")
+        if not _call_gate(gate_callback, "FINAL_REVIEW", "final_reviewer", [], [], artifacts=["traceability.json", "final-verification.json"]): raise WorkflowBlocked("Interactive gate aborted before final review")
         final_review=_generate(runner,"final_reviewer",load_prompt("final_reviewer",task="whole feature",artifact=json.dumps({"traceability":traceability,"verification":final_results})),root,config.timeouts.get("provider"),{last_coder_provider} if last_coder_provider else None)
+
         final_verdict=parse_validation(final_review.stdout,"final_reviewer",final_review.model,provider=getattr(final_review,"provider",None))
         _record_validation(runner,final_review,final_verdict,stage="FINAL_REVIEW",evidence={"final_results":final_results})
         for record in traceability:

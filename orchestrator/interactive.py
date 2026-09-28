@@ -46,11 +46,12 @@ class InteractiveGate:
             state.pop("reason",None)
         self.store.update_workflow(self.workflow_id,stage,state,item["current_task"])
 
-    def _summary(self, stage, role, provider, model, files, commands, task_id):
+    def _summary(self, stage, role, provider, model, files, commands, task_id, artifacts=()):
         summary={"workflow_id":self.workflow_id,"stage":stage,"role":role,"provider":provider,
                  "model":model or "CLI default","task":task_id,
                  "files_allowed":list(files),"files_expected_to_change":list(files),
                  "commands_or_expected_outputs":list(commands),
+                 "artifacts_supplied":list(artifacts or ()),
                  "reason_for_gate":"interactive approval before stage execution"}
         if self.context_fn:
             summary.update(self.context_fn(stage,role,provider,model,task_id) or {})
@@ -74,8 +75,9 @@ class InteractiveGate:
         self.last_decision="clarifications_answered"
         return answers
 
-    def confirm(self, stage, role, provider, model, files, commands, task_id=None, attempt=1) -> bool:
-        summary=self._summary(stage,role,provider,model,files,commands,task_id)
+    def confirm(self, stage, role, provider, model, files, commands, task_id=None, attempt=1, artifacts=()) -> bool:
+        summary=self._summary(stage,role,provider,model,files,commands,task_id,artifacts=artifacts)
+
         checkpoint=self._checkpoint_transition()
         gate_id=None
         if self.store and self.workflow_id and checkpoint:

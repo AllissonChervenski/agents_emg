@@ -1,4 +1,3 @@
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from string import Template
@@ -85,20 +84,14 @@ class AgentRunner:
 
         summary = getattr(validation_result, "summary", "") or ""
         issues_raw = getattr(validation_result, "issues", []) or []
-        issues = []
+        issues: list[str] = []
         for issue in issues_raw:
-            if hasattr(issue, "__dataclass_fields__"):
-                iss_dict = asdict(issue)
-            elif hasattr(issue, "__dict__"):
-                iss_dict = dict(issue.__dict__)
-            elif isinstance(issue, dict):
-                iss_dict = dict(issue)
+            if isinstance(issue, str):
+                issues.append(sanitize_text(issue))
+            elif isinstance(issue, dict) and "description" in issue:
+                issues.append(sanitize_text(str(issue["description"])))
             else:
-                iss_dict = {"description": str(issue)}
-            for k, v in iss_dict.items():
-                if isinstance(v, str):
-                    iss_dict[k] = sanitize_text(v)
-            issues.append(iss_dict)
+                issues.append(sanitize_text(str(issue)))
 
         raw = raw_response or getattr(validation_result, "raw_output", "") or getattr(agent_result, "stdout", "") or ""
         sanitized_raw = sanitize_text(raw)
@@ -111,11 +104,13 @@ class AgentRunner:
             "model": model,
             "status": status,
             "reason": sanitize_text(summary),
+            "summary": sanitize_text(summary),
             "issues": issues,
             "evidence": evidence or {},
             "raw_response": sanitized_raw,
             "timestamp": timestamp,
         }
+
 
         self.validation_results.append(entry)
         if self.store and self.workflow_id:
