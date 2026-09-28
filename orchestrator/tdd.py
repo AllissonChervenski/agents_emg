@@ -102,6 +102,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     def invoke(role, extra="", author_provider=None, artifacts=None):
         options={"task":task_data,"task_id":task.task} if task_data else {}
         if task_data and role in {"coder","refactorer"}: options["allowed_paths"]=task_data.get("allowed_files") or task_data.get("production_files") or []
+        if role in {"test_validator", "code_reviewer", "debugger"}: options["allowed_paths"]=[]
         if artifacts is not None: options["artifacts"]=artifacts
         if role == "coder":
             # Python's task-level TDD machine is the only implementation

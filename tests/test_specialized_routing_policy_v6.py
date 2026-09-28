@@ -220,10 +220,17 @@ def test_workflow_driver_executes_consistency_agent_and_no_legacy_cross_validato
     memory = root / ".specify" / "memory"
     memory.mkdir(parents=True)
     (root / ".specify" / "feature.json").write_text(json.dumps({"feature_directory": "specs/feature"}))
-    (memory / "constitution.md").write_text("approved constitution")
-    (feature_dir / "spec.md").write_text("approved spec")
-    (feature_dir / "plan.md").write_text("approved plan")
-    (feature_dir / "tasks.md").write_text(json.dumps({"tasks": []}))
+    (memory / "constitution.md").write_text("# Constitution\n\nPython governs deterministic stage gates.\n")
+    (feature_dir / "spec.md").write_text("# Specification\n\nFR-001: List providers. AC-001: Return names.\n")
+    (feature_dir / "plan.md").write_text("# Plan\n\nD-001: Use the configured provider registry.\n")
+    (feature_dir / "tasks.md").write_text(
+        '# Tasks\n\n- [ ] T001 List providers\n'
+        '  <!-- harness-task {"requirements":["FR-001"],"acceptance_criteria":["AC-001"],'
+        '"plan_decisions":["D-001"],"dependencies":[],"test_type":"UNIT",'
+        '"allowed_files":["src/providers.py"],"tdd_phases":["RED","GREEN","REFACTOR"]} -->\n'
+    )
+    (feature_dir / "checklists").mkdir()
+    (feature_dir / "checklists" / "requirements.md").write_text("# Requirements\n\n- [x] Testable requirements.\n")
 
     fp = WorkspaceFingerprint(root).capture(wid)
     for stage in ("CONSTITUTION_VALIDATED", "SPEC_VALIDATED", "CLARIFICATION_COMPLETE", "CHECKLIST_COMPLETE", "PLAN_VALIDATED", "TASKS_VALIDATED"):
@@ -245,11 +252,12 @@ def test_workflow_driver_executes_consistency_agent_and_no_legacy_cross_validato
 
         def run_skill(self, role, provider, model, skill_name, prompt, cwd, **kwargs):
             executed_roles.append(role)
+            (folder / "analysis-report.md").write_text("# SpecKit Analyze Report\n\nCritical Issues Count: 0\n")
             return SimpleNamespace(
                 provider="codex",
                 model="gpt-6-luna",
                 success=True,
-                stdout="## Speckit Analyze Report\nNo critical findings.",
+                stdout='{"conversation_id":"fake-analysis","status":"SUCCESS","response":""}',
                 stderr="",
                 error=None,
             )
@@ -260,8 +268,11 @@ def test_workflow_driver_executes_consistency_agent_and_no_legacy_cross_validato
         requirement_results = []
 
     cfg = Config()
-    with pytest.raises(WorkflowBlocked, match="tasks.md must contain valid SpecKit checklist tasks"):
-        run_sdd_workflow("feature", root, MockRunner(), MockHarness(), cfg, folder, store=store, resume=True)
+    with pytest.raises(WorkflowBlocked, match="TDD task T001 blocked"):
+        run_sdd_workflow(
+            "feature", root, MockRunner(), MockHarness(), cfg, folder, store=store, resume=True,
+            gate_callback=lambda stage, role, *args, **kwargs: role != "test_designer",
+        )
 
     assert executed_roles == ["consistency_agent"]
     assert "cross_artifact_validator" not in executed_roles

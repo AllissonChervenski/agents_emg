@@ -87,6 +87,16 @@ TASKS_CONTENT = """# Tasks
   <!-- harness-task {"requirements":["FR-001"],"acceptance_criteria":["AC-001"],"plan_decisions":["D-001"],"dependencies":[],"test_type":"UNIT","allowed_files":["src/summary.py"],"tdd_phases":["RED","GREEN","REFACTOR"]} -->
 """
 
+AGY_SUCCESS_ENVELOPE = json.dumps({
+    "conversation_id": "fake-agy-filesystem-regression",
+    "status": "SUCCESS",
+    "response": "",
+    "duration_seconds": 1.0,
+    "usage": {"input_tokens": 100, "output_tokens": 12},
+})
+
+ANALYSIS_CONTENT = "# SpecKit Analysis Report\nNo critical defects found.\nCritical Issues Count: 0\n"
+
 
 class SimulatedRunner:
     def __init__(self, root: Path, store: StateStore, wid: str):
@@ -95,6 +105,7 @@ class SimulatedRunner:
         self.workflow_id = wid
         self.calls: list[tuple[str, str, dict]] = []
         self.roles_called: list[str] = []
+        self.skills_called: list[tuple[str, str]] = []
         self.validation_results: list[dict] = []
         self.tamper_in_green = False
         self.specification_skip_file = False
@@ -102,6 +113,15 @@ class SimulatedRunner:
         self.validator_override: dict[str, str] = {}
         self.converge_action = "converge"  # "converge" or "append_once"
         self.appended = False
+        self.artifact_stdout = AGY_SUCCESS_ENVELOPE
+        self.needs_clarification = False
+
+    def artifact_result(self, role):
+        return AgentResult("agy", "gemini-3.8-flash-medium", role, True, stdout=self.artifact_stdout)
+
+    def run_skill(self, role, provider, model, skill_name, prompt, cwd, **kwargs):
+        self.skills_called.append((role, skill_name))
+        return self.run(role, prompt, cwd=cwd, **kwargs)
 
     def run(self, role: str, prompt: str, **kwargs):
         self.calls.append((role, prompt, kwargs))
@@ -115,7 +135,7 @@ class SimulatedRunner:
             const_file = self.root / ".specify" / "memory" / "constitution.md"
             const_file.parent.mkdir(parents=True, exist_ok=True)
             const_file.write_text(content, encoding="utf-8")
-            return AgentResult("codex", "gpt-6-astra", role, True, stdout=content)
+            return self.artifact_result(role)
 
         elif role == "specification":
             if self.specification_skip_file:
@@ -123,35 +143,48 @@ class SimulatedRunner:
                 return AgentResult("codex", "gpt-6-astra", role, True, stdout="")
             spec_file = self.root / "specs" / "provider-summary" / "spec.md"
             spec_file.parent.mkdir(parents=True, exist_ok=True)
-            spec_file.write_text(SPEC_CONTENT, encoding="utf-8")
+            content = SPEC_CONTENT
+            if self.needs_clarification:
+                content += "\n[NEEDS CLARIFICATION: Which output format?]\n"
+            revisions = self.roles_called.count("specification") - 1
+            if revisions:
+                content += f"\nRevision {revisions}: expanded error-condition requirements.\n"
+            spec_file.write_text(content, encoding="utf-8")
             feature_json = self.root / ".specify" / "feature.json"
             feature_json.parent.mkdir(parents=True, exist_ok=True)
             feature_json.write_text(json.dumps({"feature_directory": "specs/provider-summary"}), encoding="utf-8")
-            return AgentResult("codex", "gpt-6-astra", role, True, stdout=SPEC_CONTENT)
+            return self.artifact_result(role)
 
         elif role == "clarifier_agent":
-            return AgentResult("codex", "gpt-6-astra", role, True, stdout="clarified")
+            spec_file = self.root / "specs" / "provider-summary" / "spec.md"
+            spec_file.write_text(spec_file.read_text().replace(
+                "[NEEDS CLARIFICATION: Which output format?]", "Output format: JSON."
+            ))
+            return self.artifact_result(role)
 
         elif role == "requirements_reviewer":
             chk_file = self.root / "specs" / "provider-summary" / "checklists" / "requirements.md"
             chk_file.parent.mkdir(parents=True, exist_ok=True)
             chk_file.write_text(CHECKLIST_CONTENT, encoding="utf-8")
-            return AgentResult("codex", "gpt-6-astra", role, True, stdout=CHECKLIST_CONTENT)
+            return self.artifact_result(role)
 
         elif role == "planning":
             plan_file = self.root / "specs" / "provider-summary" / "plan.md"
             plan_file.parent.mkdir(parents=True, exist_ok=True)
             plan_file.write_text(PLAN_CONTENT, encoding="utf-8")
-            return AgentResult("codex", "gpt-6-astra", role, True, stdout=PLAN_CONTENT)
+            return self.artifact_result(role)
 
         elif role == "tasks":
             tasks_file = self.root / "specs" / "provider-summary" / "tasks.md"
             tasks_file.parent.mkdir(parents=True, exist_ok=True)
             tasks_file.write_text(TASKS_CONTENT, encoding="utf-8")
-            return AgentResult("codex", "gpt-6-astra", role, True, stdout=TASKS_CONTENT)
+            return self.artifact_result(role)
 
         elif role == "consistency_agent":
-            return AgentResult("codex", "gpt-6-astra", role, True, stdout="# SpecKit Analysis Report\nNo critical defects found.\n")
+            report = self.root / ".orchestrator" / "runs" / self.workflow_id / "analysis-report.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text(ANALYSIS_CONTENT, encoding="utf-8")
+            return self.artifact_result(role)
 
         elif role == "test_designer":
             if "ANALYZE only:" in prompt:
@@ -199,8 +232,10 @@ class SimulatedRunner:
                     "\"allowed_files\":[\"src/summary.py\"],\"tdd_phases\":[\"RED\",\"GREEN\",\"REFACTOR\"]} -->\n"
                 )
                 tasks_file.write_text(current + "\n" + residual, encoding="utf-8")
-                return AgentResult("codex", "gpt-6-astra", role, True, stdout="Residual tasks appended to tasks.md")
-            return AgentResult("codex", "gpt-6-astra", role, True, stdout="The codebase has converged with the spec.")
+                return self.artifact_result(role)
+            envelope = json.loads(AGY_SUCCESS_ENVELOPE)
+            envelope["response"] = "Converged — implementation satisfies spec, plan and tasks."
+            return AgentResult("agy", "gemini-3.8-flash-medium", role, True, stdout=json.dumps(envelope))
 
         # Validators
         if role in self.validator_override:
@@ -331,7 +366,7 @@ def test_scenario_b_provider_success_without_artifact_blocks(tmp_path):
             store=store,
         )
 
-    assert "specification produced no artifact" in str(exc_info.value) or "SpecKit feature directory is unresolved" in str(exc_info.value)
+    assert "specification postcondition failure: Canonical artifact missing" in str(exc_info.value)
 
     # Deterministic checkpoint guarantee: SPEC_VALIDATED MUST NOT be created
     checkpoints = [row["stage"] for row in store.checkpoints(wid)]
@@ -801,3 +836,116 @@ def test_scenario_o_multiple_validators_append_only_in_validation_results(tmp_pa
         assert "summary" in entry
         assert "issues" in entry
         assert isinstance(entry["issues"], list)
+
+
+@pytest.mark.parametrize("stdout", [AGY_SUCCESS_ENVELOPE, "", "Worker diagnostics without artifact content"])
+def test_full_lifecycle_uses_files_for_every_skill_and_real_clarification(tmp_path, stdout):
+    root, store, wid, workflow_dir = _setup_env(tmp_path)
+    runner = SimulatedRunner(root, store, wid)
+    runner.artifact_stdout = stdout
+    runner.needs_clarification = True
+    result = run_sdd_workflow(
+        "provider-summary", root, runner, SimulatedHarness(), _make_config(), workflow_dir,
+        approve_constitution=lambda: True, store=store,
+        clarification_callback=lambda questions: ["JSON" for _ in questions],
+    )
+    assert result["completed_tasks"] == ["T001"]
+    assert result["final_verification"] == ["PASS"]
+    assert runner.skills_called == [
+        ("constitution", "speckit-constitution"),
+        ("specification", "speckit-specify"),
+        ("clarifier_agent", "speckit-clarify"),
+        ("requirements_reviewer", "speckit-checklist"),
+        ("planning", "speckit-plan"),
+        ("tasks", "speckit-tasks"),
+        ("consistency_agent", "speckit-analyze"),
+        ("convergence_agent", "speckit-converge"),
+    ]
+    expected = {
+        root / ".specify/memory/constitution.md": CONSTITUTION_CONTENT,
+        root / "specs/provider-summary/spec.md": SPEC_CONTENT + "\nOutput format: JSON.\n",
+        root / "specs/provider-summary/checklists/requirements.md": CHECKLIST_CONTENT,
+        root / "specs/provider-summary/plan.md": PLAN_CONTENT,
+        root / "specs/provider-summary/tasks.md": TASKS_CONTENT,
+        workflow_dir / "analysis-report.md": ANALYSIS_CONTENT,
+    }
+    for path, content in expected.items():
+        assert path.read_text() == content
+    validator_content = {
+        "constitution_validator": CONSTITUTION_CONTENT,
+        "specification_validator": SPEC_CONTENT,
+        "plan_validator": PLAN_CONTENT,
+        "tasks_validator": TASKS_CONTENT,
+    }
+    for role, prompt, options in runner.calls:
+        if role in validator_content:
+            assert validator_content[role] in prompt
+            assert "fake-agy-filesystem-regression" not in prompt
+        if role.endswith("validator") or role in {"code_reviewer", "final_reviewer"}:
+            assert options["allowed_paths"] == []
+    analysis_call = next(call for call in runner.calls if call[0] == "consistency_agent")
+    assert analysis_call[2]["allowed_paths"] == [str((workflow_dir / "analysis-report.md").relative_to(root))]
+    report = (workflow_dir / "convergence-report-1.json").read_text()
+    assert "fake-agy-filesystem-regression" not in report
+    assert '"usage"' not in report
+
+
+@pytest.mark.parametrize("artifact", [
+    ".specify/memory/constitution.md", "specs/provider-summary/spec.md",
+    "specs/provider-summary/checklists/requirements.md", "specs/provider-summary/plan.md",
+    "specs/provider-summary/tasks.md", "analysis-report.md",
+])
+@pytest.mark.parametrize("corruption", [AGY_SUCCESS_ENVELOPE, "# [FEATURE NAME]\n\n[TODO]\n", ""])
+def test_resume_rejects_corrupted_files_despite_completed_checkpoints(tmp_path, artifact, corruption):
+    root, store, wid, workflow_dir = _setup_env(tmp_path)
+    runner = SimulatedRunner(root, store, wid)
+    cfg = _make_config()
+    run_sdd_workflow(
+        "provider-summary", root, runner, SimulatedHarness(), cfg, workflow_dir,
+        approve_constitution=lambda: True, store=store,
+    )
+    path = workflow_dir / artifact if artifact == "analysis-report.md" else root / artifact
+    path.write_text(corruption)
+    checkpoints_before = len(store.checkpoints(wid))
+    resumed = SimulatedRunner(root, store, wid)
+    with pytest.raises(WorkflowBlocked):
+        run_sdd_workflow(
+            "provider-summary", root, resumed, SimulatedHarness(), cfg, workflow_dir,
+            store=store, resume=True,
+        )
+    assert resumed.calls == []
+    assert path.read_text() == corruption
+    assert len(store.checkpoints(wid)) == checkpoints_before
+
+
+@pytest.mark.parametrize("role,checkpoint", [
+    ("clarifier_agent", "CLARIFICATION_COMPLETE"),
+    ("requirements_reviewer", "CHECKLIST_COMPLETE"),
+    ("consistency_agent", "ANALYSIS_COMPLETE"),
+    ("convergence_agent", "CONVERGED"),
+])
+def test_successful_noop_quality_skills_never_checkpoint(tmp_path, role, checkpoint):
+    root, store, wid, workflow_dir = _setup_env(tmp_path)
+
+    class NoOpRunner(SimulatedRunner):
+        def run(self, current_role, prompt, **kwargs):
+            if current_role == role:
+                return self.artifact_result(current_role)
+            return super().run(current_role, prompt, **kwargs)
+
+    runner = NoOpRunner(root, store, wid)
+    runner.needs_clarification = role == "clarifier_agent"
+    # A stale, valid artifact must not satisfy a newly executed quality skill.
+    if role == "requirements_reviewer":
+        path = root / "specs/provider-summary/checklists/requirements.md"
+        path.parent.mkdir(parents=True)
+        path.write_text(CHECKLIST_CONTENT)
+    elif role == "consistency_agent":
+        (workflow_dir / "analysis-report.md").write_text(ANALYSIS_CONTENT)
+    with pytest.raises(WorkflowBlocked):
+        run_sdd_workflow(
+            "provider-summary", root, runner, SimulatedHarness(), _make_config(), workflow_dir,
+            approve_constitution=lambda: True, store=store,
+            clarification_callback=lambda questions: ["JSON" for _ in questions],
+        )
+    assert checkpoint not in [row["stage"] for row in store.checkpoints(wid)]

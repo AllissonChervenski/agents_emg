@@ -18,7 +18,7 @@ def test_discovers_official_speckit_artifacts_and_separates_operational_reports(
     assert layout.constitution == tmp_path / ".specify" / "memory" / "constitution.md"
     assert layout.feature_artifacts == (feature / "spec.md", feature / "plan.md", feature / "tasks.md")
     assert layout.reports == tmp_path / ".orchestrator" / "runs" / "w1"
-    assert layout.stage_scope("PLAN") == ["specs/003-queue/"]
+    assert layout.stage_scope("PLAN") == ["specs/003-queue/plan.md"]
     assert layout.stage_scope("TASKS") == ["specs/003-queue/tasks.md"]
 
 

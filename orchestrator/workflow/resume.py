@@ -96,13 +96,54 @@ def compare_fingerprints(saved, current):
     return "CLEAN_MATCH",[]
 
 
+def _revalidate_artifact_chain(stage, root, folder):
+    """Validate canonical bytes through the checkpoint's last SDD gate."""
+    from orchestrator.workflow.postconditions import verify_stage_postcondition
+
+    stage_order = {
+        "CONSTITUTION_CREATED": 0, "CONSTITUTION_VALIDATED": 0,
+        "SPEC_VALIDATED": 1, "CLARIFICATION_COMPLETE": 2,
+        "CHECKLIST_COMPLETE": 3, "PLAN_VALIDATED": 4,
+        "TASKS_VALIDATED": 5, "TASKS_APPENDED": 5,
+        "RED_VALIDATED": 5, "GREEN_VALIDATED": 5, "REFACTOR_VALIDATED": 5,
+        "CROSS_VALIDATED": 6, "ANALYSIS_COMPLETE": 6,
+        "TASK_COMPLETE": 6, "FINAL_VERIFIED": 6, "CONVERGED": 6, "FINAL_REVIEWED": 6,
+    }
+    depth = stage_order.get(stage)
+    if depth is None:
+        return False
+    const_path = Path(root) / ".specify" / "memory" / "constitution.md"
+    if stage in {"RED_VALIDATED", "GREEN_VALIDATED", "REFACTOR_VALIDATED"} and not const_path.is_file():
+        return True
+    verify_stage_postcondition("CONSTITUTION_CREATED", constitution_path=const_path)
+    if depth == 0:
+        return True
+    layout = ArtifactLayout.discover(root, workflow_dir=folder)
+    verify_stage_postcondition("SPEC_VALIDATED", spec_path=layout.spec)
+    if depth >= 2:
+        verify_stage_postcondition("CLARIFICATION_COMPLETE", spec_path=layout.spec)
+    if depth >= 3:
+        verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=layout.require_feature_dir()/"checklists")
+    if depth >= 4:
+        verify_stage_postcondition("PLAN_VALIDATED", plan_path=layout.plan)
+    if depth >= 5:
+        verify_stage_postcondition("TASKS_VALIDATED", tasks_path=layout.tasks)
+    if depth >= 6:
+        verify_stage_postcondition("ANALYSIS_COMPLETE", report_path=folder/"analysis-report.md")
+    return True
+
+
 def revalidate_checkpoint(checkpoint, root, harness):
-    """Re-run the deterministic gate represented by the last durable checkpoint."""
+    """Revalidate required artifacts before rerunning the checkpoint's gate."""
     stage=checkpoint["stage"]; task_id=checkpoint.get("task_id")
     folder=Path(root)/".orchestrator"/"runs"/checkpoint["workflow_id"] if "workflow_id" in checkpoint else None
     if not folder:
         # The store returns checkpoint rows without duplicating the workflow ID.
         folder=Path(root)/".orchestrator"/"runs"/checkpoint.get("_workflow_id","")
+    try:
+        artifacts_validated = _revalidate_artifact_chain(stage, root, folder)
+    except (ValueError, OSError) as exc:
+        return False, f"ARTIFACT_POSTCONDITION_FAILED: {exc}"
     report=folder/task_id/"tdd.json" if task_id else None
     if stage in {"RED_VALIDATED","GREEN_VALIDATED","REFACTOR_VALIDATED","TASK_COMPLETE"}:
         if not report or not report.is_file(): return False,"MISSING_TDD_REPORT"
@@ -118,42 +159,19 @@ def revalidate_checkpoint(checkpoint, root, harness):
             results += [harness.run_command(item["command"],item.get("name","regression"),"regression_tests") if isinstance(item,dict) else harness.run_command(item,category="regression_tests") for item in regression]
         if stage=="TASK_COMPLETE" and evidence.get("phase")!="COMPLETE": return False,"TASK_REPORT_NOT_COMPLETE"
         return bool(results) and all(item.success for item in results),[item.status for item in results]
-    if stage in {"SPEC_VALIDATED","PLAN_VALIDATED","TASKS_VALIDATED","CONSTITUTION_VALIDATED","CROSS_VALIDATED","CONSTITUTION_CREATED","CHECKLIST_COMPLETE","CLARIFICATION_COMPLETE","ANALYSIS_COMPLETE"}:
-        from orchestrator.workflow.postconditions import verify_stage_postcondition, PostconditionError
-        artifacts=checkpoint["workspace_fingerprint"].get("artifact_hashes",{})
-        required={"CONSTITUTION_CREATED":{"constitution.md"},"CONSTITUTION_VALIDATED":{"constitution.md"},"SPEC_VALIDATED":{"constitution.md","spec.md"},
-            "PLAN_VALIDATED":{"constitution.md","spec.md","plan.md"},"TASKS_VALIDATED":{"constitution.md","spec.md","plan.md","tasks.md"},
-            "CROSS_VALIDATED":{"constitution.md","spec.md","plan.md","tasks.md"},
-            "CHECKLIST_COMPLETE":{"constitution.md","spec.md"},
-            "CLARIFICATION_COMPLETE":{"constitution.md","spec.md"},
-            "ANALYSIS_COMPLETE":{"constitution.md","spec.md","plan.md","tasks.md"}}[stage]
-        present={Path(path).name for path,value in artifacts.items() if value is not None}
-        if not required.issubset(present):
-            return False, "MISSING_VALIDATED_ARTIFACT"
-        const = Path(root) / ".specify" / "memory" / "constitution.md"
+    if stage == "CONVERGED":
+        from orchestrator.workflow.quality_gates import verify_convergence_receipt
         try:
-            if stage in {"CONSTITUTION_CREATED", "CONSTITUTION_VALIDATED"}:
-                verify_stage_postcondition("CONSTITUTION_CREATED", constitution_path=const)
-            elif stage in {"SPEC_VALIDATED", "CLARIFICATION_COMPLETE"}:
-                layout = ArtifactLayout.discover(root, workflow_dir=folder)
-                verify_stage_postcondition("SPEC_VALIDATED", spec_path=layout.spec)
-            elif stage == "CHECKLIST_COMPLETE":
-                layout = ArtifactLayout.discover(root, workflow_dir=folder)
-                verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=layout.require_feature_dir() / "checklists", allow_legacy_absent=True)
-            elif stage == "PLAN_VALIDATED":
-                layout = ArtifactLayout.discover(root, workflow_dir=folder)
-                verify_stage_postcondition("PLAN_VALIDATED", plan_path=layout.plan)
-            elif stage == "TASKS_VALIDATED":
-                layout = ArtifactLayout.discover(root, workflow_dir=folder)
-                verify_stage_postcondition("TASKS_VALIDATED", tasks_path=layout.tasks)
-            elif stage == "ANALYSIS_COMPLETE":
-                report = (folder / "analysis-report.md") if folder else None
-                if not report or not report.is_file():
-                    return False, "MISSING_ANALYSIS_REPORT"
-                verify_stage_postcondition("ANALYSIS_COMPLETE", report_path=report)
-        except (PostconditionError, ArtifactDiscoveryError) as exc:
+            attempt = checkpoint.get("attempt")
+            if type(attempt) is not int or attempt < 1:
+                raise ValueError("Invalid convergence checkpoint attempt")
+            layout = ArtifactLayout.discover(root, workflow_dir=folder)
+            receipt = verify_convergence_receipt(folder/f"convergence-report-{attempt}.json", layout.tasks, "converged")
+            if type(receipt.get("iteration")) is not int or receipt["iteration"] != attempt:
+                raise ValueError("Convergence receipt iteration does not match checkpoint attempt")
+        except (ValueError, OSError) as exc:
             return False, f"ARTIFACT_POSTCONDITION_FAILED: {exc}"
-        return True, "ARTIFACT_HASHES_OK"
+        return True, "CONVERGENCE_RECEIPT_OK"
     if stage=="WORKFLOW_PLANNED": return True,"INITIAL_WORKSPACE_MATCH"
     if stage in {"FINAL_VERIFIED","FINAL_REVIEWED"}:
         from orchestrator.verification.harness import final_verification_pass
@@ -163,6 +181,8 @@ def revalidate_checkpoint(checkpoint, root, harness):
                 return False,"FINAL_REVIEW_EVIDENCE_MISSING"
         results=harness.run()
         return final_verification_pass(results,harness.requirement_results),[item.status for item in results]
+    if artifacts_validated:
+        return True, "ARTIFACT_HASHES_OK"
     return False,"UNKNOWN_CHECKPOINT_STAGE"
 
 

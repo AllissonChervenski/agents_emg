@@ -121,18 +121,20 @@ class ArtifactLayout:
         if stage == "CONSTITUTION":
             return [".specify/memory/constitution.md"]
         if stage == "SPECIFICATION":
-            # speckit-specify creates the directory and persists its official
-            # feature selection before creating spec.md and the checklist.
-            return [".specify/feature.json", "specs/"]
+            if self.feature_dir is not None:
+                return [self.spec.relative_to(self.root).as_posix()]
+            # The skill selects one direct child of specs/.  This glob permits
+            # only spec.md, never unrelated files or nested feature directories.
+            return [".specify/feature.json", "specs/*/spec.md"]
+        if stage == "ANALYSIS":
+            return [(self.reports / "analysis-report.md").relative_to(self.root).as_posix()]
         feature_dir = self.require_feature_dir().relative_to(self.root).as_posix()
         if stage == "CLARIFICATION":
-            return [f"{feature_dir}/spec.md", f"{feature_dir}/checklists/requirements.md"]
+            return [f"{feature_dir}/spec.md"]
         if stage == "REQUIREMENTS_CHECKLIST":
             return [f"{feature_dir}/checklists/"]
         if stage == "PLAN":
-            # The installed plan skill may create research.md, data-model.md,
-            # contracts/, and quickstart.md beside plan.md.
-            return [f"{feature_dir}/"]
+            return [f"{feature_dir}/plan.md"]
         if stage == "TASKS":
             return [f"{feature_dir}/tasks.md"]
         if stage == "CONVERGENCE":
@@ -141,8 +143,17 @@ class ArtifactLayout:
 
     def fingerprint_paths(self, task_id: str | None = None) -> list[str]:
         paths = [str(self.constitution)]
+        metadata = self.root / ".specify" / "feature.json"
+        if metadata.is_file():
+            paths.append(str(metadata))
         if self.feature_dir is not None:
             paths.extend(str(path) for path in self.feature_artifacts)
+            paths.extend(str(path) for path in sorted((self.feature_dir / "checklists").glob("*.md")))
+        if self.workflow_dir is not None:
+            analysis = self.workflow_dir / "analysis-report.md"
+            if analysis.is_file():
+                paths.append(str(analysis))
+            paths.extend(str(path) for path in sorted(self.workflow_dir.glob("convergence-report-*.json")))
         if task_id and self.workflow_dir is not None:
             paths.append(str(self.workflow_dir / task_id / "tdd.json"))
         return paths

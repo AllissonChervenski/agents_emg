@@ -104,7 +104,8 @@ def test_revise_persists_before_blocking(tmp_path):
 
         def run(self, role, prompt, **kwargs):
             if role == "specification":
-                return AgentResult("codex", "gpt-6-luna", role, True, stdout="# Spec v" + str(self.call_count))
+                artifact.write_text(f"# Spec v{self.call_count}\n\nFR-001: Persist a provider listing.\n")
+                return AgentResult("codex", "gpt-6-luna", role, True, stdout="SpecKit file written")
             self.call_count += 1
             issues = [f"Missing details {self.call_count} in spec.md (FR-1)"]
             return AgentResult("opencode", "gpt-6-luna", role, True, stdout=json.dumps({"status": "REVISE", "issues": issues, "summary": f"Needs revision attempt {self.call_count}"}))
@@ -144,7 +145,7 @@ def test_blocked_persists_before_blocking_canary_reproduction(tmp_path):
     store, wid = _setup_store_and_workflow(tmp_path)
     const_file = tmp_path / ".specify" / "memory" / "constitution.md"
     const_file.parent.mkdir(parents=True, exist_ok=True)
-    const_file.write_text("# Existing Constitution")
+    const_file.write_text("# Existing Constitution\n\nAll validation must use an independent provider.\n")
 
     class CanaryRunner:
         def __init__(self):

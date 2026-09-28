@@ -1,4 +1,5 @@
 """Sequential deterministic SDD driver; semantic work stays with provider agents."""
+import hashlib
 import json
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -16,12 +17,19 @@ from orchestrator.workflow.task_adapter import TaskContractError, parse_speckit_
 from orchestrator.workflow.artifacts import ArtifactDiscoveryError, ArtifactLayout
 from orchestrator.workflow.constitution import classify_constitution
 from orchestrator.agents.roles import ROLES
+from orchestrator.workflow.stages import STAGE_REGISTRY
 from orchestrator.workflow.quality_gates import (
     clarification_questions,
     convergence_outcome,
     run_convergence_loop,
+    verify_convergence_receipt,
 )
-from orchestrator.workflow.postconditions import verify_stage_postcondition, PostconditionError
+from orchestrator.workflow.postconditions import (
+    artifact_snapshot,
+    verify_artifact_changed,
+    verify_stage_postcondition,
+    PostconditionError,
+)
 
 
 ARTIFACTS = [
@@ -59,7 +67,24 @@ def _record_validation(runner, result, validation, stage=None, evidence=None):
 
 def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=None, artifacts=None):
     """Dispatch a declared SpecKit skill while retaining legacy test doubles."""
-    skill_name=ROLES[role].skill_name
+    stage_role={
+        "constitution": "constitution_agent", "specification": "specification_agent",
+        "planning": "architect_agent", "tasks": "task_agent",
+        "cross_artifact_validator": "consistency_agent",
+    }.get(role, role)
+    stages=STAGE_REGISTRY.for_role(stage_role)
+    skill_name=stages[0].skill_name if stages else ROLES[role].skill_name
+    if skill_name:
+        prompt += (
+            "\n\nPython artifact contract: materialize the requested canonical artifact in the filesystem. "
+            "Stdout and provider response are execution diagnostics only, never artifact content. "
+            f"Permitted write paths: {json.dumps(list(allowed_paths or []))}. "
+            "These invocation-specific paths take precedence over the skill's default side effects. "
+            "Keep all other files unchanged, including source artifacts, auxiliary documents, skills, "
+            "templates and Git state. When the feature path is already selected, use that exact path; "
+            "do not bootstrap another feature or branch. For convergence, preserve the documented "
+            "append-only/no-change contract of tasks.md."
+        )
     if skill_name and hasattr(runner,"run_skill"):
         result=runner.run_skill(role,None,None,skill_name,prompt,cwd,timeout=timeout,
                                 allowed_paths=allowed_paths,exclude_providers=exclude,artifacts=artifacts)
@@ -85,42 +110,34 @@ def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=No
 def _create_and_validate(runner, author_role, validator_role, artifact_path, prompt, cwd, timeout, retries=3, gate_callback=None, allowed_paths=None, artifact_resolver=None):
     path=Path(artifact_path) if artifact_path else None; last=None
     for attempt in range(1,retries+1):
-        if path and not _call_gate(gate_callback, author_role.upper(), author_role, [str(path)] if path else list(allowed_paths or ()), [], attempt=attempt, runner=runner): raise WorkflowBlocked(f"Interactive gate aborted before {author_role}")
-        before=path.read_bytes() if path and path.is_file() else None
+        if not _call_gate(gate_callback, author_role.upper(), author_role, [str(path)] if path else list(allowed_paths or ()), [], attempt=attempt, runner=runner): raise WorkflowBlocked(f"Interactive gate aborted before {author_role}")
+        before=artifact_snapshot(path) if path else None
+        candidates = {item: artifact_snapshot(item) for item in Path(cwd).glob("specs/*/spec.md")} if path is None else {}
         author=_generate(runner,author_role,prompt,cwd,timeout,allowed_paths=allowed_paths)
         if path is None and artifact_resolver:
-            try: path=Path(artifact_resolver())
+            try:
+                path=Path(artifact_resolver())
+                before=candidates.get(path)
             except ArtifactDiscoveryError: path=None
         if path is None:
             raise WorkflowBlocked(f"{author_role} did not create a discoverable SpecKit artifact")
-        if author_role in {"tasks", "task_agent"}:
-            # SpecKit writes tasks.md itself and reports a summary on stdout.
-            # Legacy stdout artifacts remain accepted while prior runs migrate.
-            if not path.is_file() or path.read_bytes()==before:
-                try: parse_speckit_tasks(author.stdout)
-                except TaskContractError as exc: raise WorkflowBlocked(f"tasks skill produced no valid tasks.md: {exc}") from exc
-                path.write_text(author.stdout)
-            try:
-                verify_stage_postcondition("TASKS_VALIDATED", tasks_path=path)
-            except PostconditionError as exc:
-                raise WorkflowBlocked(f"tasks postcondition failure: {exc}") from exc
-        elif (not path.is_file() or path.read_bytes()==before) and author.stdout.strip():
-            # Native SpecKit skills write their canonical artifact themselves;
-            # legacy providers may still return the artifact on stdout.
-            path.parent.mkdir(parents=True,exist_ok=True)
-            path.write_text(author.stdout)
-        if not path.exists(): raise WorkflowBlocked(f"{author_role} produced no artifact at {path}")
-
-        if author_role in {"specification", "specification_agent"}:
-            try:
-                verify_stage_postcondition("SPEC_VALIDATED", spec_path=path)
-            except PostconditionError as exc:
-                raise WorkflowBlocked(f"specification postcondition failure: {exc}") from exc
-        elif author_role in {"planning", "architect_agent"}:
-            try:
-                verify_stage_postcondition("PLAN_VALIDATED", plan_path=path)
-            except PostconditionError as exc:
-                raise WorkflowBlocked(f"planning postcondition failure: {exc}") from exc
+        stages = {
+            "constitution": ("CONSTITUTION_CREATED", "constitution_path"),
+            "specification": ("SPEC_VALIDATED", "spec_path"),
+            "specification_agent": ("SPEC_VALIDATED", "spec_path"),
+            "planning": ("PLAN_VALIDATED", "plan_path"),
+            "architect_agent": ("PLAN_VALIDATED", "plan_path"),
+            "tasks": ("TASKS_VALIDATED", "tasks_path"),
+            "task_agent": ("TASKS_VALIDATED", "tasks_path"),
+        }
+        stage, path_key = stages[author_role]
+        try:
+            verify_artifact_changed(path, before)
+            verify_stage_postcondition(stage, **{path_key: path})
+        except PostconditionError as exc:
+            if getattr(runner, "store", None) and author.usage.get("execution_id"):
+                runner.store.update_execution_outcome(author.usage["execution_id"], blocked=True, success=False)
+            raise WorkflowBlocked(f"{author_role} postcondition failure: {exc}") from exc
         supplied = []
         if path:
             try:
@@ -183,19 +200,16 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         item=store.get_workflow(workflow_id)
         if item: store.update_workflow(workflow_id,stage,{**item["state"],"last_checkpoint":transition_id},task_id)
     def validated(stage):
-        if any(key.startswith(stage+":") for key in prior): return True
-        # A legacy CROSS_VALIDATED checkpoint covered the old complete
-        # specification pipeline.  Preserve its resume boundary after migration.
-        if stage in {"CLARIFICATION_COMPLETE", "CHECKLIST_COMPLETE", "ANALYSIS_COMPLETE"}:
-            return any(key.startswith("CROSS_VALIDATED:") for key in prior)
-        # Completed legacy workflows predate the semantic converge stage.
-        if stage=="CONVERGED":
-            return any(key.startswith("FINAL_REVIEWED:") for key in prior)
-        return False
+        return any(key.startswith(stage+":") for key in prior)
+    def check_artifact(stage, **paths):
+        try:
+            verify_stage_postcondition(stage, **paths)
+        except PostconditionError as exc:
+            raise WorkflowBlocked(f"{stage} artifact postcondition failure: {exc}") from exc
     constitution=layout.constitution
     constitution_status = classify_constitution(constitution)
     if resume and validated("CONSTITUTION_VALIDATED"):
-        if constitution_status != "VALID": raise WorkflowBlocked("Missing validated constitution")
+        check_artifact("CONSTITUTION_CREATED", constitution_path=constitution)
     elif constitution_status == "VALID":
         constitution_rel = str(constitution.relative_to(root)) if constitution.is_relative_to(root) else str(constitution)
         if not _call_gate(gate_callback, "CONSTITUTION_VALIDATE", "constitution_validator", [], [], artifacts=[constitution_rel], runner=runner):
@@ -209,12 +223,12 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         if parsed.status!="PASS": raise WorkflowBlocked(f"constitution_validator {parsed.status}: {parsed.summary}")
     else:
         if not approve_constitution or not approve_constitution(): raise WorkflowBlocked("Constitution generation requires human approval")
-        before=constitution.read_bytes() if constitution.is_file() else None
+        if not _call_gate(gate_callback, "CONSTITUTION_CREATE", "constitution", layout.stage_scope("CONSTITUTION"), [], runner=runner):
+            raise WorkflowBlocked("Interactive gate aborted before constitution creation")
+        before=artifact_snapshot(constitution)
         generated=_generate(runner,"constitution",load_prompt("constitution",feature=feature),root,config.timeouts.get("provider"),allowed_paths=layout.stage_scope("CONSTITUTION"))
-        if (not constitution.is_file() or constitution.read_bytes()==before) and generated.stdout.strip():
-            constitution.parent.mkdir(parents=True,exist_ok=True)
-            constitution.write_text(generated.stdout)
         try:
+            verify_artifact_changed(constitution, before)
             verify_stage_postcondition("CONSTITUTION_CREATED", constitution_path=constitution)
         except PostconditionError as exc:
             raise WorkflowBlocked(f"Constitution postcondition failure: {exc}") from exc
@@ -222,7 +236,7 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         constitution_rel = str(constitution.relative_to(root)) if constitution.is_relative_to(root) else str(constitution)
         if not _call_gate(gate_callback, "CONSTITUTION_VALIDATE", "constitution_validator", [], [], artifacts=[constitution_rel], runner=runner):
             raise WorkflowBlocked("Interactive gate aborted before constitution validation")
-        artifact_text = constitution.read_text() if constitution.is_file() else generated.stdout
+        artifact_text = constitution.read_text(encoding="utf-8")
         result=_generate(runner,"constitution_validator",load_prompt("constitution_validator",feature=feature,artifact=artifact_text),root,config.timeouts.get("provider"),{generated.provider},allowed_paths=[],artifacts=[constitution_rel])
         verdict=parse_validation(result.stdout,"constitution_validator",result.model,provider=getattr(result,"provider",None))
         _record_validation(runner,result,verdict,stage="CONSTITUTION_VALIDATE",evidence={"artifact":str(constitution)})
@@ -241,7 +255,8 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
             artifact_resolver=None
         stage={"specification":"SPEC_VALIDATED","planning":"PLAN_VALIDATED","tasks":"TASKS_VALIDATED"}[author]
         if resume and validated(stage):
-            if not path or not path.is_file() or not path.read_text().strip(): raise WorkflowBlocked(f"Missing validated artifact {path}")
+            if path is None: raise WorkflowBlocked("Missing validated specification directory")
+            check_artifact(stage, spec_path=path)
             continue
         prompt=load_prompt(author,feature=feature,artifact=constitution.read_text() if constitution.is_file() else "")
         scope=layout.stage_scope({"specification":"SPECIFICATION","planning":"PLAN","tasks":"TASKS"}[author])
@@ -270,9 +285,14 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
                 spec_rel = str(layout.spec.relative_to(root)) if layout.spec.is_relative_to(root) else str(layout.spec)
                 if not _call_gate(gate_callback, "CLARIFICATION", "clarifier_agent", layout.stage_scope("CLARIFICATION"), [], artifacts=[spec_rel], runner=runner):
                     raise WorkflowBlocked("Interactive gate aborted before clarification")
+                spec_before=artifact_snapshot(layout.spec)
                 clarify=_generate(runner,"clarifier_agent",clarify_prompt,root,config.timeouts.get("provider"),
                                   allowed_paths=layout.stage_scope("CLARIFICATION"),artifacts=[spec_rel])
                 if not clarify.success: raise WorkflowBlocked(f"speckit-clarify failed: {clarify.error or clarify.stderr}")
+                try:
+                    verify_artifact_changed(layout.spec, spec_before)
+                except PostconditionError as exc:
+                    raise WorkflowBlocked(f"Clarification postcondition failure: {exc}") from exc
         try:
             verify_stage_postcondition("CLARIFICATION_COMPLETE", spec_path=layout.spec)
         except PostconditionError as exc:
@@ -290,18 +310,21 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         spec_rel = str(layout.spec.relative_to(root)) if layout.spec.is_relative_to(root) else str(layout.spec)
         if not _call_gate(gate_callback, "REQUIREMENTS_CHECKLIST", "requirements_reviewer", layout.stage_scope("REQUIREMENTS_CHECKLIST"), [], artifacts=[spec_rel], runner=runner):
             raise WorkflowBlocked("Interactive gate aborted before requirements checklist")
+        checklist_dir=layout.require_feature_dir()/"checklists"
+        checklist_before={path: artifact_snapshot(path) for path in checklist_dir.glob("*.md")}
         checklist=_generate(runner,"requirements_reviewer",checklist_prompt,root,config.timeouts.get("provider"),
                             allowed_paths=layout.stage_scope("REQUIREMENTS_CHECKLIST"),artifacts=[spec_rel])
         if not checklist.success: raise WorkflowBlocked(f"speckit-checklist failed: {checklist.error or checklist.stderr}")
-        checklist_dir=layout.require_feature_dir()/"checklists"
         try:
             verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=checklist_dir)
+            if not any(artifact_snapshot(path) != checklist_before.get(path) for path in checklist_dir.glob("*.md")):
+                raise PostconditionError("Checklist skill did not create or update a checklist")
         except PostconditionError as exc:
             raise WorkflowBlocked(f"Checklist postcondition failure: {exc}") from exc
         checkpoint("CHECKLIST_COMPLETE")
     else:
         try:
-            verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=layout.require_feature_dir() / "checklists", allow_legacy_absent=True)
+            verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=layout.require_feature_dir() / "checklists")
         except PostconditionError as exc:
             raise WorkflowBlocked(f"Resume artifact validation failed: {exc}") from exc
     for author,validator,filename in ARTIFACTS[1:]:
@@ -310,7 +333,7 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
             raise WorkflowBlocked(str(exc)) from exc
         stage={"specification":"SPEC_VALIDATED","planning":"PLAN_VALIDATED","tasks":"TASKS_VALIDATED"}[author]
         if resume and validated(stage):
-            if not path or not path.is_file() or not path.read_text().strip(): raise WorkflowBlocked(f"Missing validated artifact {path}")
+            check_artifact(stage, **{"plan_path" if author == "planning" else "tasks_path": path})
             continue
         if author=="planning":
             artifact_text = layout.spec.read_text() if layout.spec.is_file() else ""
@@ -324,29 +347,34 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         authors[author]=author_result.provider
         checkpoint(stage)
     if not (resume and validated("ANALYSIS_COMPLETE")):
+        report_path = out / "analysis-report.md"
+        report_rel = str(report_path.relative_to(root))
         analyze_prompt=("Use the installed speckit-analyze skill to assess consistency across the active spec.md, "
-                        "plan.md, and tasks.md. Produce its documented read-only analysis report. "
-                        "Do not apply remediation edits.")
+                        "plan.md, and tasks.md. Keep every source artifact strictly read-only; do not apply remediation. "
+                        "For this Python-controlled invocation, persist the complete Markdown analysis report at "
+                        f"{report_rel}. This is the only permitted write and overrides the skill's usual in-session "
+                        "report delivery. Include Critical Issues Count explicitly. A stdout report is not an artifact.")
         analysis_artifacts = [
             str(layout.spec.relative_to(root)) if layout.spec.is_relative_to(root) else str(layout.spec),
             str(layout.plan.relative_to(root)) if layout.plan.is_relative_to(root) else str(layout.plan),
             str(layout.tasks.relative_to(root)) if layout.tasks.is_relative_to(root) else str(layout.tasks),
         ]
-        if not _call_gate(gate_callback, "ANALYSIS", "consistency_agent", [], [], artifacts=analysis_artifacts, runner=runner):
+        analysis_scope = [report_rel]
+        if not _call_gate(gate_callback, "ANALYSIS", "consistency_agent", analysis_scope, [], artifacts=analysis_artifacts, runner=runner):
             raise WorkflowBlocked("Interactive gate aborted before SpecKit analysis")
+        report_before=artifact_snapshot(report_path)
         analysis=_generate(runner,"consistency_agent",analyze_prompt,root,config.timeouts.get("provider"),
-                           {authors["tasks"]} if authors.get("tasks") else None,allowed_paths=[],artifacts=analysis_artifacts)
+                           {authors["tasks"]} if authors.get("tasks") else None,allowed_paths=analysis_scope,artifacts=analysis_artifacts)
         if not analysis.success: raise WorkflowBlocked(f"speckit-analyze failed: {analysis.error or analysis.stderr}")
-        report_path = out / "analysis-report.md"
-        report_path.write_text(analysis.stdout)
         try:
+            verify_artifact_changed(report_path, report_before)
             verify_stage_postcondition("ANALYSIS_COMPLETE", report_path=report_path)
         except PostconditionError as exc:
             raise WorkflowBlocked(f"Analysis postcondition failure: {exc}") from exc
         checkpoint("ANALYSIS_COMPLETE")
     else:
         try:
-            verify_stage_postcondition("ANALYSIS_COMPLETE", report_path=out / "analysis-report.md", allow_legacy_absent=True)
+            verify_stage_postcondition("ANALYSIS_COMPLETE", report_path=out / "analysis-report.md")
         except PostconditionError as exc:
             raise WorkflowBlocked(str(exc)) from exc
     tasks=_parse_tasks(layout.tasks.read_text())
@@ -427,19 +455,32 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         checkpoint("FINAL_VERIFIED",attempt=iteration)
 
     def converge_iteration(iteration):
+        check_artifact("TASKS_VALIDATED", tasks_path=layout.tasks)
         tasks_before=layout.tasks.read_bytes()
         converge_prompt=("Use the installed speckit-converge skill after deterministic verification. "
                          "Assess the code against the active spec, plan, and tasks. Preserve the skill's append-only "
-                         "tasks.md contract and report its documented convergence outcome.")
+                         "tasks.md contract and report its documented convergence outcome, starting the clean "
+                         "outcome with 'Converged'. Provider SUCCESS alone is not a convergence outcome.")
         if not _call_gate(gate_callback, "CONVERGENCE", "convergence_agent", layout.stage_scope("CONVERGENCE"), [], runner=runner):
             raise WorkflowBlocked("Interactive gate aborted before SpecKit convergence")
         convergence=_generate(runner,"convergence_agent",converge_prompt,root,config.timeouts.get("provider"),
                               allowed_paths=layout.stage_scope("CONVERGENCE"))
         if not convergence.success:
             raise WorkflowBlocked(f"speckit-converge failed: {convergence.error or convergence.stderr}")
-        try: outcome=convergence_outcome(tasks_before,layout.tasks.read_bytes(),convergence.stdout)
+        check_artifact("TASKS_VALIDATED", tasks_path=layout.tasks)
+        tasks_after=layout.tasks.read_bytes()
+        try: outcome=convergence_outcome(tasks_before,tasks_after,convergence.stdout)
         except ValueError as exc: raise WorkflowBlocked(str(exc)) from exc
-        (out/f"convergence-report-{iteration}.md").write_text(convergence.stdout)
+        previous_ids={task["id"] for task in parse_speckit_tasks(tasks_before.decode("utf-8"))}
+        added_ids=sorted(task["id"] for task in parse_speckit_tasks(tasks_after.decode("utf-8")) if task["id"] not in previous_ids)
+        if outcome=="tasks_appended" and not added_ids:
+            raise WorkflowBlocked("speckit-converge appended no executable new tasks")
+        # This operational receipt is Python's evidence, not a provider report.
+        (out/f"convergence-report-{iteration}.json").write_text(json.dumps({
+            "outcome": outcome, "iteration": iteration, "added_task_ids": added_ids,
+            "tasks_sha256_before": hashlib.sha256(tasks_before).hexdigest(),
+            "tasks_sha256_after": hashlib.sha256(tasks_after).hexdigest(),
+        }, indent=2), encoding="utf-8")
         if outcome=="converged": checkpoint("CONVERGED",attempt=iteration)
         else: checkpoint("TASKS_APPENDED",attempt=iteration)
         return outcome
@@ -454,9 +495,12 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         execute_contracts(pending)
 
     if resume and validated("CONVERGED"):
-        path=out/"final-verification.json"
-        if not path.is_file(): raise WorkflowBlocked("Missing final verification evidence")
-        final_results=json.loads(path.read_text())
+        converged_checkpoint=next(row for row in reversed(store.checkpoints(workflow_id)) if row["stage"]=="CONVERGED")
+        try:
+            verify_convergence_receipt(out/f"convergence-report-{converged_checkpoint['attempt']}.json", layout.tasks, "converged")
+        except ValueError as exc:
+            raise WorkflowBlocked(str(exc)) from exc
+        verify_iteration(converged_checkpoint["attempt"])
     else:
         try:
             limit=int(config.real_run.get("max_convergence_iterations",3))
@@ -477,4 +521,11 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         (out/"final-review.json").write_text(json.dumps({"status":final_verdict.status,"provider":final_review.provider,"model":final_review.model},indent=2))
         if final_verdict.status!="PASS": raise WorkflowBlocked(f"final_reviewer {final_verdict.status}: {final_verdict.summary}; deterministic checks had passed")
         checkpoint("FINAL_REVIEWED")
+    else:
+        try:
+            final_review_evidence=json.loads((out/"final-review.json").read_text(encoding="utf-8"))
+            if not isinstance(final_review_evidence, dict) or final_review_evidence.get("status")!="PASS":
+                raise ValueError("final review has no PASS verdict")
+        except (OSError, ValueError) as exc:
+            raise WorkflowBlocked(f"Invalid final review evidence: {exc}") from exc
     return {"completed_tasks":sorted(completed),"traceability":traceability,"final_verification":[r["status"] for r in final_results],"requirement_verification":[asdict(item) for item in harness.requirement_results]}

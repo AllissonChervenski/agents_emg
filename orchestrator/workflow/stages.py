@@ -80,6 +80,7 @@ _STAGES = (
         name="ANALYSIS",
         skill_name="speckit-analyze",
         role="consistency_agent",
+        # The analysis report is operational output, not a source artifact.
         expected_artifacts=(),
         prerequisites=("TASKS",),
         mutability="read_only",

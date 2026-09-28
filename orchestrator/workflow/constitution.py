@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from orchestrator.workflow.artifact_content import artifact_content_problem
+
 
 OFFICIAL_CONSTITUTION_PLACEHOLDERS: tuple[str, ...] = (
     "[PROJECT_NAME]",
@@ -71,13 +73,13 @@ def classify_constitution(path_or_content: str | Path) -> str:
             return "ABSENT"
         try:
             content = path_or_content.read_text(encoding="utf-8")
-        except OSError:
-            return "ABSENT"
+        except (OSError, UnicodeError):
+            return "UNINITIALIZED_CONSTITUTION"
     else:
         content = path_or_content
 
     cleaned = content.strip()
-    if not cleaned:
+    if artifact_content_problem(cleaned):
         return "UNINITIALIZED_CONSTITUTION"
 
     placeholders = find_constitution_placeholders(cleaned)

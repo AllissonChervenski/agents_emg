@@ -26,6 +26,7 @@ def test_constitution_is_once_per_project_and_stages_keep_declared_dependencies(
     assert constitution.prerequisites == ()
     assert STAGE_REGISTRY.get("TASKS").prerequisites == ("PLAN",)
     assert STAGE_REGISTRY.get("ANALYSIS").mutability == "read_only"
+    assert STAGE_REGISTRY.get("ANALYSIS").expected_artifacts == ()
     assert STAGE_REGISTRY.get("IMPLEMENTATION").mutability == "workspace_write"
 
 

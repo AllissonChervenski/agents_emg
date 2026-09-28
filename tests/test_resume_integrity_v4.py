@@ -1,3 +1,4 @@
+import hashlib
 import json
 import socket
 import sqlite3
@@ -229,30 +230,48 @@ def test_resume_driver_skips_validated_artifacts_completed_tasks_and_review(tmp_
     from orchestrator.config.models import Config
     from orchestrator.workflow.driver import run_sdd_workflow
     root=_repo(tmp_path); store=_store(root); wid=store.create_workflow("feature")
-    folder=root/".orchestrator"/"runs"/wid; (folder/"T1").mkdir(parents=True)
+    folder=root/".orchestrator"/"runs"/wid; (folder/"T001").mkdir(parents=True)
     feature_dir=root/"specs"/"feature"; feature_dir.mkdir(parents=True)
     memory=root/".specify"/"memory"; memory.mkdir(parents=True)
     (root/".specify"/"feature.json").write_text(json.dumps({"feature_directory":"specs/feature"}))
-    (memory/"constitution.md").write_text("approved")
-    for name in ("spec.md","plan.md"): (feature_dir/name).write_text("approved")
-    (feature_dir/"tasks.md").write_text(json.dumps({"tasks":[{"id":"T1","requirements":["FR-1"],"acceptance_criteria":["AC-1"],"dependencies":[]}]}))
-    (folder/"T1"/"tdd.json").write_text(json.dumps({"phase":"COMPLETE","requirement":["FR-1"],"acceptance_criteria":["AC-1"],"coder_provider":"opencode"}))
+    (memory/"constitution.md").write_text("# Constitution\n\nPython governs deterministic stage gates.\n")
+    (feature_dir/"spec.md").write_text("# Specification\n\nFR-1: List providers. AC-1: Return configured names.\n")
+    (feature_dir/"plan.md").write_text("# Plan\n\nD-1: Use the configured provider registry.\n")
+    (feature_dir/"checklists").mkdir()
+    (feature_dir/"checklists"/"requirements.md").write_text("# Requirements\n\n- [x] Requirements are testable.\n")
+    (folder/"analysis-report.md").write_text("# Analysis Report\n\nCritical Issues Count: 0\n")
+    metadata={"requirements":["FR-1"],"acceptance_criteria":["AC-1"],"plan_decisions":["D-1"],
+              "dependencies":[],"allowed_files":["src/feature.py"],"test_type":"UNIT",
+              "tdd_phases":["RED","GREEN","REFACTOR"]}
+    (feature_dir/"tasks.md").write_text("# Tasks\n\n- [x] T001 List providers in src/feature.py\n"
+                                      f"  <!-- harness-task {json.dumps(metadata)} -->\n")
+    (folder/"T001"/"tdd.json").write_text(json.dumps({"phase":"COMPLETE","requirement":["FR-1"],"acceptance_criteria":["AC-1"],"coder_provider":"opencode"}))
     (folder/"traceability.json").write_text("[]")
     (folder/"final-verification.json").write_text(json.dumps([{"status":"PASS","command":["pytest"]}]))
     (folder/"final-review.json").write_text(json.dumps({"status":"PASS"}))
-    fp=WorkspaceFingerprint(root).capture(wid,"T1")
-    for stage in ("CONSTITUTION_VALIDATED","SPEC_VALIDATED","PLAN_VALIDATED","TASKS_VALIDATED","CROSS_VALIDATED","TASK_COMPLETE","FINAL_VERIFIED","FINAL_REVIEWED"):
-        task_id="T1" if stage=="TASK_COMPLETE" else None
+    digest=hashlib.sha256((feature_dir/"tasks.md").read_bytes()).hexdigest()
+    (folder/"convergence-report-1.json").write_text(json.dumps({
+        "iteration":1,"outcome":"converged","added_task_ids":[],
+        "tasks_sha256_before":digest,"tasks_sha256_after":digest,
+    }))
+    fp=WorkspaceFingerprint(root).capture(wid,"T001")
+    for stage in ("CONSTITUTION_VALIDATED","SPEC_VALIDATED","CLARIFICATION_COMPLETE","CHECKLIST_COMPLETE","PLAN_VALIDATED","TASKS_VALIDATED","ANALYSIS_COMPLETE","TASK_COMPLETE","FINAL_VERIFIED","CONVERGED","FINAL_REVIEWED"):
+        task_id="T001" if stage=="TASK_COMPLETE" else None
         store.create_checkpoint(wid,f"{stage}:{task_id or '-'}:1",stage,fp,task_id)
     class NoAgent:
         def run(self,*args,**kwargs): raise AssertionError("resume duplicated a validated agent call")
-    class NoHarness:
-        def run(self,*args,**kwargs): raise AssertionError("driver duplicated a revalidated final gate")
+    class FinalHarness:
+        calls=0
         requirement_results=[]
-    result=run_sdd_workflow("feature",root,NoAgent(),NoHarness(),Config(),folder,store=store,resume=True)
-    assert result["completed_tasks"]==["T1"]
+        def run(self):
+            self.calls+=1
+            return [SimpleNamespace(name="tests",command=["pytest"],status="PASS",exit_code=0,success=True)]
+    harness=FinalHarness()
+    result=run_sdd_workflow("feature",root,NoAgent(),harness,Config(),folder,store=store,resume=True)
+    assert harness.calls==1
+    assert result["completed_tasks"]==["T001"]
     assert result["final_verification"]==["PASS"]
-    assert len(store.checkpoints(wid))==8
+    assert len(store.checkpoints(wid))==11
 
 
 def test_driver_skips_constitution_generation_when_canonical_constitution_exists_and_valid(tmp_path):
@@ -265,7 +284,7 @@ def test_driver_skips_constitution_generation_when_canonical_constitution_exists
     folder = root / ".orchestrator" / "runs" / wid
     memory = root / ".specify" / "memory"
     memory.mkdir(parents=True)
-    (memory / "constitution.md").write_text("existing canonical constitution")
+    (memory / "constitution.md").write_text("# Existing Canonical Constitution\n\nPython alone governs gates.\n")
 
     roles_called = []
     class StopWorkflow(Exception): pass
@@ -310,4 +329,3 @@ def test_driver_skips_constitution_generation_when_canonical_constitution_exists
     assert "constitution" not in roles_called
     assert "constitution_validator" in roles_called
     assert any(c["stage"] == "CONSTITUTION_VALIDATED" for c in store.checkpoints(wid))
-

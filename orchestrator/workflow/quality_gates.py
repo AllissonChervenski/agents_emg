@@ -6,8 +6,11 @@ clarify, checklist, analyze, or converge methodology owned by SpecKit skills.
 
 from __future__ import annotations
 
+import json
+import hashlib
 import re
 from collections.abc import Callable
+from pathlib import Path
 
 
 _CLARIFICATION = re.compile(r"\[NEEDS CLARIFICATION(?::\s*(.*?))?\]", re.IGNORECASE)
@@ -29,12 +32,27 @@ def analyze_has_critical_findings(report: str) -> bool:
 
 
 def convergence_outcome(before: bytes, after: bytes, report: str) -> str:
-    """Validate the converge skill's append-only artifact contract."""
+    """Check filesystem changes and interpret only an explicit outcome diagnostic.
+
+    Provider envelopes are transport metadata, never a tasks artifact. Empty
+    responses and a transport SUCCESS cannot establish semantic convergence.
+    """
     if after != before:
         if not after.startswith(before):
             raise ValueError("speckit-converge changed existing tasks.md content; append-only contract violated")
         return "tasks_appended"
-    if re.search(r"\bconverged\b", report, re.IGNORECASE):
+    try:
+        payload = json.loads(report)
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict):
+        if payload.get("outcome") == "converged":
+            return "converged"
+        response = payload.get("response", "")
+        report = response if isinstance(response, str) else ""
+    if re.search(r"\b(?:not|never)(?:\s+\w+){0,2}\s+converged\b", report, re.IGNORECASE):
+        raise ValueError("speckit-converge returned no append and no explicit converged result")
+    if re.search(r"^\s*(?:[#*✅]\s*)*converged\b", report, re.IGNORECASE | re.MULTILINE):
         return "converged"
     raise ValueError("speckit-converge returned no append and no explicit converged result")
 
@@ -66,3 +84,28 @@ def run_convergence_loop(
             )
         implement_remaining(iteration + 1)
     raise AssertionError("unreachable convergence loop exit")
+
+
+def verify_convergence_receipt(path: Path, tasks_path: Path, expected_outcome: str) -> dict:
+    """Revalidate Python's convergence receipt against the current tasks bytes."""
+    try:
+        if path.is_symlink() or tasks_path.is_symlink():
+            raise ValueError("symlink evidence is not accepted")
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(receipt, dict) or receipt.get("outcome") != expected_outcome:
+            raise ValueError("missing or mismatched convergence outcome")
+        before, after = receipt.get("tasks_sha256_before"), receipt.get("tasks_sha256_after")
+        if not all(isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) for value in (before, after)):
+            raise ValueError("missing task artifact hashes")
+        if after != hashlib.sha256(tasks_path.read_bytes()).hexdigest():
+            raise ValueError("tasks.md no longer matches the convergence receipt")
+        added = receipt.get("added_task_ids")
+        if not isinstance(added, list) or not all(isinstance(item, str) for item in added):
+            raise ValueError("invalid appended task IDs")
+        if expected_outcome == "converged" and (before != after or added):
+            raise ValueError("converged receipt contradicts task changes")
+        if expected_outcome == "tasks_appended" and (before == after or not added):
+            raise ValueError("appended receipt has no new tasks")
+        return receipt
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ValueError(f"Invalid convergence evidence at {path}: {exc}") from exc

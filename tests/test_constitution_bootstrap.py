@@ -89,12 +89,15 @@ class MockAgentRunner:
                 stdout=json.dumps({"status": "PASS", "issues": [], "summary": "Constitution valid"}),
             )
         if role == "constitution":
+            const_path = Path(kwargs["cwd"]) / ".specify" / "memory" / "constitution.md"
+            const_path.parent.mkdir(parents=True, exist_ok=True)
+            const_path.write_text(self.generated_constitution)
             return AgentResult(
                 "agy",
                 "gemini-3.8-flash-medium",
                 role,
                 True,
-                stdout=self.generated_constitution,
+                stdout=json.dumps({"conversation_id": "fake-bootstrap", "status": "SUCCESS", "response": ""}),
             )
         if role == "specification":
             raise StopWorkflow("Reached specification")
@@ -323,7 +326,7 @@ def test_constitution_parcialmente_preenchido_bloqueio_em_resume(tmp_path):
             resume=True,
         )
 
-    assert "Missing validated constitution" in str(exc_info.value)
+    assert "postcondition failure" in str(exc_info.value)
 
 
 def test_constitution_real_nao_regenera(tmp_path):
@@ -448,3 +451,50 @@ def test_template_nunca_chega_diretamente_a_constitution_validator_como_se_fosse
     # In denied approval, constitution_validator was NEVER invoked
     assert "constitution_validator" not in [c["role"] for c in runner2.calls]
     assert runner2.calls == []
+
+
+@pytest.mark.parametrize("stdout", [
+    json.dumps({"conversation_id": "fake-constitution", "status": "SUCCESS", "response": "",
+                "duration_seconds": 1.0, "usage": {"input_tokens": 12, "output_tokens": 0}}),
+    "", "Provider completed its command",
+])
+@pytest.mark.parametrize("initial", [None, OFFICIAL_TEMPLATE_SAMPLE])
+@pytest.mark.parametrize("creates_file", [True, False])
+def test_constitution_success_requires_skill_filesystem_output(tmp_path, stdout, initial, creates_file):
+    root, store, wid, workflow_dir = _setup_workspace(tmp_path)
+    artifact = root / ".specify/memory/constitution.md"
+    if initial is not None:
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text(initial)
+
+    class EnvelopeRunner(MockAgentRunner):
+        def run_skill(self, role, provider, model, skill_name, prompt, cwd, **kwargs):
+            if role != "constitution":
+                return super().run_skill(role, provider, model, skill_name, prompt, cwd, **kwargs)
+            assert skill_name == "speckit-constitution"
+            assert kwargs["allowed_paths"] == [".specify/memory/constitution.md"]
+            if creates_file:
+                artifact.parent.mkdir(parents=True, exist_ok=True)
+                artifact.write_text(REAL_CONSTITUTION_TEXT)
+            return AgentResult("agy", "gemini-3.8-flash-medium", role, True, stdout=stdout)
+
+        def run(self, role, prompt, *args, **kwargs):
+            if role == "constitution_validator":
+                assert kwargs["allowed_paths"] == []
+                assert REAL_CONSTITUTION_TEXT in prompt
+                assert "fake-constitution" not in prompt
+            return super().run(role, prompt, *args, **kwargs)
+
+    runner = EnvelopeRunner()
+    with pytest.raises(StopWorkflow if creates_file else WorkflowBlocked):
+        run_sdd_workflow(
+            "test-feature", root, runner, SimpleNamespace(requirement_results=[]), Config(),
+            workflow_dir, approve_constitution=lambda: True, store=store,
+        )
+    if creates_file:
+        assert artifact.read_text() == REAL_CONSTITUTION_TEXT
+        assert "CONSTITUTION_VALIDATED" in [cp["stage"] for cp in store.checkpoints(wid)]
+    else:
+        assert artifact.read_text() == initial if initial is not None else not artifact.exists()
+        assert "constitution_validator" not in [call["role"] for call in runner.calls]
+        assert store.checkpoints(wid) == []
