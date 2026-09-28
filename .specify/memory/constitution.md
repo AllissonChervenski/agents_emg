@@ -1,50 +1,69 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report:
+- Version change: 0.0.0 (template) → 1.0.0
+- List of modified principles:
+  - [PRINCIPLE_1_NAME] → I. Python Central Orchestrator & Deterministic Gatekeeper (NON-NEGOTIABLE)
+  - [PRINCIPLE_2_NAME] → II. Strict TDD Lifecycle & Anti-Tampering Protection (NON-NEGOTIABLE)
+  - [PRINCIPLE_3_NAME] → III. Non-Destructive Local Reuse & Zero-Subprocess Read Paths
+  - [PRINCIPLE_4_NAME] → IV. CLI Ergonomics, Text/JSON Duality & Failure Containment
+  - [PRINCIPLE_5_NAME] → V. SpecKit Traceability & Living Documentation Supremacy
+- Added sections:
+  - Technical Constraints & Safe Execution Policies ([SECTION_2_NAME])
+  - Quality Gates & Multi-Agent Verification Matrix ([SECTION_3_NAME])
+- Removed sections: None
+- Follow-up TODOs: None (all placeholders resolved)
+-->
+
+# SDD Orchestrator Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Python Central Orchestrator & Deterministic Gatekeeper (NON-NEGOTIABLE)
+Python (`orchestrator/`) is the sole orchestrator and state authority for the system. External agent providers (Antigravity, Codex, OpenCode, Claude Code) are untrusted workers invoked strictly to produce or inspect artifacts. Python owns all state machine transitions (SDD and TDD), persistence in SQLite, workspace fingerprinting, scope containment (`SCOPE_VIOLATION`), and deterministic verification. No LLM response, agent output, or external tool can override or bypass a failing deterministic gate (test failure, lint issue, typing error, or syntax compilation failure).
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Strict TDD Lifecycle & Anti-Tampering Protection (NON-NEGOTIABLE)
+All code changes MUST follow the strict RED → GREEN → REFACTOR lifecycle per task contract (`T###`).
+- **RED**: The test designer must produce dedicated tests in `tests/` demonstrating an expected failure (`EXPECTED_FAILURE`). Python validates that the test fails for the expected missing feature before implementation begins.
+- **GREEN**: The implementer modifies only the files specified in `allowed_files` to make the task tests pass. Test files created in RED are protected by SHA-256 snapshots; any alteration, weakening of assertions, or skipping of tests during GREEN or REFACTOR is blocked as `TEST_TAMPERING`.
+- **REFACTOR**: Code restructuring must maintain green tests across both the task suite and full regression.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Non-Destructive Local Reuse & Zero-Subprocess Read Paths
+Commands and features designed for inspection, reporting, or summary (such as `provider-summary` or catalog queries) MUST be strictly read-only and non-destructive.
+- They MUST NOT invoke external agent CLIs, dispatch LLM model calls, execute subprocesses, or run live smoke tests.
+- They MUST reuse existing local abstractions, registries, and configuration caches (e.g., `capabilities.json`, `models.json`, and capability registries) rather than duplicating discovery or routing logic.
+- They MUST NOT introduce unnecessary architectural layers or external dependencies when existing project abstractions suffice.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. CLI Ergonomics, Text/JSON Duality & Failure Containment
+Every user-facing CLI command MUST provide predictable, robust interfaces:
+- Dual-format output: Commands MUST provide a standard human-readable text output and a pure machine-readable JSON output via `--json`. When `--json` is supplied, stdout MUST contain exclusively parseable JSON without extraneous logs or banners.
+- Error handling: Expected operational errors MUST exit with a non-zero exit code, print clear diagnostics to stderr, and suppress unhandled stack traces during normal operation.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. SpecKit Traceability & Living Documentation Supremacy
+Living documentation organized under `specs/<feature>/` (`spec.md`, `plan.md`, `tasks.md`, `checklists/`) is the authoritative source of truth for features.
+- All functional requirements (`FR-xxx`) and acceptance criteria (`AC-xxx`) must maintain end-to-end traceability to tasks and tests.
+- This Constitution in `.specify/memory/constitution.md` supersedes all downstream specifications, plans, and task breakdowns. If a conflict arises, the Constitution prevails.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Technical Constraints & Safe Execution Policies
+- **Runtime Environment**: Python 3.10+ standard library baseline. Optional development dependencies (`pytest`, `PyYAML`, `ruff`, `mypy`) are managed via `pyproject.toml`.
+- **Command Safety Policy**: Execution of destructive commands (`rm -rf`, `git reset --hard`, `git push --force`) is strictly forbidden and blocked by Python command policies.
+- **Scope Invariants**: Core components—including `ModelRouter`, cost policies, `StageRegistry`, `SkillDispatcher`, and the `TDD` engine—MUST NOT be modified unless explicitly required by an authorized architectural initiative. Features MUST NOT introduce new third-party dependencies without prior governance approval.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
-
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
-
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## Quality Gates & Multi-Agent Verification Matrix
+- **Deterministic Pipeline**: Every change MUST pass four deterministic quality gates:
+  1. Unit and regression tests: `python -m pytest -q`
+  2. Linting and formatting: `python -m ruff check orchestrator tests`
+  3. Static type analysis: `python -m mypy`
+  4. Syntax validation: `python -m compileall -q orchestrator tests`
+- **Independent Validation**: Artifacts (specs, plans, tasks, test designs, diffs) MUST be reviewed by an independent validator role preferably routed to a distinct agent provider from the authoring agent (`prefer_different_provider_from_author`).
+- **Checkpoint Persistence**: Phase transitions and state snapshots MUST be durably recorded in SQLite alongside workspace fingerprints prior to advancing.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+- **Supremacy**: This Constitution defines the non-negotiable operational principles of the repository. All agents, automations, and human contributors MUST comply.
+- **Amendment Procedure**: Any amendment requires an explicit proposal detailing the rationale, impact on existing features, and an accompanying update to `.specify/memory/constitution.md`.
+- **Versioning Policy**: Semantic versioning (MAJOR.MINOR.PATCH) governs this document:
+  - MAJOR: Incompatible governance changes, removal or redefinition of core principles.
+  - MINOR: Addition of new principles or material expansions to governance sections.
+  - PATCH: Clarifications, wording refinements, non-semantic typographical updates.
+- **Compliance Review**: Every feature pipeline validation and code review must explicitly verify adherence to these principles before convergence and final sign-off.
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
-
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-09-28 | **Last Amended**: 2026-09-28

@@ -44,14 +44,15 @@ _TEMPLATE_TOKEN_RE = re.compile(r"\[([A-Z][A-Z0-9_]{2,})\]")
 
 def find_constitution_placeholders(content: str) -> list[str]:
     """Find template placeholders present in constitution content."""
+    cleaned = re.sub(r"<!--.*?-->", "", content, flags=re.DOTALL)
     found: list[str] = []
     for p in OFFICIAL_CONSTITUTION_PLACEHOLDERS:
-        if p in content and p not in found:
+        if p in cleaned and p not in found:
             found.append(p)
-    for m in _TEMPLATE_TOKEN_RE.finditer(content):
+    for m in _TEMPLATE_TOKEN_RE.finditer(cleaned):
         token = m.group(0)
         end_idx = m.end()
-        after = content[end_idx : end_idx + 2]
+        after = cleaned[end_idx : end_idx + 2]
         if after.startswith("(") or after.startswith(":"):
             # Exclude markdown links [NAME](url) or link references [NAME]: url
             continue
