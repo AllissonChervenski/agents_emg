@@ -9,3 +9,4 @@ dist/
 feature.md
 first-real-run.log
 logs/
+.orchestrator/model-selection.md
