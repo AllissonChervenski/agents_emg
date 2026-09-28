@@ -205,7 +205,8 @@ def run(args):
     if interactive_gate:
         runner.on_fallback=lambda role,provider,model: interactive_gate.confirm("PROVIDER_FALLBACK",role,provider,model,[],[])
         if getattr(args,"first_real_run",False):
-            runner.on_call=lambda role,provider,model,task_id,files,outputs: interactive_gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task_id)
+            runner.on_call=lambda role,provider,model,task_id,files,outputs,artifacts=(): interactive_gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task_id,artifacts=artifacts)
+
     def command_event(event, payload):
         if event=="started":
             item=store.get_workflow(wid)
@@ -354,7 +355,8 @@ def resume(args):
         runner=AgentRunner(providers,router,store,workflow_id=args.workflow_id,safety=cfg.real_run,
             cost_router=CostAwareRouter(router,cfg.cost_optimization,store,args.workflow_id),
             execution_policy_router=ExecutionPolicyRouter(cfg.execution_policies,router.capabilities))
-        if gate: runner.on_call=lambda role,provider,model,task,files,outputs: gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task)
+        if gate: runner.on_call=lambda role,provider,model,task,files,outputs,artifacts=(): gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task,artifacts=artifacts)
+
         def command_event(event,payload):
             if event=="started":
                 current=store.get_workflow(args.workflow_id)

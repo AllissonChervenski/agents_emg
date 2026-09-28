@@ -3,7 +3,10 @@ from pathlib import Path
 from string import Template
 from uuid import uuid4
 import hashlib
+import json
+from typing import Any
 from orchestrator.agents.roles import ROLES
+
 from orchestrator.config.models import AgentResult
 from orchestrator.agents.history import classify_task
 from orchestrator.agents.cost import TaskProfile
@@ -11,10 +14,53 @@ from orchestrator.agents.skills import SkillDispatcher
 from orchestrator.validation.parser import sanitize_text
 
 
-def load_prompt(role: str, **values: str) -> str:
+def load_prompt(role: str, **values: Any) -> str:
     spec = ROLES[role]
     path = Path(__file__).resolve().parents[1] / "prompts" / spec.prompt_file
-    return Template(path.read_text()).safe_substitute(**values)
+    template_text = path.read_text(encoding="utf-8")
+
+    # Unified internal contract: canonical parameter is 'artifact'
+    # Resolve any alias divergence: artifact, artifacts, response, context, artifact_content
+    artifact: Any = values.pop("artifact", None)
+
+    for alias in ("artifact_content", "context", "artifacts"):
+        if artifact is None and alias in values:
+            val = values.pop(alias)
+            if val is not None:
+                artifact = val
+        else:
+            values.pop(alias, None)
+
+    # Do not use an empty generic 'response' field if template expects 'artifact'
+    response_val = values.pop("response", None)
+    if artifact is None and response_val is not None:
+        if isinstance(response_val, str) and response_val.strip():
+            artifact = response_val
+        elif not isinstance(response_val, str) and response_val:
+            artifact = response_val
+
+    # If artifact is a Path or a path string to an existing file, read real content
+    if isinstance(artifact, Path):
+        artifact = artifact.read_text(encoding="utf-8")
+    elif isinstance(artifact, str) and "\n" not in artifact and len(artifact) < 1024:
+        try:
+            p = Path(artifact)
+            if p.is_file():
+                artifact = p.read_text(encoding="utf-8")
+        except OSError:
+            pass
+    elif isinstance(artifact, (dict, list)):
+        artifact = json.dumps(artifact, indent=2)
+
+    # Prompt final must not contain an empty artifact when template expects $artifact
+    if "$artifact" in template_text or "${artifact}" in template_text:
+        if artifact is None or (isinstance(artifact, str) and not artifact.strip()):
+            raise ValueError(f"Artifact content cannot be empty for role '{role}'")
+        values["artifact"] = artifact
+
+    str_values = {k: str(v) for k, v in values.items()}
+    return Template(template_text).safe_substitute(**str_values)
+
 
 
 class AgentRunner:
@@ -33,9 +79,18 @@ class AgentRunner:
         self.calls=0
         self.task_calls={}
         self.active_elapsed=0.0
+        self.active_stage_name=None
+        self.active_stage_role=None
+        self.active_stage_artifacts=[]
         if store and workflow_id:
             self.calls,self.task_calls=store.agent_call_counts(workflow_id)
             self.active_elapsed=store.active_execution_seconds(workflow_id)
+
+    def set_stage_context(self, stage: str, role: str, artifacts: Any = ()):
+        self.active_stage_name = stage
+        self.active_stage_role = role
+        self.active_stage_artifacts = list(artifacts or ())
+
 
     @staticmethod
     def _snapshot(root):
@@ -138,15 +193,25 @@ class AgentRunner:
 
     def run_skill(self, role, provider, model, skill_name, arguments, cwd, execution_policy=None,
                   timeout=None, fallback=True, task=None, task_id=None, allowed_paths=None,
-                  expected_outputs=None, exclude_providers=None):
+                  expected_outputs=None, exclude_providers=None, artifacts=None):
         """Run a skill through the normal router, safety, retry, and telemetry path."""
         return self.run(role, arguments, cwd=cwd, timeout=timeout, override_provider=provider,
                         override_model=model, fallback=fallback, task=task, task_id=task_id,
                         allowed_paths=allowed_paths, expected_outputs=expected_outputs,
                         skill_name=skill_name, execution_policy=execution_policy,
-                        exclude_providers=exclude_providers)
+                        exclude_providers=exclude_providers, artifacts=artifacts)
 
-    def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None, skill_name=None, execution_policy=None):
+    def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None, skill_name=None, execution_policy=None, artifacts=None):
+        artifacts_list = list(artifacts or ())
+        if (
+            self.active_stage_role == role
+            and self.active_stage_artifacts
+            and not artifacts_list
+        ):
+            raise RuntimeError(
+                f"INVARIANCE_VIOLATION: stage '{self.active_stage_name}' declared artifacts_supplied "
+                f"{self.active_stage_artifacts}, but agent call for role '{role}' received empty artifacts."
+            )
         invocation_id=str(uuid4())
         route_excludes=set(exclude_providers or ())
         if author_provider is None and exclude_providers and len(exclude_providers)==1:
@@ -184,8 +249,14 @@ class AgentRunner:
             budget=self._budget_error(task_id)
             if budget: return AgentResult(chosen.provider,chosen.model,role,False,error=budget)
             outputs=expected_outputs or (["structured validation JSON"] if ROLES[role].validation else (["task tests"] if role=="test_designer" else (["declared production files"] if role in {"coder","refactorer"} else ["SDD artifact or structured task output"])))
-            if self.on_call and not self.on_call(role,chosen.provider,chosen.model,task_id,permitted,outputs):
-                return AgentResult(chosen.provider,chosen.model,role,False,error="INTERACTIVE_ABORT")
+            if self.on_call:
+                try:
+                    on_call_ok = self.on_call(role,chosen.provider,chosen.model,task_id,permitted,outputs,artifacts=artifacts_list)
+                except TypeError:
+                    on_call_ok = self.on_call(role,chosen.provider,chosen.model,task_id,permitted,outputs)
+                if not on_call_ok:
+                    return AgentResult(chosen.provider,chosen.model,role,False,error="INTERACTIVE_ABORT")
+
             before=self._snapshot(cwd) if self.safety.get("safety_mode")=="strict" else {}
             self.calls+=1
             if task_id: self.task_calls[task_id]=self.task_calls.get(task_id,0)+1
@@ -254,4 +325,9 @@ class AgentRunner:
                     result.error="PROVIDER_FAILURE: interactive fallback aborted"
                     return result
                 result=execute(second,2)
+        if self.active_stage_role == role:
+            self.active_stage_name = None
+            self.active_stage_role = None
+            self.active_stage_artifacts = []
         return result
+

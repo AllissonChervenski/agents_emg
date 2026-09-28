@@ -21,7 +21,13 @@ class InteractiveGate:
         self.ready_role=None
         self.ready_task_id=None
         self.active_gate_id=None
+
         self.events=[]
+        self.stage_artifacts=[]
+        self.stage_role=None
+        self.stage_name=None
+        self.stage_task_id=None
+
 
     def _event(self, name, **details):
         self.events.append({"event":name,**details})
@@ -78,6 +84,23 @@ class InteractiveGate:
         return answers
 
     def confirm(self, stage, role, provider, model, files, commands, task_id=None, attempt=1, artifacts=()) -> bool:
+        if stage != "AGENT_CALL":
+            self.stage_name = stage
+            self.stage_role = role
+            self.stage_task_id = task_id
+            self.stage_artifacts = list(artifacts or ())
+        else:
+            if (
+                self.stage_role == role
+                and (self.stage_task_id == task_id or task_id is None or self.stage_task_id is None)
+                and self.stage_artifacts
+                and not artifacts
+            ):
+                raise RuntimeError(
+                    f"INVARIANCE_VIOLATION: stage '{self.stage_name}' declared artifacts_supplied "
+                    f"{self.stage_artifacts}, but AGENT_CALL for role '{role}' received empty artifacts."
+                )
+
         summary=self._summary(stage,role,provider,model,files,commands,task_id,artifacts=artifacts)
 
         checkpoint=self._checkpoint_transition()
@@ -131,10 +154,11 @@ class InteractiveGate:
                 continue
             print("Choose continue, inspect, or abort.")
 
-    def authorize_agent_call(self, role, provider, model, task_id, files, outputs):
+    def authorize_agent_call(self, role, provider, model, task_id, files, outputs, artifacts=()):
         checkpoint=self._checkpoint_transition()
         if not (self.ready_gate_id and self.ready_role==role and self.ready_task_id==task_id):
-            if not self.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task_id): return False
+            if not self.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task_id,artifacts=artifacts): return False
+
         if not self.store or not self.ready_gate_id: return True
         from orchestrator.workflow.resume import compare_fingerprints
         gate=next((item for item in self.store.list_human_gates(self.workflow_id) if item["id"]==self.ready_gate_id),None)

@@ -99,9 +99,10 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         return {name:hashlib.sha256(str(Path(path).readlink()).encode() if Path(path).is_symlink() else Path(path).read_bytes()).hexdigest() for name,path in artifact_paths.items() if Path(path).is_file() or Path(path).is_symlink()}
     protected_artifacts=artifact_hashes()
     ctx=f"Task: {task.task}\nRequirements: {task.requirements}\nAcceptance criteria: {task.acceptance_criteria}\nArtifact paths: {artifact_paths}"
-    def invoke(role, extra="", author_provider=None):
+    def invoke(role, extra="", author_provider=None, artifacts=None):
         options={"task":task_data,"task_id":task.task} if task_data else {}
         if task_data and role in {"coder","refactorer"}: options["allowed_paths"]=task_data.get("allowed_files") or task_data.get("production_files") or []
+        if artifacts is not None: options["artifacts"]=artifacts
         if role == "coder":
             # Python's task-level TDD machine is the only implementation
             # authority. SpecKit implement is dispatched as the worker skill
@@ -137,6 +138,8 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         save()
         if checkpoint_callback: checkpoint_callback(stage,task.task,task.attempts.get("green",0)+1)
     def gate_phase(phase, role, files=(), commands=(), artifacts=()):
+        if hasattr(runner, "set_stage_context"):
+            runner.set_stage_context(phase, role, artifacts)
         if not gate_callback:
             return True
         try:
@@ -150,6 +153,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
             task.evidence["gate_abort"]=phase
             task.advance(TDDPhase.BLOCKED); save(); return False
         return True
+
 
     if resume_stage in {"RED_VALIDATED","GREEN_VALIDATED","REFACTOR_VALIDATED"}:
         from types import SimpleNamespace
@@ -195,8 +199,9 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
             task.advance(TDDPhase.BLOCKED); save(); return task
         task.evidence["test_design"]={"task_id":design.task_id,"requirement_ids":design.requirement_ids,"acceptance_criteria_ids":design.acceptance_criteria_ids,"created_tests":design.created_tests,"test_commands":design.test_commands}
         test_sources={path:(root/path).read_text(errors="replace")[:12000] for path in task.evidence["test_files_changed"] if (root/path).is_file()}
-        if not gate_phase("RED_VALIDATE","test_validator",[],[],artifacts=task.evidence["test_files_changed"]): return task
-        validator, raw=invoke("test_validator", load_prompt("test_validator", task=json.dumps(task.evidence['test_design']), artifact=json.dumps(test_sources, indent=2)), author_provider=designer.provider)
+        test_files = list(task.evidence["test_files_changed"])
+        if not gate_phase("RED_VALIDATE","test_validator",[],[],artifacts=test_files): return task
+        validator, raw=invoke("test_validator", load_prompt("test_validator", task=json.dumps(task.evidence['test_design']), artifact=json.dumps(test_sources, indent=2)), author_provider=designer.provider, artifacts=test_files)
         if validator.success:
             vr=parse_validation(raw or "", "test_validator", validator.model, provider=getattr(validator,"provider",None))
         else:
@@ -216,7 +221,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         task.evidence["red_expected_failure_confirmed"]=red_status=="EXPECTED_FAILURE"
         task.evidence["red_attempts"]=1
         if red_status=="EXPECTED_FAILURE":
-            red_validator,red_raw=invoke("test_validator", load_prompt("test_validator", task=f"Validate observed RED failures for {task.task}", artifact=json.dumps(task.evidence["red"], indent=2)), author_provider=designer.provider)
+            red_validator,red_raw=invoke("test_validator", load_prompt("test_validator", task=f"Validate observed RED failures for {task.task}", artifact=json.dumps(task.evidence["red"], indent=2)), author_provider=designer.provider, artifacts=test_files)
             if red_validator.success:
                 red_validation=parse_validation(red_raw or "","test_validator",red_validator.model, provider=getattr(red_validator,"provider",None))
             else:
@@ -251,7 +256,9 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                 f"Files: {json.dumps(changed)}\n"
                 'Return strict JSON: {"status":"PASS|REVISE|BLOCKED","summary":"...","issues":[]}'
             )
-            tamper_validator,tamper_raw=invoke("test_validator", tamper_prompt, author_provider=coder.provider)
+            tamper_files = list(changed.keys()) if isinstance(changed, dict) else list(changed)
+            tamper_validator,tamper_raw=invoke("test_validator", tamper_prompt, author_provider=coder.provider, artifacts=tamper_files)
+
             if tamper_validator.success:
                 tamper_review=parse_validation(tamper_raw or "","test_validator",tamper_validator.model, provider=getattr(tamper_validator,"provider",None))
             else:
@@ -322,8 +329,11 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         if not gate.refactor(True,regression_ok):
             task.advance(TDDPhase.BLOCKED); save(); return task
         checkpoint("REFACTOR_VALIDATED")
-    if not gate_phase("REVIEW","code_reviewer",[],[],artifacts=task.evidence.get("production_files_changed",[])): return task
-    review,raw=invoke("code_reviewer", load_prompt("code_reviewer", task=task.task, artifact=json.dumps(task.evidence, indent=2)), author_provider=task.evidence.get("coder_provider"))
+    prod_files = list(task.evidence.get("production_files_changed", []))
+
+    if not gate_phase("REVIEW","code_reviewer",[],[],artifacts=prod_files): return task
+    review,raw=invoke("code_reviewer", load_prompt("code_reviewer", task=task.task, artifact=json.dumps(task.evidence, indent=2)), author_provider=task.evidence.get("coder_provider"), artifacts=prod_files)
+
 
 
 
