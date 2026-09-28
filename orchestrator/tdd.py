@@ -187,7 +187,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         if not gate_phase("RED_VALIDATE","test_validator",task.evidence["test_files_changed"]): return task
         validator, raw=invoke("test_validator", f"Review declared task tests, sources and commands before RED.\n{json.dumps({'design':task.evidence['test_design'],'sources':test_sources})}", author_provider=designer.provider)
         if validator.success:
-            vr=parse_validation(raw or "", "test_validator", validator.model)
+            vr=parse_validation(raw or "", "test_validator", validator.model, provider=getattr(validator,"provider",None))
         else:
             vr=ValidationResult("PARSE_ERROR" if not validator.error else "BLOCKED", [], validator.error or validator.stderr or "test_validator failed", "test_validator", validator.model, datetime.now(timezone.utc).isoformat(), raw or validator.stderr or validator.error or "")
         _record_validation(runner, validator, vr, stage="RED_VALIDATE", evidence={"task_id": task.task})
@@ -207,7 +207,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         if red_status=="EXPECTED_FAILURE":
             red_validator,red_raw=invoke("test_validator", "Validate the observed RED failures semantically against the linked acceptance criteria. Return PASS only if each failure demonstrates missing behavior.\n"+json.dumps(task.evidence["red"]),author_provider=designer.provider)
             if red_validator.success:
-                red_validation=parse_validation(red_raw or "","test_validator",red_validator.model)
+                red_validation=parse_validation(red_raw or "","test_validator",red_validator.model, provider=getattr(red_validator,"provider",None))
             else:
                 red_validation=ValidationResult("PARSE_ERROR" if not red_validator.error else "BLOCKED", [], red_validator.error or red_validator.stderr or "test_validator failed", "test_validator", red_validator.model, datetime.now(timezone.utc).isoformat(), red_raw or red_validator.stderr or red_validator.error or "")
             _record_validation(runner, red_validator, red_validation, stage="RED_SEMANTIC_VALIDATE", evidence={"task_id": task.task})
@@ -236,7 +236,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
             task.evidence["green_attempts"]=task.attempts["green"]
             tamper_validator,tamper_raw=invoke("test_validator", "TEST_TAMPERING: inspect unauthorized GREEN changes. Return REVISE with suggested_action RETURN_TO_RED only if a legitimate test correction is needed; otherwise BLOCKED. Files: "+json.dumps(changed),author_provider=coder.provider)
             if tamper_validator.success:
-                tamper_review=parse_validation(tamper_raw or "","test_validator",tamper_validator.model)
+                tamper_review=parse_validation(tamper_raw or "","test_validator",tamper_validator.model, provider=getattr(tamper_validator,"provider",None))
             else:
                 tamper_review=ValidationResult("PARSE_ERROR" if not tamper_validator.error else "BLOCKED", [], tamper_validator.error or tamper_validator.stderr or "test_validator failed", "test_validator", tamper_validator.model, datetime.now(timezone.utc).isoformat(), tamper_raw or tamper_validator.stderr or tamper_validator.error or "")
             _record_validation(runner, tamper_validator, tamper_review, stage="TEST_TAMPERING_VALIDATE", evidence={"task_id": task.task, "changed_files": changed})
@@ -304,7 +304,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     if not gate_phase("REVIEW","code_reviewer",task.evidence.get("production_files_changed",[])): return task
     review,raw=invoke("code_reviewer", "Review code and TDD evidence.\n"+json.dumps(task.evidence), author_provider=task.evidence.get("coder_provider"))
     if review.success:
-        review_result=parse_validation(raw or "", "code_reviewer", review.model)
+        review_result=parse_validation(raw or "", "code_reviewer", review.model, provider=getattr(review,"provider",None))
     else:
         review_result=ValidationResult("PARSE_ERROR" if not review.error else "BLOCKED", [], review.error or review.stderr or "code_reviewer failed", "code_reviewer", review.model, datetime.now(timezone.utc).isoformat(), raw or review.stderr or review.error or "")
     _record_validation(runner, review, review_result, stage="CODE_REVIEW", evidence={"task_id": task.task})

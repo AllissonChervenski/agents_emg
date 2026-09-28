@@ -77,6 +77,16 @@ class ArtifactLayout:
     def constitution(self) -> Path:
         return self.root / ".specify" / "memory" / "constitution.md"
 
+    @property
+    def constitution_status(self) -> str:
+        from orchestrator.workflow.constitution import classify_constitution
+        return classify_constitution(self.constitution)
+
+    @property
+    def constitution_is_uninitialized(self) -> bool:
+        from orchestrator.workflow.constitution import is_uninitialized_constitution
+        return is_uninitialized_constitution(self.constitution)
+
     def require_feature_dir(self) -> Path:
         if self.feature_dir is None:
             raise ArtifactDiscoveryError(
