@@ -375,7 +375,11 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         elif author=="tasks":
             artifact_text = layout.plan.read_text() if layout.plan.is_file() else ""
             prompt=load_prompt(author,feature=feature,artifact=artifact_text)
-            prompt += '\nGenerate the official SpecKit tasks.md checklist using the installed tasks-template override. Include adjacent harness-task metadata for every checklist item. TestDesigner declares task-specific tests and commands during RED.'
+            prompt += ('\nGenerate the official SpecKit tasks.md checklist using the installed tasks-template override. '
+                       'Include adjacent harness-task metadata for every checklist item. TestDesigner declares task-specific tests '
+                       'and commands during RED. In the harness-task metadata JSON, test_type must be strictly one of: '
+                       '"UNIT", "INTEGRATION", "CONTRACT", "E2E", "NOT_AUTOMATABLE". For non-implementation verification tasks, '
+                       'use test_type "NOT_AUTOMATABLE" with justification and alternative_verification.')
         scope=layout.stage_scope({"specification":"SPECIFICATION","planning":"PLAN","tasks":"TASKS"}[author])
         author_result,_=_create_and_validate(runner,author,validator,path,prompt,root,config.timeouts.get("provider"),max(1,min(config.retries.get("artifact_generation",3),config.real_run.get("max_retries",3))),gate_callback,scope)
         authors[author]=author_result.provider
