@@ -1,6 +1,7 @@
 """Policy-level TDD enforcement helpers used by workflow drivers."""
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from orchestrator.agents.roles import ROLES
 from orchestrator.config.models import ValidationResult
 from orchestrator.workflow.tdd import TDDTask
@@ -166,11 +167,11 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
 
     if resume_stage in {"RED_VALIDATED","GREEN_VALIDATED","REFACTOR_VALIDATED"}:
         from types import SimpleNamespace
-        report=Path(workflow_dir)/task.task/"tdd.json"
-        payload=json.loads(report.read_text())
+        tdd_report_path=Path(workflow_dir)/task.task/"tdd.json"
+        payload=json.loads(tdd_report_path.read_text())
         task.evidence={k:v for k,v in payload.items() if k not in {"task","requirement","acceptance_criteria","test_type","phase","attempts"}}
         task.attempts=payload.get("attempts",task.attempts)
-        design=SimpleNamespace(**task.evidence["test_design"])
+        design: Any = SimpleNamespace(**task.evidence["test_design"])
         task.phase={"RED_VALIDATED":TDDPhase.GREEN_IMPLEMENT,"GREEN_VALIDATED":TDDPhase.GREEN_VERIFY,"REFACTOR_VALIDATED":TDDPhase.REVIEW}[resume_stage]
     else:
         production_before=workspace_snapshot(root)
@@ -219,7 +220,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                     if designer.usage.get("execution_id"): runner.store.update_execution_outcome(designer.usage["execution_id"], structured_output_valid=False)
                 task.advance(TDDPhase.BLOCKED); save(); return task
             task.evidence["test_design"] = {"task_id": design.task_id, "requirement_ids": design.requirement_ids, "acceptance_criteria_ids": design.acceptance_criteria_ids, "created_tests": design.created_tests, "test_commands": design.test_commands}
-            test_sources = {path: (root / path).read_text(errors="replace")[:12000] for path in task.evidence["test_files_changed"] if (root / path).is_file()}
+            test_sources = {path: (root / path).read_text(errors="replace") for path in task.evidence["test_files_changed"] if (root / path).is_file()}
             test_files = list(task.evidence["test_files_changed"])
             if not gate_phase("RED_VALIDATE", "test_validator", [], [], artifacts=test_files, attempt=red_attempt): return task
             validator, raw = invoke("test_validator", load_prompt("test_validator", task=json.dumps(task.evidence['test_design']), artifact=json.dumps(test_sources, indent=2)), author_provider=designer.provider, artifacts=test_files, attempt=red_attempt)
@@ -233,21 +234,21 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                 task.evidence["test_validation"] = vr.status
                 task.evidence["test_validation_reason"] = vr.summary
                 task.evidence["test_validation_issues"] = vr.issues
-                if vr.status == "REVISE":
+                if vr.status in {"REVISE", "BLOCKED"}:
                     task.attempts["red"] += 1
                     validator_feedback = f"{vr.summary}\nIssues: {vr.issues}"
                     combined_tests = "\n".join(test_sources.values())
-                    report = red_detector.evaluate(
+                    stag_report = red_detector.evaluate(
                         status=vr.status,
                         issues=vr.issues,
                         artifact_text=combined_tests,
                         summary=vr.summary,
                     )
-                    if report.requires_human_intervention:
+                    if stag_report.requires_human_intervention:
                         warn_context = {
-                            "reason": report.reason,
-                            "stagnant_streak": report.stagnant_streak,
-                            "total_attempts": report.total_attempts,
+                            "reason": stag_report.reason,
+                            "stagnant_streak": stag_report.stagnant_streak,
+                            "total_attempts": stag_report.total_attempts,
                             "issues": list(vr.issues),
                             "summary": vr.summary,
                         }
