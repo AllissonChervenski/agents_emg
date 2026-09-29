@@ -134,7 +134,7 @@ class VerificationHarness:
         lowered=output.lower()
         discovered = any(token in lowered for token in ("collected ", "ran ", "--- fail", "test result: failed", "failed in ", "passed in "))
         infra_tokens=("timed out","permission denied","connection refused","no such file or directory")
-        invalid_tokens=("syntaxerror", "modulenotfounderror", "importerror", "no tests ran", "no tests collected", "collected 0 items", "error collecting", "usage error", "unrecognized arguments")
+        invalid_tokens=("syntaxerror", "modulenotfounderror", "importerror", "no tests ran", "no tests collected", "collected 0 items", "error collecting", "usage error", "pytest: error: unrecognized arguments")
         assertion_tokens=("assertionerror", "assert ", "assertion failed", "expected:", "not equal", "failed: test", "=== fail", "test result: failed")
         if result.classification in ("INFRASTRUCTURE_FAILURE","BLOCKED"):
             result.cause=result.stderr or "Command could not run"
