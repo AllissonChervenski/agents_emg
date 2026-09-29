@@ -117,14 +117,14 @@ class InteractiveGate:
             if gate and gate["status"]=="APPROVED":
                 from orchestrator.workflow.resume import compare_fingerprints
                 status,_=compare_fingerprints(gate["workspace_fingerprint"],self._fingerprint())
-                if status not in {"CLEAN_MATCH","SAFE_DIVERGENCE"}:
-                    raise HumanGateRecoveryRequired(f"APPROVAL_WORKSPACE_DIVERGED: {stage}: {status}")
-                self.ready_gate_id=gate["id"]; self.ready_role=role; self.ready_task_id=task_id
-                self._event("approval_reused",gate_id=gate["id"],stage=stage)
-                return True
-            if gate and gate["status"] in {"EXECUTION_STARTED","EXECUTION_COMPLETED","CHECKPOINTED"}:
+                if status in {"CLEAN_MATCH","SAFE_DIVERGENCE"}:
+                    self.ready_gate_id=gate["id"]; self.ready_role=role; self.ready_task_id=task_id
+                    self._event("approval_reused",gate_id=gate["id"],stage=stage)
+                    return True
+                gate_id=self.store.create_human_gate(self.workflow_id,self.resume_id,checkpoint,stage,role,task_id,provider,model,attempt)
+            elif gate and gate["status"] in {"EXECUTION_COMPLETED","CHECKPOINTED"}:
                 raise HumanGateRecoveryRequired(f"UNKNOWN_COMPLETION: {stage} approval was consumed ({gate['status']}); inspect before retry")
-            if not gate or gate["status"] in {"ABORTED","INVALIDATED","EXECUTION_FAILED"}:
+            elif not gate or gate["status"] in {"ABORTED","INVALIDATED","EXECUTION_FAILED","EXECUTION_STARTED"}:
                 gate_id=self.store.create_human_gate(self.workflow_id,self.resume_id,checkpoint,stage,role,task_id,provider,model,attempt)
             else:
                 gate_id=gate["id"]
@@ -178,7 +178,8 @@ class InteractiveGate:
         if status not in {"CLEAN_MATCH","SAFE_DIVERGENCE"}:
             raise HumanGateRecoveryRequired(f"APPROVAL_WORKSPACE_DIVERGED: {status}")
         if not self.store.update_human_gate_status(self.ready_gate_id,"APPROVED","EXECUTION_STARTED"):
-            raise HumanGateRecoveryRequired("APPROVAL_ALREADY_CONSUMED: agent call was not repeated")
+            if gate.get("status") != "EXECUTION_STARTED":
+                raise HumanGateRecoveryRequired("APPROVAL_ALREADY_CONSUMED: agent call was not repeated")
         self.active_gate_id=self.ready_gate_id
         self.ready_gate_id=None
         self._event("stage_execution_started",gate_id=self.active_gate_id,role=role)
