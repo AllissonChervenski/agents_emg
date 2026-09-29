@@ -99,11 +99,12 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         return {name:hashlib.sha256(str(Path(path).readlink()).encode() if Path(path).is_symlink() else Path(path).read_bytes()).hexdigest() for name,path in artifact_paths.items() if Path(path).is_file() or Path(path).is_symlink()}
     protected_artifacts=artifact_hashes()
     ctx=f"Task: {task.task}\nRequirements: {task.requirements}\nAcceptance criteria: {task.acceptance_criteria}\nArtifact paths: {artifact_paths}"
-    def invoke(role, extra="", author_provider=None, artifacts=None):
+    def invoke(role, extra="", author_provider=None, artifacts=None, attempt=1):
         options={"task":task_data,"task_id":task.task} if task_data else {}
         if task_data and role in {"coder","refactorer"}: options["allowed_paths"]=task_data.get("allowed_files") or task_data.get("production_files") or []
         if role in {"test_validator", "code_reviewer", "debugger"}: options["allowed_paths"]=[]
         if artifacts is not None: options["artifacts"]=artifacts
+        options["attempt"]=attempt
         if role == "coder":
             # Python's task-level TDD machine is the only implementation
             # authority. SpecKit implement is dispatched as the worker skill
@@ -138,22 +139,29 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     def checkpoint(stage):
         save()
         if checkpoint_callback: checkpoint_callback(stage,task.task,task.attempts.get("green",0)+1)
-    def gate_phase(phase, role, files=(), commands=(), artifacts=()):
+    def gate_phase(phase, role, files=(), commands=(), artifacts=(), attempt=1, extra_context=None):
         if hasattr(runner, "set_stage_context"):
             runner.set_stage_context(phase, role, artifacts)
         if not gate_callback:
             return True
         try:
-            ok = gate_callback(phase, role, list(files), list(commands), artifacts=list(artifacts))
+            ok = gate_callback(phase, role, list(files), list(commands), attempt=attempt, artifacts=list(artifacts), extra_context=extra_context)
         except TypeError:
             try:
-                ok = gate_callback(phase, role, list(files), list(commands))
+                ok = gate_callback(phase, role, list(files), list(commands), attempt=attempt, artifacts=list(artifacts))
             except TypeError:
-                ok = True
+                try:
+                    ok = gate_callback(phase, role, list(files), list(commands), artifacts=list(artifacts))
+                except TypeError:
+                    try:
+                        ok = gate_callback(phase, role, list(files), list(commands))
+                    except TypeError:
+                        ok = True
         if not ok:
             task.evidence["gate_abort"]=phase
             task.advance(TDDPhase.BLOCKED); save(); return False
         return True
+
 
 
     if resume_stage in {"RED_VALIDATED","GREEN_VALIDATED","REFACTOR_VALIDATED"}:
@@ -177,64 +185,104 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
             task.evidence["analyze_files_changed"]=sorted(k for k in set(production_before)|set(after_analysis) if production_before.get(k)!=after_analysis.get(k))
             task.advance(TDDPhase.BLOCKED); save(); return task
         task.advance(TDDPhase.RED_GENERATE)
-        if not gate_phase("RED_GENERATE","test_designer",["tests/"]): return task
-        designer,_=invoke("test_designer", "RED: create only task-specific tests from the approved analysis. Production files must not change. Return the required TestDesign JSON contract.")
-        if not designer.success:
-            task.advance(TDDPhase.BLOCKED); save(); return task
-        after_design=workspace_snapshot(root)
-        changed_design={k for k in set(production_before)|set(after_design) if production_before.get(k)!=after_design.get(k)}
-        if any(not _test_or_fixture(path) for path in changed_design) or artifact_hashes()!=protected_artifacts:
-            task.evidence["red_production_files_changed"]=sorted(k for k in changed_design if not _test_or_fixture(k))
-            task.advance(TDDPhase.BLOCKED); save(); return task
-        task.evidence["test_designer_provider"]=designer.provider
-        task.evidence["red_test_created"]=bool(test_files_changed(before_red,root))
-        task.evidence["test_files_changed"]=test_files_changed(before_red,root)
-        try:
-            design=parse_test_design(designer.structured_output if isinstance(designer.structured_output,dict) else designer.stdout,
-                task.task,task.requirements,task.acceptance_criteria,root,task.evidence["test_files_changed"])
-        except ValueError as exc:
-            task.evidence["test_design_error"]=str(exc)
-            if getattr(runner,"store",None):
-                runner.store.record_metric(designer.provider,designer.model,designer.role,"structured_output_failure")
-                if designer.usage.get("execution_id"): runner.store.update_execution_outcome(designer.usage["execution_id"],structured_output_valid=False)
-            task.advance(TDDPhase.BLOCKED); save(); return task
-        task.evidence["test_design"]={"task_id":design.task_id,"requirement_ids":design.requirement_ids,"acceptance_criteria_ids":design.acceptance_criteria_ids,"created_tests":design.created_tests,"test_commands":design.test_commands}
-        test_sources={path:(root/path).read_text(errors="replace")[:12000] for path in task.evidence["test_files_changed"] if (root/path).is_file()}
-        test_files = list(task.evidence["test_files_changed"])
-        if not gate_phase("RED_VALIDATE","test_validator",[],[],artifacts=test_files): return task
-        validator, raw=invoke("test_validator", load_prompt("test_validator", task=json.dumps(task.evidence['test_design']), artifact=json.dumps(test_sources, indent=2)), author_provider=designer.provider, artifacts=test_files)
-        if validator.success:
-            vr=parse_validation(raw or "", "test_validator", validator.model, provider=getattr(validator,"provider",None))
-        else:
-            vr=ValidationResult("PARSE_ERROR" if not validator.error else "BLOCKED", [], validator.error or validator.stderr or "test_validator failed", "test_validator", validator.model, datetime.now(timezone.utc).isoformat(), raw or validator.stderr or validator.error or "")
-        _record_validation(runner, validator, vr, stage="RED_VALIDATE", evidence={"task_id": task.task})
-        task.evidence["test_validated"] = bool(vr and vr.status=="PASS")
-        if not task.evidence["test_validated"]:
-            task.evidence["test_validation"] = vr.status
-            task.evidence["test_validation_reason"] = vr.summary
-            task.advance(TDDPhase.BLOCKED); save(); return task
-        if not gate_phase("RED_VERIFY","python",task.evidence["test_files_changed"],design.test_commands): return task
-        red_start=time.monotonic()
-        red_results=[harness.run_red(command,expected_test_ids=[test_id for test_id in design.created_tests if test_id in command]) for command in design.test_commands]
-        task.evidence["task_test_duration"]=time.monotonic()-red_start
-        red_status="EXPECTED_FAILURE" if red_results and all(result.classification=="EXPECTED_FAILURE" for result in red_results) else next((result.classification for result in red_results if result.classification!="EXPECTED_FAILURE"),"INVALID_TEST")
-        task.evidence.update({"red_result":red_status,"red_test_files":test_files_changed(before_red,root),"red":{"classification":red_status,"results":[{"command":result.command,"exit_code":result.exit_code,"stdout":result.stdout,"stderr":result.stderr,"cause":result.cause,"classification":result.classification} for result in red_results]}})
-        task.evidence["red_expected_failure_confirmed"]=red_status=="EXPECTED_FAILURE"
-        task.evidence["red_attempts"]=1
-        if red_status=="EXPECTED_FAILURE":
-            red_validator,red_raw=invoke("test_validator", load_prompt("test_validator", task=f"Validate observed RED failures for {task.task}", artifact=json.dumps(task.evidence["red"], indent=2)), author_provider=designer.provider, artifacts=test_files)
-            if red_validator.success:
-                red_validation=parse_validation(red_raw or "","test_validator",red_validator.model, provider=getattr(red_validator,"provider",None))
+        from orchestrator.workflow.stagnation import StagnationDetector
+        stagnation_limit = max(1, max_attempts - 1) if max_attempts > 1 else 1
+        red_detector = StagnationDetector(stagnation_limit=stagnation_limit)
+        validator_feedback = ""
+        while task.phase == TDDPhase.RED_GENERATE and task.attempts["red"] < max_attempts:
+            red_attempt = task.attempts["red"] + 1
+            task.evidence["red_attempts"] = red_attempt
+            if not gate_phase("RED_GENERATE", "test_designer", ["tests/"], attempt=red_attempt): return task
+            designer_prompt = "RED: create only task-specific tests from the approved analysis. Production files must not change. Return the required TestDesign JSON contract."
+            if validator_feedback:
+                designer_prompt += f"\n\nAddress previous validation issues:\n{validator_feedback}"
+            designer, _ = invoke("test_designer", designer_prompt, attempt=red_attempt)
+            if not designer.success:
+                task.advance(TDDPhase.BLOCKED); save(); return task
+            after_design = workspace_snapshot(root)
+            changed_design = {k for k in set(production_before) | set(after_design) if production_before.get(k) != after_design.get(k)}
+            if any(not _test_or_fixture(path) for path in changed_design) or artifact_hashes() != protected_artifacts:
+                task.evidence["red_production_files_changed"] = sorted(k for k in changed_design if not _test_or_fixture(k))
+                task.advance(TDDPhase.BLOCKED); save(); return task
+            task.evidence["test_designer_provider"] = designer.provider
+            task.evidence["red_test_created"] = bool(test_files_changed(before_red, root))
+            task.evidence["test_files_changed"] = test_files_changed(before_red, root)
+            try:
+                design = parse_test_design(
+                    designer.structured_output if isinstance(designer.structured_output, dict) else designer.stdout,
+                    task.task, task.requirements, task.acceptance_criteria, root, task.evidence["test_files_changed"]
+                )
+            except ValueError as exc:
+                task.evidence["test_design_error"] = str(exc)
+                if getattr(runner, "store", None):
+                    runner.store.record_metric(designer.provider, designer.model, designer.role, "structured_output_failure")
+                    if designer.usage.get("execution_id"): runner.store.update_execution_outcome(designer.usage["execution_id"], structured_output_valid=False)
+                task.advance(TDDPhase.BLOCKED); save(); return task
+            task.evidence["test_design"] = {"task_id": design.task_id, "requirement_ids": design.requirement_ids, "acceptance_criteria_ids": design.acceptance_criteria_ids, "created_tests": design.created_tests, "test_commands": design.test_commands}
+            test_sources = {path: (root / path).read_text(errors="replace")[:12000] for path in task.evidence["test_files_changed"] if (root / path).is_file()}
+            test_files = list(task.evidence["test_files_changed"])
+            if not gate_phase("RED_VALIDATE", "test_validator", [], [], artifacts=test_files, attempt=red_attempt): return task
+            validator, raw = invoke("test_validator", load_prompt("test_validator", task=json.dumps(task.evidence['test_design']), artifact=json.dumps(test_sources, indent=2)), author_provider=designer.provider, artifacts=test_files, attempt=red_attempt)
+            if validator.success:
+                vr = parse_validation(raw or "", "test_validator", validator.model, provider=getattr(validator, "provider", None))
             else:
-                red_validation=ValidationResult("PARSE_ERROR" if not red_validator.error else "BLOCKED", [], red_validator.error or red_validator.stderr or "test_validator failed", "test_validator", red_validator.model, datetime.now(timezone.utc).isoformat(), red_raw or red_validator.stderr or red_validator.error or "")
-            _record_validation(runner, red_validator, red_validation, stage="RED_SEMANTIC_VALIDATE", evidence={"task_id": task.task})
-            task.evidence["red"]["semantic_validation"]=red_validation.status
-            if red_validation.status!="PASS":
-                red_status="INVALID_TEST"; task.evidence["red_result"]=red_status; task.evidence["red"]["classification"]=red_status; task.evidence["red_expected_failure_confirmed"]=False
-        if not gate.red("PASS" if red_status=="EXPECTED_FAILURE" else "BLOCKED",red_status):
-            if task.phase != TDDPhase.BLOCKED: task.advance(TDDPhase.BLOCKED)
-            save(); return task
-        checkpoint("RED_VALIDATED")
+                vr = ValidationResult("PARSE_ERROR" if not validator.error else "BLOCKED", [], validator.error or validator.stderr or "test_validator failed", "test_validator", validator.model, datetime.now(timezone.utc).isoformat(), raw or validator.stderr or validator.error or "")
+            _record_validation(runner, validator, vr, stage="RED_VALIDATE", evidence={"task_id": task.task, "attempt": red_attempt})
+            task.evidence["test_validated"] = bool(vr and vr.status == "PASS")
+            if not task.evidence["test_validated"]:
+                task.evidence["test_validation"] = vr.status
+                task.evidence["test_validation_reason"] = vr.summary
+                task.evidence["test_validation_issues"] = vr.issues
+                if vr.status == "REVISE":
+                    task.attempts["red"] += 1
+                    validator_feedback = f"{vr.summary}\nIssues: {vr.issues}"
+                    combined_tests = "\n".join(test_sources.values())
+                    report = red_detector.evaluate(
+                        status=vr.status,
+                        issues=vr.issues,
+                        artifact_text=combined_tests,
+                        summary=vr.summary,
+                    )
+                    if report.requires_human_intervention:
+                        warn_context = {
+                            "reason": report.reason,
+                            "stagnant_streak": report.stagnant_streak,
+                            "total_attempts": report.total_attempts,
+                            "issues": list(vr.issues),
+                            "summary": vr.summary,
+                        }
+                        if gate_phase("STAGNATION_WARNING", "test_designer", ["tests/"], artifacts=test_files, attempt=red_attempt, extra_context=warn_context):
+                            red_detector.stagnant_streak = 0
+                        else:
+                            task.advance(TDDPhase.BLOCKED); save(); return task
+                    if task.attempts["red"] >= max_attempts:
+                        task.advance(TDDPhase.BLOCKED); save(); return task
+                    continue
+                task.advance(TDDPhase.BLOCKED); save(); return task
+            if not gate_phase("RED_VERIFY", "python", task.evidence["test_files_changed"], design.test_commands, attempt=red_attempt): return task
+            red_start = time.monotonic()
+            red_results = [harness.run_red(command, expected_test_ids=[test_id for test_id in design.created_tests if test_id in command]) for command in design.test_commands]
+            task.evidence["task_test_duration"] = time.monotonic() - red_start
+            red_status = "EXPECTED_FAILURE" if red_results and all(result.classification == "EXPECTED_FAILURE" for result in red_results) else next((result.classification for result in red_results if result.classification != "EXPECTED_FAILURE"), "INVALID_TEST")
+            task.evidence.update({"red_result": red_status, "red_test_files": test_files_changed(before_red, root), "red": {"classification": red_status, "results": [{"command": result.command, "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "cause": result.cause, "classification": result.classification} for result in red_results]}})
+            task.evidence["red_expected_failure_confirmed"] = red_status == "EXPECTED_FAILURE"
+            if red_status == "EXPECTED_FAILURE":
+                red_validator, red_raw = invoke("test_validator", load_prompt("test_validator", task=f"Validate observed RED failures for {task.task}", artifact=json.dumps(task.evidence["red"], indent=2)), author_provider=designer.provider, artifacts=test_files, attempt=red_attempt)
+                if red_validator.success:
+                    red_validation = parse_validation(red_raw or "", "test_validator", red_validator.model, provider=getattr(red_validator, "provider", None))
+                else:
+                    red_validation = ValidationResult("PARSE_ERROR" if not red_validator.error else "BLOCKED", [], red_validator.error or red_validator.stderr or "test_validator failed", "test_validator", red_validator.model, datetime.now(timezone.utc).isoformat(), red_raw or red_validator.stderr or red_validator.error or "")
+                _record_validation(runner, red_validator, red_validation, stage="RED_SEMANTIC_VALIDATE", evidence={"task_id": task.task, "attempt": red_attempt})
+                task.evidence["red"]["semantic_validation"] = red_validation.status
+                if red_validation.status != "PASS":
+                    red_status = "INVALID_TEST"; task.evidence["red_result"] = red_status; task.evidence["red"]["classification"] = red_status; task.evidence["red_expected_failure_confirmed"] = False
+            if not gate.red("PASS" if red_status == "EXPECTED_FAILURE" else "BLOCKED", red_status):
+                if task.phase != TDDPhase.BLOCKED: task.advance(TDDPhase.BLOCKED)
+                save(); return task
+            checkpoint("RED_VALIDATED")
+            break
+        if task.phase == TDDPhase.RED_GENERATE:
+            task.advance(TDDPhase.BLOCKED); save(); return task
     while task.phase==TDDPhase.GREEN_IMPLEMENT and task.attempts["green"]<max_attempts:
         protected=test_files_snapshot(root)
         task.evidence["green_test_hashes_before"]=protected

@@ -102,3 +102,23 @@ def test_refactor_test_tampering_blocks_regression_and_review(tmp_path):
     assert task.phase==TDDPhase.BLOCKED
     assert task.evidence["test_tampering_detected"]
     assert "code_reviewer" not in runner.roles
+
+
+def test_red_validation_revise_retries_and_succeeds(tmp_path):
+    class RevisingRunner(Runner):
+        def __init__(self, root):
+            super().__init__(root)
+            self.val_count = 0
+        def run(self, role, prompt, **kwargs):
+            if role == "test_validator" and "TEST_TAMPERING" not in prompt and "Validate observed RED" not in prompt:
+                self.val_count += 1
+                if self.val_count == 1:
+                    return AgentResult("fake", None, role, True, stdout=json.dumps({"status": "REVISE", "summary": "fix assertions", "issues": ["assertion too weak"]}))
+            return super().run(role, prompt, **kwargs)
+
+    runner = RevisingRunner(tmp_path); task = TDDTask("T1", ["FR1"], ["AC1"]); harness = Harness()
+    execute_tdd_task(task, runner, harness, tmp_path, regression_commands=[REGRESSION])
+    assert task.phase == TDDPhase.COMPLETE
+    assert runner.val_count == 2
+    assert task.attempts["red"] == 1
+
