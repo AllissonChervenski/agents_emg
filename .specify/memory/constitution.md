@@ -1,17 +1,11 @@
 <!--
 Sync Impact Report:
-- Version change: 0.0.0 (template) → 1.0.0
+- Version change: 1.0.0 → 1.1.0
 - List of modified principles:
-  - [PRINCIPLE_1_NAME] → I. Python Central Orchestrator & Deterministic Gatekeeper (NON-NEGOTIABLE)
-  - [PRINCIPLE_2_NAME] → II. Strict TDD Lifecycle & Anti-Tampering Protection (NON-NEGOTIABLE)
-  - [PRINCIPLE_3_NAME] → III. Non-Destructive Local Reuse & Zero-Subprocess Read Paths
-  - [PRINCIPLE_4_NAME] → IV. CLI Ergonomics, Text/JSON Duality & Failure Containment
-  - [PRINCIPLE_5_NAME] → V. SpecKit Traceability & Living Documentation Supremacy
-- Added sections:
-  - Technical Constraints & Safe Execution Policies ([SECTION_2_NAME])
-  - Quality Gates & Multi-Agent Verification Matrix ([SECTION_3_NAME])
+  - Added: VI. Scientific and Numerical Oracle Integrity
+- Added sections: None
 - Removed sections: None
-- Follow-up TODOs: None (all placeholders resolved)
+- Follow-up TODOs: None
 -->
 
 # SDD Orchestrator Constitution
@@ -43,6 +37,11 @@ Living documentation organized under `specs/<feature>/` (`spec.md`, `plan.md`, `
 - All functional requirements (`FR-xxx`) and acceptance criteria (`AC-xxx`) must maintain end-to-end traceability to tasks and tests.
 - This Constitution in `.specify/memory/constitution.md` supersedes all downstream specifications, plans, and task breakdowns. If a conflict arises, the Constitution prevails.
 
+### VI. Scientific and Numerical Oracle Integrity
+Scientific and numerical reference artifacts used as test oracles MUST have explicit provenance and MUST NOT be generated from the implementation under test.
+
+Protected golden/reference artifacts and registered tolerance contracts MUST remain immutable during implementation phases unless changed through an explicitly authorized requirements/test-design revision.
+
 ## Technical Constraints & Safe Execution Policies
 - **Runtime Environment**: Python 3.10+ standard library baseline. Optional development dependencies (`pytest`, `PyYAML`, `ruff`, `mypy`) are managed via `pyproject.toml`.
 - **Command Safety Policy**: Execution of destructive commands (`rm -rf`, `git reset --hard`, `git push --force`) is strictly forbidden and blocked by Python command policies.
@@ -66,4 +65,4 @@ Living documentation organized under `specs/<feature>/` (`spec.md`, `plan.md`, `
   - PATCH: Clarifications, wording refinements, non-semantic typographical updates.
 - **Compliance Review**: Every feature pipeline validation and code review must explicitly verify adherence to these principles before convergence and final sign-off.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-28 | **Last Amended**: 2026-09-28
+**Version**: 1.1.0 | **Ratified**: 2026-09-28 | **Last Amended**: 2026-09-29
