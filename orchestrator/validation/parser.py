@@ -7,15 +7,23 @@ from .schemas import validation_result
 
 def _extract(text: str):
     text = text.strip()
-    try: return json.loads(text)
+    def _unwrap(data):
+        if isinstance(data, dict):
+            if data.get("status") not in {"PASS", "REVISE", "BLOCKED"} and "response" in data:
+                inner = _extract(data["response"]) if isinstance(data["response"], str) else (data["response"] if isinstance(data["response"], dict) else None)
+                if isinstance(inner, dict):
+                    return inner
+        return data
+
+    try: return _unwrap(json.loads(text))
     except ValueError: pass
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S)
     if fenced:
-        try: return json.loads(fenced.group(1))
+        try: return _unwrap(json.loads(fenced.group(1)))
         except ValueError: pass
     start, end = text.find("{"), text.rfind("}")
     if start >= 0 and end > start:
-        try: return json.loads(text[start:end+1])
+        try: return _unwrap(json.loads(text[start:end+1]))
         except ValueError: pass
     return None
 
