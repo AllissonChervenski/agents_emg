@@ -228,13 +228,13 @@ class AgentRunner:
 
     def run_skill(self, role, provider, model, skill_name, arguments, cwd, execution_policy=None,
                   timeout=None, fallback=True, task=None, task_id=None, allowed_paths=None,
-                  expected_outputs=None, exclude_providers=None, artifacts=None, attempt=1):
+                  expected_outputs=None, exclude_providers=None, artifacts=None, attempt=1, **kwargs):
         """Run a skill through the normal router, safety, retry, and telemetry path."""
         return self.run(role, arguments, cwd=cwd, timeout=timeout, override_provider=provider,
                         override_model=model, fallback=fallback, task=task, task_id=task_id,
                         allowed_paths=allowed_paths, expected_outputs=expected_outputs,
                         skill_name=skill_name, execution_policy=execution_policy,
-                        exclude_providers=exclude_providers, artifacts=artifacts, attempt=attempt)
+                        exclude_providers=exclude_providers, artifacts=artifacts, attempt=attempt, **kwargs)
 
     def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None, skill_name=None, execution_policy=None, artifacts=None, attempt=1, author_model=None, author_models=None, author_role=None, numeric_sensitive: bool = False):
         artifacts_list = list(artifacts or ())
@@ -387,9 +387,16 @@ class AgentRunner:
             result.usage["routing_selection_mode"]=chosen.selection_mode
             result.usage["task_type"]=kind; result.usage["task_complexity"]=difficulty
             result.usage["task_id"]=task_id
+            res_model = result.resolved_model or result.model or chosen.model
+            if not result.resolution_source or result.resolution_source == "unavailable":
+                res_src = "adapter_explicit" if (result.model or result.resolved_model) else "cli_default"
+            else:
+                res_src = result.resolution_source
+            result.resolved_model = res_model
+            result.resolution_source = res_src
             result.usage["requested_model"] = chosen.model
-            result.usage["resolved_model"] = result.resolved_model
-            result.usage["resolution_source"] = result.resolution_source
+            result.usage["resolved_model"] = res_model
+            result.usage["resolution_source"] = res_src
             result.usage["requested_effort"] = result.requested_effort
             result.usage["resolved_effort"] = result.resolved_effort
             result.usage["fallback_reason"] = getattr(result, "fallback_reason", None)
@@ -397,8 +404,8 @@ class AgentRunner:
                 self.stage_resolved_models = {}
             self.stage_resolved_models[role] = {
                 "requested_model": chosen.model,
-                "resolved_model": result.resolved_model,
-                "resolution_source": result.resolution_source,
+                "resolved_model": res_model,
+                "resolution_source": res_src,
                 "provider": chosen.provider,
             }
             if policy:
