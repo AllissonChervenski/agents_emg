@@ -52,15 +52,22 @@ class InteractiveGate:
             state.pop("reason",None)
         self.store.update_workflow(self.workflow_id,stage,state,item["current_task"])
 
-    def _summary(self, stage, role, provider, model, files, commands, task_id, artifacts=()):
+    def _summary(self, stage, role, provider, model, files, commands, task_id, artifacts=(), extra_context=None):
         from orchestrator.agents.roles import ROLES
         skill = ROLES[role].skill_name if role in ROLES else None
+        reason = (
+            "interactive stagnation warning: agent appears to be stalled or making insignificant changes"
+            if stage == "STAGNATION_WARNING"
+            else "interactive approval before stage execution"
+        )
         summary={"workflow_id":self.workflow_id,"stage":stage,"role":role,"provider":provider,
                  "model":model or "CLI default","skill":skill,"task":task_id,
                  "files_allowed":list(files),"files_expected_to_change":list(files),
                  "commands_or_expected_outputs":list(commands),
                  "artifacts_supplied":list(artifacts or ()),
-                 "reason_for_gate":"interactive approval before stage execution"}
+                 "reason_for_gate":reason}
+        if extra_context:
+            summary["stagnation_context"] = extra_context
         if self.context_fn:
             summary.update(self.context_fn(stage,role,provider,model,task_id) or {})
         return summary
@@ -83,7 +90,7 @@ class InteractiveGate:
         self.last_decision="clarifications_answered"
         return answers
 
-    def confirm(self, stage, role, provider, model, files, commands, task_id=None, attempt=1, artifacts=()) -> bool:
+    def confirm(self, stage, role, provider, model, files, commands, task_id=None, attempt=1, artifacts=(), extra_context=None) -> bool:
         if stage != "AGENT_CALL":
             self.stage_name = stage
             self.stage_role = role
@@ -101,7 +108,7 @@ class InteractiveGate:
                     f"{self.stage_artifacts}, but AGENT_CALL for role '{role}' received empty artifacts."
                 )
 
-        summary=self._summary(stage,role,provider,model,files,commands,task_id,artifacts=artifacts)
+        summary=self._summary(stage,role,provider,model,files,commands,task_id,artifacts=artifacts,extra_context=extra_context)
 
         checkpoint=self._checkpoint_transition()
         gate_id=None

@@ -214,10 +214,10 @@ def run(args):
             if item: store.update_workflow(wid,"RUNNING_VERIFICATION",{**item["state"],"running_command":payload["command"]},item["current_task"])
         else: store.record_verification(wid,payload)
     harness.on_command=command_event
-    def gate_callback(stage, role, files=(), commands=(), attempt=1, artifacts=()):
+    def gate_callback(stage, role, files=(), commands=(), attempt=1, artifacts=(), **kwargs):
         if not interactive_gate: return True
         route=route_plan.get(role)
-        return interactive_gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands,attempt=attempt,artifacts=artifacts)
+        return interactive_gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands,attempt=attempt,artifacts=artifacts,extra_context=kwargs.get("extra_context"))
 
     def approve_constitution():
         if interactive_gate: return gate_callback("CONSTITUTION_CREATE","constitution",[".specify/memory/constitution.md"],[])
@@ -356,7 +356,9 @@ def resume(args):
         runner=AgentRunner(providers,router,store,workflow_id=args.workflow_id,safety=cfg.real_run,
             cost_router=CostAwareRouter(router,cfg.cost_optimization,store,args.workflow_id),
             execution_policy_router=ExecutionPolicyRouter(cfg.execution_policies,router.capabilities))
-        if gate: runner.on_call=lambda role,provider,model,task,files,outputs,artifacts=(): gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task,artifacts=artifacts)
+        if gate:
+            runner.on_call=lambda role,provider,model,task,files,outputs,artifacts=(),attempt=1: gate.confirm("AGENT_CALL",role,provider,model,files,outputs,task_id=task,attempt=attempt,artifacts=artifacts)
+            runner.on_call_complete=lambda result: gate.agent_call_completed(result)
 
         def command_event(event,payload):
             if event=="started":
@@ -364,10 +366,10 @@ def resume(args):
                 store.update_workflow(args.workflow_id,"RUNNING_VERIFICATION",{**current["state"],"running_command":payload["command"]},current["current_task"])
             else: store.record_verification(args.workflow_id,payload)
         harness.on_command=command_event
-        def gate_callback(stage,role,files=(),commands=(),attempt=1,artifacts=()):
+        def gate_callback(stage,role,files=(),commands=(),attempt=1,artifacts=(),**kwargs):
             if not gate: return True
             route=router.route(role) if role in __import__("orchestrator.agents.roles",fromlist=["ROLES"]).ROLES else None
-            return gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands,attempt=attempt,artifacts=artifacts)
+            return gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands,attempt=attempt,artifacts=artifacts,extra_context=kwargs.get("extra_context"))
         def approve_constitution():
             return bool(gate and gate_callback("CONSTITUTION_CREATE","constitution",["constitution.md"],[]))
         try:

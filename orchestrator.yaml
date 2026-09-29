@@ -28,7 +28,7 @@
     "consistency_agent": {"tier": "balanced", "preferred_providers": ["codex", "agy", "opencode"], "preferred_models": ["gpt-6-luna", "gemini-3.8-flash-medium", "gemini-3.8-flash-low", "gpt-6-sol"]},
     "convergence_agent": {"tier": "balanced", "preferred_providers": ["codex", "agy", "opencode"], "preferred_models": ["gpt-6-luna", "gemini-3.8-flash-medium", "gemini-3.8-flash-low", "gpt-6-sol"]}
   },
-  "retries": {"artifact_generation": 3, "implementation": 3, "review": 2},
+  "retries": {"artifact_generation": 5, "implementation": 3, "review": 2},
   "routing": {"adaptive_routing_mode": "observe", "historical_min_samples": 10, "decay_half_life_days": 30, "exploration_rate": 0.05},
   "cost_optimization": {
     "mode": "observe", "profile": "balanced", "capability_failures_to_escalate": 2,
@@ -50,7 +50,7 @@
     "strong_model_budgets": {"sol": {"task": 3, "workflow": 20}, "sonnet": {"task": 2, "workflow": 8}, "astra": {"task": 1, "workflow": 2}, "opus": {"task": 0, "workflow": 0}}
   },
   "execution_policies": {"prompt_fallback": true, "ponytail_roles": ["coder", "refactorer"], "caveman_excluded_roles": []},
-  "real_run": {"safety_mode": "strict", "max_agent_calls_per_task": 12, "max_agent_calls_per_workflow": 100, "max_retries": 3, "max_wall_time": 7200, "max_convergence_iterations": 3,
+  "real_run": {"safety_mode": "strict", "max_agent_calls_per_task": 12, "max_agent_calls_per_workflow": 100, "max_retries": 5, "max_wall_time": 7200, "max_convergence_iterations": 3,
     "file_scopes": {
       "constitution": ["constitution.md", ".specify/memory/constitution.md"],
       "specification": ["specs/", ".specify/"],

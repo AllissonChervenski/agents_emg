@@ -298,7 +298,10 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         task.attempts["green"]+=1
         task.evidence["green_attempts"]=task.attempts["green"]
         if task.attempts["green"]>=max_attempts:
-            task.advance(TDDPhase.BLOCKED); save(); return task
+            if gate_callback and gate_phase("STAGNATION_WARNING","coder",["production files"],design.test_commands):
+                max_attempts += max_attempts
+            else:
+                task.advance(TDDPhase.BLOCKED); save(); return task
     if task.phase != TDDPhase.GREEN_VERIFY and resume_stage!="REFACTOR_VALIDATED":
         if task.phase != TDDPhase.BLOCKED: task.advance(TDDPhase.BLOCKED)
         save(); return task

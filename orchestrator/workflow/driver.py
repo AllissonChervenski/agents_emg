@@ -42,18 +42,21 @@ ARTIFACTS = [
 class WorkflowBlocked(RuntimeError): pass
 
 
-def _call_gate(gate_callback, stage, role, files=(), commands=(), attempt=1, artifacts=(), runner=None):
+def _call_gate(gate_callback, stage, role, files=(), commands=(), attempt=1, artifacts=(), runner=None, extra_context=None):
     if runner and hasattr(runner, "set_stage_context"):
         runner.set_stage_context(stage, role, artifacts)
     if not gate_callback:
         return True
     try:
-        return bool(gate_callback(stage, role, files, commands, attempt=attempt, artifacts=artifacts))
+        return bool(gate_callback(stage, role, files, commands, attempt=attempt, artifacts=artifacts, extra_context=extra_context))
     except TypeError:
         try:
-            return bool(gate_callback(stage, role, files, commands, attempt=attempt))
+            return bool(gate_callback(stage, role, files, commands, attempt=attempt, artifacts=artifacts))
         except TypeError:
-            return bool(gate_callback(stage, role, files, commands))
+            try:
+                return bool(gate_callback(stage, role, files, commands, attempt=attempt))
+            except TypeError:
+                return bool(gate_callback(stage, role, files, commands))
 
 
 def _record_validation(runner, result, validation, stage=None, evidence=None):
@@ -108,8 +111,12 @@ def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=No
 
 
 def _create_and_validate(runner, author_role, validator_role, artifact_path, prompt, cwd, timeout, retries=3, gate_callback=None, allowed_paths=None, artifact_resolver=None):
-    path=Path(artifact_path) if artifact_path else None; last=None
-    for attempt in range(1,retries+1):
+    from orchestrator.workflow.stagnation import StagnationDetector
+    path=Path(artifact_path) if artifact_path else None
+    stagnation_limit = max(1, retries - 1) if retries > 1 else 1
+    detector=StagnationDetector(stagnation_limit=stagnation_limit)
+    while True:
+        attempt=detector.total_attempts+1
         if not _call_gate(gate_callback, author_role.upper(), author_role, [str(path)] if path else list(allowed_paths or ()), [], attempt=attempt, runner=runner): raise WorkflowBlocked(f"Interactive gate aborted before {author_role}")
         before=artifact_snapshot(path) if path else None
         candidates = {item: artifact_snapshot(item) for item in Path(cwd).glob("specs/*/spec.md")} if path is None else {}
@@ -156,7 +163,6 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
             runner.store.update_execution_outcome(author.usage["execution_id"],validator_accepted=validation.status=="PASS",blocked=validation.status in {"BLOCKED", "PARSE_ERROR"})
         if validation.status!="PASS" and hasattr(runner,"record_model_feedback"):
             runner.record_model_feedback(author,"VALIDATOR_REJECTION" if validation.status!="PARSE_ERROR" else "STRUCTURED_OUTPUT_FAILURE",validation.summary)
-        last=validation
         if validation.status=="PASS": return author,validation
         if validation.status=="BLOCKED":
             if getattr(runner,"store",None) and author.usage.get("execution_id"):
@@ -166,11 +172,39 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
             if getattr(runner,"store",None) and author.usage.get("execution_id"):
                 runner.store.update_execution_outcome(author.usage["execution_id"],blocked=True,success=False)
             raise WorkflowBlocked(f"{validator_role} PARSE_ERROR: {validation.summary}; raw={validation.raw_output}")
-        prompt += "\nRevise based on these issues: "+json.dumps(validation.issues)
 
-    if getattr(runner,"store",None) and author.usage.get("execution_id"):
-        runner.store.update_execution_outcome(author.usage["execution_id"],blocked=True,success=False)
-    raise WorkflowBlocked(f"{validator_role} retry limit exceeded: {last.summary if last else 'no result'}")
+        report=detector.evaluate(
+            status=validation.status,
+            issues=validation.issues,
+            artifact_text=path.read_text(encoding="utf-8") if path and path.is_file() else "",
+            summary=validation.summary,
+        )
+        if report.requires_human_intervention:
+            warn_context = {
+                "reason": report.reason,
+                "stagnant_streak": report.stagnant_streak,
+                "total_attempts": report.total_attempts,
+                "issues": list(validation.issues),
+                "summary": validation.summary,
+            }
+            if gate_callback and _call_gate(
+                gate_callback,
+                "STAGNATION_WARNING",
+                author_role,
+                files=[str(path)] if path else [],
+                commands=[],
+                attempt=attempt,
+                artifacts=supplied,
+                runner=runner,
+                extra_context=warn_context,
+            ):
+                detector.stagnant_streak = 0
+            else:
+                if getattr(runner, "store", None) and author.usage.get("execution_id"):
+                    runner.store.update_execution_outcome(author.usage["execution_id"], blocked=True, success=False)
+                raise WorkflowBlocked(f"{validator_role} retry limit exceeded: {report.reason}")
+
+        prompt += "\nRevise based on these issues: "+json.dumps(validation.issues)
 
 
 def _parse_tasks(text):
