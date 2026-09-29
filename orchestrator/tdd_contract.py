@@ -77,6 +77,7 @@ def parse_test_design(raw: str | dict, task_id: str, requirement_ids: list[str],
         if relative not in changed or not path.is_file(): raise ValueError("created_tests must reference a modified test file")
         if not ("tests" in Path(relative).parts or Path(relative).name.startswith("test_")): raise ValueError("created_tests must reference test files")
     policy=CommandPolicy(root)
+    valid_commands = []
     for command in commands:
         allowed,reason=policy.validate(command)
         if not allowed: raise ValueError(reason)
@@ -85,6 +86,9 @@ def parse_test_design(raw: str | dict, task_id: str, requirement_ids: list[str],
              executable=="pytest" or (executable,command[1] if len(command)>1 else "") in {
                  ("cargo","test"),("go","test"),("pio","test"),("npm","test"),("pnpm","test"),("ctest","-R"),("make","test")}
         if not safe: raise ValueError("test_commands must use an approved test runner")
-        if not any(test_id in command for test_id in created): raise ValueError("test_commands must be task-specific")
+        if any(test_id in command for test_id in created):
+            valid_commands.append(command)
+    if not valid_commands: raise ValueError("test_commands must be task-specific")
+    commands = valid_commands
     if any(not any(test_id in command for command in commands) for test_id in created): raise ValueError("each created test needs a task-specific command")
     return TestDesign(task_id,list(requirement_ids),list(acceptance_criteria_ids),list(created),[list(command) for command in commands])

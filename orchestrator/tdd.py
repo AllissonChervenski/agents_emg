@@ -218,6 +218,10 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                 if getattr(runner, "store", None):
                     runner.store.record_metric(designer.provider, designer.model, designer.role, "structured_output_failure")
                     if designer.usage.get("execution_id"): runner.store.update_execution_outcome(designer.usage["execution_id"], structured_output_valid=False)
+                task.attempts["red"] += 1
+                if task.attempts["red"] < max_attempts:
+                    validator_feedback = f"TestDesign contract error: {exc}. Return only task-specific test runner commands referencing modified test files (do not include full test suite commands without paths)."
+                    continue
                 task.advance(TDDPhase.BLOCKED); save(); return task
             task.evidence["test_design"] = {"task_id": design.task_id, "requirement_ids": design.requirement_ids, "acceptance_criteria_ids": design.acceptance_criteria_ids, "created_tests": design.created_tests, "test_commands": design.test_commands}
             test_sources = {path: (root / path).read_text(errors="replace") for path in task.evidence["test_files_changed"] if (root / path).is_file()}
