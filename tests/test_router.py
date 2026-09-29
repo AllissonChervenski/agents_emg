@@ -17,7 +17,7 @@ def test_validator_prefers_different_provider_from_author():
 
 def test_coder_prefers_provider_with_agentic_coding_capability():
     router=ModelRouter({"agy":cap(["claude-sonnet"],capabilities=["CODING","FILE_EDITING"]),"opencode":cap(["provider/kimi-code"],capabilities=["AGENTIC_CODING"])})
-    route=router.route("coder")
+    route=router.route("test_designer")
     assert route.provider=="opencode"
 
 

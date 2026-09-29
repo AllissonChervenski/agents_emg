@@ -19,44 +19,46 @@ def make_test_router():
     return router, cfg
 
 
-def test_red_simple_selects_opencode_qwen_flash():
+def test_red_simple_selects_opencode_mimo_pro():
     router, _ = make_test_router()
     route = router.route("test_designer")
     assert route.provider == "opencode"
-    assert route.model == "opencode-go/qwen3.8-flash"
+    assert route.model == "opencode-go/mimo-v2.6-pro"
 
 
-def test_green_simple_selects_opencode_qwen_flash():
+def test_green_simple_selects_agy_gemini_flash_high():
     router, _ = make_test_router()
     route = router.route("coder", task={"task_complexity": "LOW"})
-    assert route.provider == "opencode"
-    assert route.model == "opencode-go/qwen3.8-flash"
+    assert route.provider == "agy"
+    assert route.model == "gemini-3.8-flash-high"
 
 
-def test_green_complex_selects_kimi_before_sol():
+def test_green_complex_escalates_candidate_priority():
     router, _ = make_test_router()
     route = router.route("coder", task={"task_complexity": "HIGH"})
-    assert route.provider == "opencode"
-    assert route.model == "opencode-go/kimi-k2.7-code"
+    # Primary remains gemini-3.8-flash-high
+    assert route.provider == "agy"
+    assert route.model == "gemini-3.8-flash-high"
 
+    # For high complexity tasks, Sol is prioritized ahead of economical alternatives for capability escalation
     models_order = [c["model"] for c in route.candidates if c.get("model")]
-    assert "opencode-go/kimi-k2.7-code" in models_order
     assert "gpt-6-sol" in models_order
-    assert models_order.index("opencode-go/kimi-k2.7-code") < models_order.index("gpt-6-sol")
+    assert "opencode-go/kimi-k3" in models_order
+    assert models_order.index("gpt-6-sol") < models_order.index("opencode-go/kimi-k3")
 
 
 def test_refactor_prefers_kimi():
     router, _ = make_test_router()
     route = router.route("refactorer")
     assert route.provider == "opencode"
-    assert route.model == "opencode-go/kimi-k2.7-code"
+    assert route.model == "opencode-go/kimi-k3"
 
 
-def test_validator_with_agy_author_prefers_codex_luna():
+def test_validator_with_agy_author_prefers_opencode_mimo():
     router, _ = make_test_router()
     route = router.route("specification_validator", author_provider="agy")
-    assert route.provider == "codex"
-    assert route.model == "gpt-6-luna"
+    assert route.provider == "opencode"
+    assert route.model == "opencode-go/mimo-v2.6-pro"
     assert route.independence is True
 
 
@@ -64,15 +66,15 @@ def test_validator_with_codex_author_prefers_agy_flash():
     router, _ = make_test_router()
     route = router.route("specification_validator", author_provider="codex")
     assert route.provider == "agy"
-    assert route.model in {"gemini-3.8-flash-medium", "gemini-3.8-flash-low"}
+    assert route.model == "gemini-3.8-flash-high"
     assert route.independence is True
 
 
-def test_validator_with_opencode_author_prefers_codex_luna():
+def test_validator_with_opencode_author_prefers_agy_flash():
     router, _ = make_test_router()
     route = router.route("specification_validator", author_provider="opencode")
-    assert route.provider == "codex"
-    assert route.model == "gpt-6-luna"
+    assert route.provider == "agy"
+    assert route.model == "gemini-3.8-flash-high"
     assert route.independence is True
 
 
@@ -90,19 +92,25 @@ def test_provider_failure_causes_provider_fallback_not_intelligence_escalation()
     base_route = router.route("coder")
 
     infra_failures = [
-        {"provider": "opencode", "model": "opencode-go/qwen3.8-flash", "category": "PROVIDER_FAILURE"},
-        {"provider": "opencode", "model": "opencode-go/qwen3.8-flash", "category": "TIMEOUT"},
-        {"provider": "opencode", "model": "opencode-go/qwen3.8-flash", "category": "INFRASTRUCTURE_FAILURE"},
+        {"provider": "agy", "model": "gemini-3.8-flash-high", "category": "PROVIDER_FAILURE"},
+        {"provider": "agy", "model": "gemini-3.8-flash-high", "category": "TIMEOUT"},
+        {"provider": "agy", "model": "gemini-3.8-flash-high", "category": "INFRASTRUCTURE_FAILURE"},
+        {"provider": "agy", "model": "gemini-3.8-flash-high", "category": "QUOTA_EXHAUSTED"},
     ]
     assessment = cost_router.assess("coder", base_route, failures=infra_failures)
     assert assessment["previous_failure_reasons"] == []
     # No intelligence escalation occurred because failures were infrastructure/provider-related
     assert assessment["recommended_escalation_level"] == "CODING_ECONOMY"
 
-    # Provider failure causes provider fallback in router
-    fallback_route = router.route("coder", exclude={"opencode"})
-    assert fallback_route.provider == "codex"
-    assert fallback_route.model == "gpt-6-luna"
+    # Provider failure causes provider fallback in router (AGY unavailable -> OpenCode Kimi K3)
+    fallback_route = router.route("coder", exclude={"agy"})
+    assert fallback_route.provider == "opencode"
+    assert fallback_route.model == "opencode-go/kimi-k3"
+
+    # Secondary fallback when both AGY and OpenCode are unavailable -> Codex Sol
+    secondary_fallback = router.route("coder", exclude={"agy", "opencode"})
+    assert secondary_fallback.provider == "codex"
+    assert secondary_fallback.model == "gpt-6-sol"
 
 
 def test_real_capability_failure_unlocks_escalation_ladder():
@@ -280,3 +288,79 @@ def test_workflow_driver_executes_consistency_agent_and_no_legacy_cross_validato
     checkpoints = [row["stage"] for row in store.checkpoints(wid)]
     assert "ANALYSIS_COMPLETE" in checkpoints
     assert "CROSS_VALIDATED" not in checkpoints
+
+
+def test_all_roles_primary_mappings():
+    router, _ = make_test_router()
+    expected_primaries = {
+        "constitution": ("codex", "gpt-6-sol"),
+        "constitution_validator": ("opencode", "opencode-go/mimo-v2.6-pro"),
+        "specification": ("opencode", "opencode-go/mimo-v2.6-pro"),
+        "specification_validator": ("agy", "gemini-3.8-flash-high"),
+        "clarifier_agent": ("agy", "gemini-3.8-flash-medium"),
+        "requirements_reviewer": ("opencode", "opencode-go/mimo-v2.6-pro"),
+        "planning": ("codex", "gpt-6-sol"),
+        "plan_validator": ("opencode", "opencode-go/mimo-v2.6-pro"),
+        "tasks": ("opencode", "opencode-go/mimo-v2.6-pro"),
+        "tasks_validator": ("agy", "gemini-3.8-flash-high"),
+        "consistency_agent": ("codex", "gpt-6-sol"),
+        "test_designer": ("opencode", "opencode-go/mimo-v2.6-pro"),
+        "test_validator": ("agy", "gemini-3.8-flash-high"),
+        "coder": ("agy", "gemini-3.8-flash-high"),
+        "refactorer": ("opencode", "opencode-go/kimi-k3"),
+        "code_reviewer": ("opencode", "opencode-go/mimo-v2.6-pro"),
+        "convergence_agent": ("opencode", "opencode-go/mimo-v2.6-pro"),
+        "final_reviewer": ("codex", "gpt-6-sol"),
+    }
+    for role, (exp_provider, exp_model) in expected_primaries.items():
+        route = router.route(role)
+        assert route.provider == exp_provider, f"Role {role} expected provider {exp_provider}, got {route.provider}"
+        assert route.model == exp_model, f"Role {role} expected model {exp_model}, got {route.model}"
+
+
+def test_codex_roles_have_cross_provider_first_fallback():
+    router, _ = make_test_router()
+    codex_roles = ["constitution", "planning", "consistency_agent", "final_reviewer"]
+    for role in codex_roles:
+        primary = router.route(role)
+        assert primary.provider == "codex"
+        assert primary.model == "gpt-6-sol"
+
+        # First fallback MUST NOT belong to the same provider Codex
+        fb1 = router.route(role, exclude={"codex"})
+        assert fb1.provider == "agy", f"Role {role} first fallback provider must be agy, got {fb1.provider}"
+        assert fb1.model == "claude-sonnet-4-6", f"Role {role} first fallback model must be claude-sonnet-4-6, got {fb1.model}"
+
+        # Secondary fallback
+        fb2 = router.route(role, exclude={"codex", "agy"})
+        assert fb2.provider == "opencode"
+        assert fb2.model == "opencode-go/mimo-v2.6-pro"
+
+
+def test_tdd_phases_roles_separation():
+    router, _ = make_test_router()
+    # test_designer creates RED
+    red_route = router.route("test_designer")
+    assert red_route.provider == "opencode"
+    assert red_route.model == "opencode-go/mimo-v2.6-pro"
+
+    # coder implements GREEN
+    green_route = router.route("coder")
+    assert green_route.provider == "agy"
+    assert green_route.model == "gemini-3.8-flash-high"
+
+    # refactorer refactors
+    refactor_route = router.route("refactorer")
+    assert refactor_route.provider == "opencode"
+    assert refactor_route.model == "opencode-go/kimi-k3"
+
+
+def test_analyze_uses_consistency_agent_never_test_designer():
+    from orchestrator.workflow.stages import STAGE_REGISTRY
+
+    analysis_stage = STAGE_REGISTRY.get("ANALYSIS")
+    assert analysis_stage is not None
+    assert analysis_stage.role == "consistency_agent"
+    assert analysis_stage.role != "test_designer"
+    assert analysis_stage.skill_name == "speckit-analyze"
+

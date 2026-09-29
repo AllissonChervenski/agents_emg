@@ -1125,7 +1125,7 @@
       "confidence": "high",
       "metadata": {
         "description": "Frontier intelligence for the most demanding work.",
-        "priority": 1,
+        "priority": 2,
         "default_reasoning_level": "low",
         "supported_reasoning_levels": [
           {
@@ -1172,8 +1172,8 @@
       "metadata_source": "codex debug models",
       "confidence": "high",
       "metadata": {
-        "description": "Workhorse model for coding and everyday work.",
-        "priority": 2,
+        "description": "Previous generation workhorse model.",
+        "priority": 3,
         "default_reasoning_level": "medium",
         "supported_reasoning_levels": [
           {
@@ -1221,7 +1221,7 @@
       "confidence": "high",
       "metadata": {
         "description": "Fast and affordable model for easier tasks.",
-        "priority": 3,
+        "priority": 4,
         "default_reasoning_level": "medium",
         "supported_reasoning_levels": [
           {
@@ -1264,8 +1264,8 @@
       "metadata_source": "codex debug models",
       "confidence": "high",
       "metadata": {
-        "description": "Older coding model for complex work.",
-        "priority": 4,
+        "description": "Older generation workhorse model.",
+        "priority": 5,
         "default_reasoning_level": "low",
         "supported_reasoning_levels": [
           {
@@ -1313,7 +1313,7 @@
       "confidence": "high",
       "metadata": {
         "description": "Older balanced model for straightforward work.",
-        "priority": 7,
+        "priority": 8,
         "default_reasoning_level": "medium",
         "supported_reasoning_levels": [
           {
@@ -1361,7 +1361,7 @@
       "confidence": "high",
       "metadata": {
         "description": "Older fast and efficient model.",
-        "priority": 8,
+        "priority": 9,
         "default_reasoning_level": "medium",
         "supported_reasoning_levels": [
           {
@@ -1405,7 +1405,7 @@
       "confidence": "high",
       "metadata": {
         "description": "Legacy coding model.",
-        "priority": 12,
+        "priority": 13,
         "default_reasoning_level": "medium",
         "supported_reasoning_levels": [
           {
