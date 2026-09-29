@@ -122,9 +122,7 @@ class InteractiveGate:
                     self._event("approval_reused",gate_id=gate["id"],stage=stage)
                     return True
                 gate_id=self.store.create_human_gate(self.workflow_id,self.resume_id,checkpoint,stage,role,task_id,provider,model,attempt)
-            elif gate and gate["status"] in {"EXECUTION_COMPLETED","CHECKPOINTED"}:
-                raise HumanGateRecoveryRequired(f"UNKNOWN_COMPLETION: {stage} approval was consumed ({gate['status']}); inspect before retry")
-            elif not gate or gate["status"] in {"ABORTED","INVALIDATED","EXECUTION_FAILED","EXECUTION_STARTED"}:
+            elif not gate or gate["status"] in {"ABORTED","INVALIDATED","EXECUTION_FAILED","EXECUTION_STARTED","EXECUTION_COMPLETED","CHECKPOINTED"}:
                 gate_id=self.store.create_human_gate(self.workflow_id,self.resume_id,checkpoint,stage,role,task_id,provider,model,attempt)
             else:
                 gate_id=gate["id"]
