@@ -156,7 +156,7 @@ class InteractiveGate:
                 paths=[path for path in files if isinstance(path,str) and (self.workspace/path).exists()]
                 if paths:
                     try:
-                        diff=subprocess.run(["git","diff","--",*paths],cwd=self.workspace,capture_output=True,text=True,timeout=10,check=False)
+                        diff=subprocess.run(["git","diff","--",*paths],cwd=self.workspace,stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=10,check=False)
                         if diff.stdout: print("Current diff:\n"+diff.stdout[:4000])
                     except (OSError,subprocess.TimeoutExpired): pass
                 continue

@@ -12,7 +12,7 @@ SAFE_FILES = {".orchestrator/capabilities.json", ".orchestrator/models.json", ".
 
 
 def _git(root, *args):
-    try: process=subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False)
+    try: process=subprocess.run(["git", *args], cwd=root, stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False)
     except OSError: return None
     return process.stdout.strip() if process.returncode==0 else None
 

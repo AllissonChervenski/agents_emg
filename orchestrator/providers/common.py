@@ -37,7 +37,7 @@ def resolve_binary(binary: str) -> str | None:
     mise = shutil.which("mise")
     if mise:
         try:
-            cp = subprocess.run([mise, "which", binary], capture_output=True, text=True, timeout=10, check=False)
+            cp = subprocess.run([mise, "which", binary], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10, check=False)
             resolved = (cp.stdout or "").strip().splitlines()
             if cp.returncode == 0 and resolved:
                 candidate = Path(resolved[-1])
