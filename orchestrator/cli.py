@@ -3,6 +3,7 @@ import importlib.util
 import json
 import shutil
 import sys
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from orchestrator.config.loader import load_config
 from orchestrator.config.models import Config
@@ -17,12 +18,13 @@ from orchestrator.agents.cost import CostAwareRouter, TaskProfile
 from orchestrator.agents.execution_policy import ExecutionPolicyRouter
 
 
-def _router(root, cfg):
-    path = root / ".orchestrator" / "capabilities.json"
-    if path.exists():
-        try: data=json.loads(path.read_text())
-        except ValueError: data={}
-    else: data={}
+def _load_provider_capabilities(root, data=None):
+    if data is None:
+        path = root / ".orchestrator" / "capabilities.json"
+        if path.exists():
+            try: data=json.loads(path.read_text())
+            except ValueError: data={}
+        else: data={}
     caps={}
     for name, cls in PROVIDERS.items():
         if name in data:
@@ -33,6 +35,11 @@ def _router(root, cfg):
         else:
             from orchestrator.config.models import ProviderCapabilities
             caps[name]=ProviderCapabilities(provider=name, metadata={"discovery":"not run; use `python -m orchestrator doctor`"})
+    return caps
+
+
+def _router(root, cfg):
+    caps = _load_provider_capabilities(root)
     db_path=root/".orchestrator"/"state"/"orchestrator.sqlite3"
     metrics=StateStore.load_provider_metrics(db_path)
     history=StateStore(db_path).routing_history() if db_path.exists() else []
@@ -126,6 +133,59 @@ def models(args):
             available="unknown" if detail is None else str(detail.available).lower()
             print(f"{name} | {model_id} | {available} | {','.join(tiers)} | {source} | {','.join(all_caps) or 'unknown'} | {fmt(metric.get('success_rate'))} | {fmt(metric.get('average_retries'))} | {fmt(metric.get('average_latency'))}")
     print("Selection report: .orchestrator/model-selection.md")
+
+
+@dataclass(frozen=True)
+class ProviderSummaryItem:
+    name: str
+    available: bool
+    model_count: int
+
+
+@dataclass(frozen=True)
+class ProviderSummaryReport:
+    providers: list[ProviderSummaryItem]
+
+    def to_dict(self) -> dict:
+        return {"providers": [asdict(item) for item in self.providers]}
+
+
+def _build_provider_summary() -> ProviderSummaryReport:
+    """Build a provider summary from the local registry and capability cache.
+
+    Uses PROVIDERS registry membership to determine known providers and the
+    cached ProviderCapabilities loaded by _load_provider_capabilities. No
+    adapter discovery, probes, subprocesses, state-store access, or LLM calls
+    are performed.
+    """
+    root = Path.cwd()
+    path = root / ".orchestrator" / "capabilities.json"
+    data = json.loads(path.read_text()) if path.exists() else {}
+    if not isinstance(data, dict):
+        raise ValueError("expected a JSON object in capabilities cache")
+    caps = _load_provider_capabilities(root, data=data)
+    items = []
+    for name in PROVIDERS:
+        cap = caps.get(name)
+        available = cap.cli_available is True if cap else False
+        catalog = getattr(cap, "models", None) if cap else None
+        model_count = len(catalog) if isinstance(catalog, list) else 0
+        items.append(ProviderSummaryItem(name=name, available=available, model_count=model_count))
+    return ProviderSummaryReport(providers=items)
+
+
+def provider_summary(args):
+    try:
+        report = _build_provider_summary()
+    except (OSError, ValueError, TypeError) as exc:
+        print(f"provider-summary: invalid or unreadable capabilities cache: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+    if args.json:
+        print(json.dumps(report.to_dict()))
+        return
+    for item in report.providers:
+        status = "OK" if item.available else "UNAVAILABLE"
+        print(f"{item.name} | {status} | {item.model_count} discovered")
 
 
 def run(args):
@@ -444,6 +504,7 @@ def main():
     sub=parser.add_subparsers(dest="command",required=True)
     p=sub.add_parser("doctor"); p.add_argument("--config",default="orchestrator.yaml"); p.add_argument("--live",action="store_true",help="Run opt-in low-cost provider smoke calls"); p.add_argument("--verbose",action="store_true",help="Show execution, parsing, contract and failure layer for live checks"); p.set_defaults(func=doctor)
     p=sub.add_parser("models"); p.add_argument("--config",default="orchestrator.yaml"); p.set_defaults(func=models)
+    p=sub.add_parser("provider-summary"); p.add_argument("--json",action="store_true"); p.set_defaults(func=provider_summary)
     p=sub.add_parser("run"); p.add_argument("--feature"); p.add_argument("--feature-file"); p.add_argument("--coder-provider"); p.add_argument("--dry-run",action="store_true"); p.add_argument("--interactive",action="store_true"); p.add_argument("--first-real-run",action="store_true"); p.add_argument("--worktree",action="store_true"); p.add_argument("--config",default="orchestrator.yaml"); p.set_defaults(func=run)
     p=sub.add_parser("resume"); p.add_argument("workflow_id"); p.add_argument("--interactive",action="store_true"); p.add_argument("--config",default="orchestrator.yaml"); p.set_defaults(func=resume)
     p=sub.add_parser("status"); p.add_argument("workflow_id",nargs="?"); p.set_defaults(func=status)

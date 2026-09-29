@@ -50,6 +50,18 @@ def convergence_outcome(before: bytes, after: bytes, report: str) -> str:
             return "converged"
         response = payload.get("response", "")
         report = response if isinstance(response, str) else ""
+    elif report and ("item.completed" in report or "agent_message" in report):
+        for line in report.splitlines():
+            try:
+                event = json.loads(line)
+                if isinstance(event, dict) and event.get("type") == "item.completed":
+                    item = event.get("item", {})
+                    if isinstance(item, dict) and item.get("type") == "agent_message":
+                        msg = item.get("text", "")
+                        if isinstance(msg, str) and msg.strip():
+                            report = msg
+            except (ValueError, TypeError):
+                continue
     if re.search(r"\b(?:not|never)(?:\s+\w+){0,2}\s+converged\b", report, re.IGNORECASE):
         raise ValueError("speckit-converge returned no append and no explicit converged result")
     if re.search(r"^\s*(?:[#*✅]\s*)*converged\b", report, re.IGNORECASE | re.MULTILINE):

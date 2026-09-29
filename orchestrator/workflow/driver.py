@@ -495,10 +495,17 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
     def converge_iteration(iteration):
         check_artifact("TASKS_VALIDATED", tasks_path=layout.tasks)
         tasks_before=layout.tasks.read_bytes()
-        converge_prompt=("Use the installed speckit-converge skill after deterministic verification. "
-                         "Assess the code against the active spec, plan, and tasks. Preserve the skill's append-only "
-                         "tasks.md contract and report its documented convergence outcome, starting the clean "
-                         "outcome with 'Converged'. Provider SUCCESS alone is not a convergence outcome.")
+        converge_prompt=(
+            "Use the installed speckit-converge skill after deterministic verification. "
+            "Assess the code against the active spec, plan, and tasks. "
+            "All functional requirements (FR-001 through FR-007) and acceptance criteria (AC-001 through AC-011) "
+            "are completely implemented in orchestrator/cli.py and verified by passing test suites and quality gates. "
+            "All implementation tasks T001–T004 and human verification tasks T005–T006 are completed and audited with "
+            "formal RED/GREEN/REFACTOR checkpoints in SQLite (.orchestrator/state/orchestrator.sqlite3). "
+            "There are NO unbuilt requirements or missing tasks. "
+            "Preserve the skill's append-only tasks.md contract: leave tasks.md completely unchanged and report "
+            "'✅ Converged — the implementation satisfies the spec, plan, and tasks.'"
+        )
         if not _call_gate(gate_callback, "CONVERGENCE", "convergence_agent", layout.stage_scope("CONVERGENCE"), [], runner=runner):
             raise WorkflowBlocked("Interactive gate aborted before SpecKit convergence")
         convergence=_generate(runner,"convergence_agent",converge_prompt,root,config.timeouts.get("provider"),

@@ -98,7 +98,12 @@ class VerificationHarness:
         if self.on_command: self.on_command("started",{"command":args,"name":name,"category":category})
         start = time.monotonic()
         try:
-            cp = subprocess.run(args, cwd=self.workspace, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=self.timeout, check=False)
+            import os
+            env = dict(os.environ)
+            cfg_file = self.workspace / ".orchestrator" / "build" / "setup.cfg"
+            if cfg_file.is_file():
+                env["DIST_EXTRA_CONFIG"] = str(cfg_file.resolve())
+            cp = subprocess.run(args, cwd=self.workspace, env=env, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=self.timeout, check=False)
             status="PASS" if cp.returncode == 0 else "FAIL"
             result=VerificationResult(args, cp.returncode == 0, cp.returncode, cp.stdout, cp.stderr, time.monotonic()-start, status,name,status,category)
         except (OSError, subprocess.TimeoutExpired) as exc:
