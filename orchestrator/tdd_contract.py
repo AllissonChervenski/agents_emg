@@ -21,7 +21,7 @@ def hash_test_files(root: str | Path) -> dict[str, str]:
     root=Path(root).resolve()
     hashes={}
     for path in root.rglob("*"):
-        if not (path.is_file() or path.is_symlink()) or any(part in {".git",".orchestrator",".venv","__pycache__","build"} for part in path.parts): continue
+        if not (path.is_file() or path.is_symlink()) or any(part in {".git", ".venv", ".orchestrator", "build", "dist", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache"} for part in path.parts): continue
         relative=path.relative_to(root)
         if "tests" not in relative.parts and not path.name.startswith("test_") and path.name not in {"conftest.py","pytest.ini","tox.ini","setup.cfg","pyproject.toml","package.json"}: continue
         hashes[str(relative)]=sha256(str(path.readlink()).encode() if path.is_symlink() else path.read_bytes()).hexdigest()

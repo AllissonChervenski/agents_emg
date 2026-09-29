@@ -62,7 +62,7 @@ def test_files_changed(before, root):
 
 def workspace_snapshot(root):
     root=Path(root)
-    ignored={".git", ".orchestrator", "__pycache__", ".venv"}
+    ignored={".git", ".venv", ".orchestrator", "build", "dist", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache"}
     return {str(p.relative_to(root)): str(p.readlink()).encode() if p.is_symlink() else p.read_bytes() for p in root.rglob("*") if (p.is_file() or p.is_symlink()) and not any(part in ignored for part in p.parts)}
 
 
