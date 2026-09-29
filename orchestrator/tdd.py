@@ -276,10 +276,36 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                 _record_validation(runner, red_validator, red_validation, stage="RED_SEMANTIC_VALIDATE", evidence={"task_id": task.task, "attempt": red_attempt})
                 task.evidence["red"]["semantic_validation"] = red_validation.status
                 if red_validation.status != "PASS":
-                    red_status = "INVALID_TEST"; task.evidence["red_result"] = red_status; task.evidence["red"]["classification"] = red_status; task.evidence["red_expected_failure_confirmed"] = False
-            if not gate.red("PASS" if red_status == "EXPECTED_FAILURE" else "BLOCKED", red_status):
-                if task.phase != TDDPhase.BLOCKED: task.advance(TDDPhase.BLOCKED)
-                save(); return task
+                    task.evidence["red_semantic_validation"] = red_validation.status
+                    task.evidence["red_semantic_validation_reason"] = red_validation.summary
+                    task.evidence["red_semantic_validation_issues"] = red_validation.issues
+                    if red_validation.status in {"REVISE", "BLOCKED"} and task.attempts["red"] < max_attempts:
+                        task.attempts["red"] += 1
+                        validator_feedback = f"RED SEMANTIC VALIDATION: {red_validation.summary}\nIssues: {red_validation.issues}"
+                        stag_report = red_detector.evaluate(
+                            status=red_validation.status,
+                            issues=red_validation.issues,
+                            artifact_text="\n".join(test_sources.values()),
+                            summary=red_validation.summary,
+                        )
+                        if stag_report.requires_human_intervention:
+                            warn_context = {
+                                "reason": stag_report.reason,
+                                "stagnant_streak": stag_report.stagnant_streak,
+                                "total_attempts": stag_report.total_attempts,
+                                "issues": list(red_validation.issues),
+                                "summary": red_validation.summary,
+                            }
+                            if gate_phase("STAGNATION_WARNING", "test_designer", ["tests/"], artifacts=test_files, attempt=red_attempt, extra_context=warn_context):
+                                red_detector.stagnant_streak = 0
+                            else:
+                                task.advance(TDDPhase.BLOCKED); save(); return task
+                        continue
+                    red_status = "INVALID_TEST"
+                    task.evidence["red_result"] = red_status
+                    task.evidence["red"]["classification"] = red_status
+                    task.evidence["red_expected_failure_confirmed"] = False
+                    task.advance(TDDPhase.BLOCKED); save(); return task
             checkpoint("RED_VALIDATED")
             break
         if task.phase == TDDPhase.RED_GENERATE:
