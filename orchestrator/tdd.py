@@ -306,6 +306,9 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                     task.evidence["red"]["classification"] = red_status
                     task.evidence["red_expected_failure_confirmed"] = False
                     task.advance(TDDPhase.BLOCKED); save(); return task
+            if not gate.red("PASS" if red_status == "EXPECTED_FAILURE" else "BLOCKED", red_status):
+                if task.phase != TDDPhase.BLOCKED: task.advance(TDDPhase.BLOCKED)
+                save(); return task
             checkpoint("RED_VALIDATED")
             break
         if task.phase == TDDPhase.RED_GENERATE:
