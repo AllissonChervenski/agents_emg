@@ -55,7 +55,7 @@ def execute(provider: str, model: str | None, role: str, command: list[str], cwd
         resolved = resolve_binary(command[0]) if command else None
         if not resolved:
             raise FileNotFoundError(f"CLI executable not found: {command[0] if command else '(empty command)'}")
-        cp = subprocess.run([resolved, *command[1:]], cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
+        cp = subprocess.run([resolved, *command[1:]], cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, check=False)
         out = cp.stdout or ""
         structured = None
         try:
@@ -73,7 +73,7 @@ def probe(binary: str, args: list[str], timeout: int = 20) -> tuple[bool, str, s
     if not path:
         return False, "", f"{binary} unavailable"
     try:
-        cp = subprocess.run([path, *args], capture_output=True, text=True, timeout=timeout, check=False)
+        cp = subprocess.run([path, *args], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, check=False)
         output=(cp.stdout or "")
         if cp.returncode == 0 and not output.strip(): output=cp.stderr or ""
         error=((cp.stderr or "")+(cp.stdout or "")) if cp.returncode else ""
