@@ -124,7 +124,54 @@ def parse_codex_validation(text: str, validator: str, model: str | None = None) 
     return res
 
 
+def _is_opencode_jsonl(text: str) -> bool:
+    if not text:
+        return False
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return False
+    first = lines[0]
+    try:
+        data = json.loads(first)
+        if isinstance(data, dict):
+            event_type = data.get("type", "")
+            if event_type in {"step_start", "step_finish", "text"} or ("sessionID" in data and "part" in data):
+                return True
+    except (ValueError, TypeError):
+        if first.startswith('{"type":') and any(k in first for k in ('"step_start"', '"step_finish"', '"part"')):
+            return True
+    return False
+
+
+def parse_opencode_validation(text: str, validator: str, model: str | None = None) -> ValidationResult:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    parts: list[str] = []
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(event, dict) and event.get("type") == "text":
+            part = event.get("part")
+            if isinstance(part, dict) and isinstance(part.get("text"), str):
+                parts.append(part["text"])
+    if not parts:
+        return validation_result("PARSE_ERROR", [], "Could not parse strict validation output", validator, model, text)
+    extracted = "".join(parts)
+    res = _parse_contract(extracted, validator, model)
+    res.raw_output = text
+    return res
+
+
 def parse_validation(text: str, validator: str, model: str | None = None, provider: str | None = None) -> ValidationResult:
+    if provider == "opencode" or (provider is None and _is_opencode_jsonl(text)):
+        if _is_opencode_jsonl(text):
+            return parse_opencode_validation(text, validator, model)
+        if provider == "opencode":
+            obj = _extract(text)
+            if isinstance(obj, dict) and obj.get("status") in {"PASS", "REVISE", "BLOCKED"}:
+                return _parse_contract(text, validator, model)
+            return parse_opencode_validation(text, validator, model)
     if provider == "codex" or (provider is None and _is_codex_jsonl(text)):
         if _is_codex_jsonl(text):
             return parse_codex_validation(text, validator, model)

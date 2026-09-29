@@ -75,15 +75,16 @@ class StateStore:
             version=db.execute("SELECT value FROM schema_meta WHERE key='state_schema_version'").fetchone()
             if version and int(version[0]) > self.SCHEMA_VERSION:
                 raise RuntimeError(f"State schema {version[0]} is newer than supported {self.SCHEMA_VERSION}")
-            db.execute("INSERT OR REPLACE INTO schema_meta VALUES('state_schema_version',?)",(str(self.SCHEMA_VERSION),))
-            for wid,payload in db.execute("SELECT id,state_json FROM workflows").fetchall():
-                state=json.loads(payload or "{}")
-                if int(state.get("state_schema_version",1))<self.SCHEMA_VERSION:
-                    previous=int(state.get("state_schema_version",1))
-                    state["state_schema_version"]=self.SCHEMA_VERSION
-                    state["migrated_from_state_version"]=previous
-                    if previous==1: state["resume_integrity"]="LEGACY_NO_FINGERPRINT"
-                    db.execute("UPDATE workflows SET state_json=? WHERE id=?",(json.dumps(state),wid))
+            if not version or int(version[0]) < self.SCHEMA_VERSION:
+                db.execute("INSERT OR REPLACE INTO schema_meta VALUES('state_schema_version',?)", (str(self.SCHEMA_VERSION),))
+                for wid,payload in db.execute("SELECT id,state_json FROM workflows").fetchall():
+                    state=json.loads(payload or "{}")
+                    if int(state.get("state_schema_version",1))<self.SCHEMA_VERSION:
+                        previous=int(state.get("state_schema_version",1))
+                        state["state_schema_version"]=self.SCHEMA_VERSION
+                        state["migrated_from_state_version"]=previous
+                        if previous==1: state["resume_integrity"]="LEGACY_NO_FINGERPRINT"
+                        db.execute("UPDATE workflows SET state_json=? WHERE id=?",(json.dumps(state),wid))
     def connect(self): return sqlite3.connect(self.db_path)
     def create_workflow(self, feature, state=None):
         wid = str(uuid.uuid4()); now = datetime.now(timezone.utc).isoformat()

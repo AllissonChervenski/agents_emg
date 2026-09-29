@@ -6,7 +6,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from orchestrator.config.loader import load_config
-from orchestrator.config.models import Config
+from orchestrator.config.models import Config, ModelCapabilities, ProviderCapabilities
 from orchestrator.doctor import discover_all, write_selection_report
 from orchestrator.agents.router import ModelRouter, describe_model
 from orchestrator.agents.plan import build_route_plan, format_route
@@ -26,31 +26,46 @@ def _load_provider_capabilities(root, data=None):
             except ValueError: data={}
         else: data={}
     caps={}
-    for name, cls in PROVIDERS.items():
+    for name in PROVIDERS:
         if name in data:
-            from orchestrator.config.models import ProviderCapabilities
-            from orchestrator.config.models import ModelCapabilities
-            item=dict(data[name]); item["model_details"]=[ModelCapabilities(**detail) for detail in item.get("model_details",[]) if isinstance(detail,dict)]
+            item=dict(data[name])
+            item["model_details"]=[ModelCapabilities(**detail) for detail in item.get("model_details",[]) if isinstance(detail,dict)]
             caps[name]=ProviderCapabilities(**item)
         else:
-            from orchestrator.config.models import ProviderCapabilities
             caps[name]=ProviderCapabilities(provider=name, metadata={"discovery":"not run; use `python -m orchestrator doctor`"})
     return caps
 
 
-def _router(root, cfg):
-    caps = _load_provider_capabilities(root)
-    db_path=root/".orchestrator"/"state"/"orchestrator.sqlite3"
+def _router_config(cfg):
+    return {"roles":cfg.roles, "model_tiers":cfg.providers.get("model_tiers",{}), "models_config":cfg.models,
+            "provider_preference":cfg.providers.get("preference", ["codex","opencode","agy"]), "routing":cfg.routing}
+
+
+def _build_router(cfg, caps, db_path):
     metrics=StateStore.load_provider_metrics(db_path)
     history=StateStore(db_path).routing_history() if db_path.exists() else []
-    return ModelRouter(caps, {"roles":cfg.roles, "model_tiers":cfg.providers.get("model_tiers",{}), "models_config":cfg.models, "provider_preference":cfg.providers.get("preference", ["codex","opencode","agy"]),"routing":cfg.routing} ,metrics,history), caps
+    return ModelRouter(caps, _router_config(cfg), metrics, history)
+
+
+def _router(root, cfg):
+    caps=_load_provider_capabilities(root)
+    db_path=root/".orchestrator"/"state"/"orchestrator.sqlite3"
+    return _build_router(cfg, caps, db_path), caps
+
+
+_CAPABILITY_FLAG_FIELDS=("supports_coding","supports_reasoning","supports_structured_output","supports_file_editing","supports_shell","supports_agentic_work")
+
+
+def _capability_names(detail, cfg_caps):
+    known=[] if not detail else [field.removeprefix("supports_") for field in _CAPABILITY_FLAG_FIELDS if getattr(detail,field) is True]
+    return list(dict.fromkeys(known + cfg_caps))
 
 
 def doctor(args):
     root=Path.cwd(); cfg=load_config(args.config)
     caps=discover_all(root)
     db_path=root/".orchestrator"/"state"/"orchestrator.sqlite3"
-    router=ModelRouter(caps,{"roles":cfg.roles,"model_tiers":cfg.providers.get("model_tiers",{}),"models_config":cfg.models,"provider_preference":cfg.providers.get("preference",["codex","opencode","agy"]),"routing":cfg.routing},StateStore.load_provider_metrics(db_path),StateStore(db_path).routing_history() if db_path.exists() else [])
+    router=_build_router(cfg,caps,db_path)
     write_selection_report(root,caps,router)
     print(f"Python .......... OK ({sys.version.split()[0]})")
     print(f"Git ............. {'OK' if shutil.which('git') else 'UNAVAILABLE'}")
@@ -63,9 +78,7 @@ def doctor(args):
             tiers,source=describe_model(cap,name,model_id,cfg.models)
             detail=next((item for item in cap.model_details if item.model_id==model_id),None)
             cfg_entry=(cfg.models or {}).get("models",{}).get(name,{}).get(model_id,{})
-            cfg_caps=cfg_entry.get("capabilities",[])
-            known=[] if not detail else [field.removeprefix("supports_") for field in ("supports_coding","supports_reasoning","supports_structured_output","supports_file_editing","supports_shell","supports_agentic_work") if getattr(detail,field) is True]
-            all_caps=list(dict.fromkeys(known + cfg_caps))
+            all_caps=_capability_names(detail,cfg_entry.get("capabilities",[]))
             print(f"    {model_id}: {','.join(tiers)} tier_source={source}; model_capabilities={','.join(all_caps) or 'unknown'}")
         if not cap.models: print(f"  {name}: not detected ({cap.metadata.get('model_discovery_error') or 'no catalog returned'})")
     print("\nVerification:")
@@ -119,6 +132,7 @@ def models(args):
     root=Path.cwd(); cfg=load_config(args.config); router,caps=_router(root,cfg); write_selection_report(root,caps,router)
     history=StateStore.load_model_metrics(root/".orchestrator"/"state"/"orchestrator.sqlite3")
     print("Provider | Model | Available | Tiers | Tier source | Capabilities | Historical success | Average retries | Average latency")
+    def fmt(value): return "unknown" if value is None else f"{value:.2f}" if isinstance(value,float) else str(value)
     for name,cap in caps.items():
         if not cap.models: print(f"{name} | CLI default | {cap.cli_available} | unknown | cli_default | {','.join(cap.capabilities) or 'unknown'} | unknown | unknown | unknown")
         for model_id in cap.models:
@@ -126,10 +140,7 @@ def models(args):
             metric=history.get((name,model_id),{})
             detail=next((item for item in cap.model_details if item.model_id==model_id),None)
             cfg_entry=(cfg.models or {}).get("models",{}).get(name,{}).get(model_id,{})
-            cfg_caps=cfg_entry.get("capabilities",[])
-            known=[] if not detail else [field.removeprefix("supports_") for field in ("supports_coding","supports_reasoning","supports_structured_output","supports_file_editing","supports_shell","supports_agentic_work") if getattr(detail,field) is True]
-            all_caps=list(dict.fromkeys(known + cfg_caps))
-            def fmt(value): return "unknown" if value is None else f"{value:.2f}" if isinstance(value,float) else str(value)
+            all_caps=_capability_names(detail,cfg_entry.get("capabilities",[]))
             available="unknown" if detail is None else str(detail.available).lower()
             print(f"{name} | {model_id} | {available} | {','.join(tiers)} | {source} | {','.join(all_caps) or 'unknown'} | {fmt(metric.get('success_rate'))} | {fmt(metric.get('average_retries'))} | {fmt(metric.get('average_latency'))}")
     print("Selection report: .orchestrator/model-selection.md")
@@ -411,6 +422,7 @@ def resume(args):
     harness=VerificationHarness(root,cfg.verification)
     gate=InteractiveGate(workspace=root, store=store, workflow_id=args.workflow_id) if args.interactive or item["state"].get("first_real_run") else None
     def continue_run():
+        from orchestrator.agents.roles import ROLES
         providers={name:cls() for name,cls in PROVIDERS.items()}
         for provider in providers.values(): provider.discover()
         runner=AgentRunner(providers,router,store,workflow_id=args.workflow_id,safety=cfg.real_run,
@@ -428,7 +440,7 @@ def resume(args):
         harness.on_command=command_event
         def gate_callback(stage,role,files=(),commands=(),attempt=1,artifacts=(),**kwargs):
             if not gate: return True
-            route=router.route(role) if role in __import__("orchestrator.agents.roles",fromlist=["ROLES"]).ROLES else None
+            route=router.route(role) if role in ROLES else None
             return gate.confirm(stage,role,route.provider if route else "python",route.model if route else None,files,commands,attempt=attempt,artifacts=artifacts,extra_context=kwargs.get("extra_context"))
         def approve_constitution():
             return bool(gate and gate_callback("CONSTITUTION_CREATE","constitution",["constitution.md"],[]))
@@ -455,7 +467,6 @@ def verify(args):
     run_verify_command(Path.cwd(), args.config)
 
 
-
 def validate(args):
     path=Path(args.artifact)
     if not path.exists(): raise SystemExit(f"Artifact not found: {path}")
@@ -464,7 +475,6 @@ def validate(args):
     status="PASS" if not missing else "REVISE"
     result={"status":status,"issues":[f"Requirement ID missing: {req} in {path}" for req in missing],"summary":"Deterministic textual requirement check","validator":"python","model":None}
     print(json.dumps(result,indent=2))
-
 
 
 def configure(args):

@@ -1,6 +1,9 @@
 <!--
 Sync Impact Report:
 - Version change: 1.0.0 → 1.1.0
+- Rationale: Added Principle VI (Scientific and Numerical Oracle Integrity) to formalize provenance and immutability requirements for scientific, numerical, and DSP fixtures ahead of feature development.
+- Impact on existing features: Fully backward-compatible. Feature 001-provider-summary is governed by Principles III and IV (local inspection, dual-format output); Principle VI establishes forward invariants for numerical/DSP pipelines without retroactively altering provider-summary behavior.
+- Nexus to active feature: Feature 001-provider-summary serves as the architectural canary validating that the orchestrator control plane, model resolution, family separation, and protected gates function before numerical workloads execute under Principle VI.
 - List of modified principles:
   - Added: VI. Scientific and Numerical Oracle Integrity
 - Added sections: None
