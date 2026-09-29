@@ -1,5 +1,4 @@
-"""Validated, task-specific test selection returned by TestDesigner."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
 import json
@@ -15,6 +14,7 @@ class TestDesign:
     acceptance_criteria_ids: list[str]
     created_tests: list[str]
     test_commands: list[list[str]]
+    fixture_files: list[str] = field(default_factory=list)
 
 
 def hash_test_files(root: str | Path) -> dict[str, str]:
@@ -91,4 +91,19 @@ def parse_test_design(raw: str | dict, task_id: str, requirement_ids: list[str],
     if not valid_commands: raise ValueError("test_commands must be task-specific")
     commands = valid_commands
     if any(not any(test_id in command for command in commands) for test_id in created): raise ValueError("each created test needs a task-specific command")
-    return TestDesign(task_id,list(requirement_ids),list(acceptance_criteria_ids),list(created),[list(command) for command in commands])
+    fixtures_raw = obj.get("fixture_files") or obj.get("fixtures") or []
+    if not isinstance(fixtures_raw, list) or any(not isinstance(f, str) or not f.strip() for f in fixtures_raw):
+        raise ValueError("fixture_files must be a list of relative path strings")
+    valid_fixtures = []
+    for f in fixtures_raw:
+        if f.startswith("-") or ".." in Path(f).parts:
+            raise ValueError(f"invalid fixture path: {f}")
+        fp = (root / f).resolve()
+        try:
+            rel_fix = str(fp.relative_to(root))
+        except ValueError:
+            raise ValueError(f"fixture path outside workspace: {f}")
+        if not fp.is_file():
+            raise ValueError(f"declared fixture file not found: {f}")
+        valid_fixtures.append(rel_fix)
+    return TestDesign(task_id,list(requirement_ids),list(acceptance_criteria_ids),list(created),[list(command) for command in commands],fixture_files=valid_fixtures)

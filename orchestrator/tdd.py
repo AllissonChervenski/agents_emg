@@ -1,4 +1,5 @@
 """Policy-level TDD enforcement helpers used by workflow drivers."""
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -69,7 +70,7 @@ def workspace_snapshot(root):
 
 def _test_or_fixture(path):
     p=Path(path)
-    return "tests" in p.parts or p.name.startswith("test_") or p.name in {"conftest.py", "pytest.ini", "tox.ini"}
+    return "tests" in p.parts or "fixtures" in p.parts or p.name.startswith("test_") or p.name in {"conftest.py", "pytest.ini", "tox.ini"}
 
 
 def _record_validation(runner, result, validation, stage=None, evidence=None):
@@ -81,7 +82,7 @@ def _record_validation(runner, result, validation, stage=None, evidence=None):
         runner.record_validation(result, validation)
 
 
-def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_command=None, regression_commands=None, max_attempts=3, workflow_dir=None, gate_callback=None, checkpoint_callback=None, task_data=None, resume_stage=None, artifact_paths=None):
+def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_command=None, regression_commands=None, max_attempts=3, workflow_dir=None, gate_callback=None, checkpoint_callback=None, task_data=None, resume_stage=None, artifact_paths=None, snapshot_gate_registered: bool = False):
     """Run a bounded TDD cycle. Python alone advances phases and evaluates checks."""
     import json
     import time
@@ -100,12 +101,26 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         return {name:hashlib.sha256(str(Path(path).readlink()).encode() if Path(path).is_symlink() else Path(path).read_bytes()).hexdigest() for name,path in artifact_paths.items() if Path(path).is_file() or Path(path).is_symlink()}
     protected_artifacts=artifact_hashes()
     ctx=f"Task: {task.task}\nRequirements: {task.requirements}\nAcceptance criteria: {task.acceptance_criteria}\nArtifact paths: {artifact_paths}"
-    def invoke(role, extra="", author_provider=None, artifacts=None, attempt=1):
+    numeric_sensitive = bool(task_data.get("numeric_sensitive", False)) if task_data else False
+    snapshot_gate = snapshot_gate_registered or (bool(task_data.get("snapshot_gate_registered", False)) if task_data else False)
+    def _fixture_hashes(files):
+        import hashlib
+        hashes = {}
+        for f in (files or ()):
+            p = (root / f).resolve()
+            if p.is_file():
+                hashes[str(p.relative_to(root))] = hashlib.sha256(p.read_bytes()).hexdigest()
+        return hashes
+    def invoke(role, extra="", author_provider=None, artifacts=None, attempt=1, author_model=None, author_models=None, author_role=None):
         options={"task":task_data,"task_id":task.task} if task_data else {}
         if task_data and role in {"coder","refactorer"}: options["allowed_paths"]=task_data.get("allowed_files") or task_data.get("production_files") or []
         if role in {"test_validator", "code_reviewer", "debugger"}: options["allowed_paths"]=[]
         if artifacts is not None: options["artifacts"]=artifacts
         options["attempt"]=attempt
+        options["author_model"]=author_model
+        options["author_models"]=author_models
+        options["author_role"]=author_role
+        options["numeric_sensitive"]=numeric_sensitive
         if role == "coder":
             # Python's task-level TDD machine is the only implementation
             # authority. SpecKit implement is dispatched as the worker skill
@@ -206,6 +221,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                 task.evidence["red_production_files_changed"] = sorted(k for k in changed_design if not _test_or_fixture(k))
                 task.advance(TDDPhase.BLOCKED); save(); return task
             task.evidence["test_designer_provider"] = designer.provider
+            task.evidence["test_designer_model"] = designer.model
             task.evidence["red_test_created"] = bool(test_files_changed(before_red, root))
             task.evidence["test_files_changed"] = test_files_changed(before_red, root)
             try:
@@ -223,11 +239,12 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                     validator_feedback = f"TestDesign contract error: {exc}. Return only task-specific test runner commands referencing modified test files (do not include full test suite commands without paths)."
                     continue
                 task.advance(TDDPhase.BLOCKED); save(); return task
-            task.evidence["test_design"] = {"task_id": design.task_id, "requirement_ids": design.requirement_ids, "acceptance_criteria_ids": design.acceptance_criteria_ids, "created_tests": design.created_tests, "test_commands": design.test_commands}
+            task.evidence["fixture_files"] = list(getattr(design, "fixture_files", ()))
+            task.evidence["test_design"] = {"task_id": design.task_id, "requirement_ids": design.requirement_ids, "acceptance_criteria_ids": design.acceptance_criteria_ids, "created_tests": design.created_tests, "test_commands": design.test_commands, "fixture_files": list(getattr(design, "fixture_files", ()))}
             test_sources = {path: (root / path).read_text(errors="replace") for path in task.evidence["test_files_changed"] if (root / path).is_file()}
             test_files = list(task.evidence["test_files_changed"])
             if not gate_phase("RED_VALIDATE", "test_validator", [], [], artifacts=test_files, attempt=red_attempt): return task
-            validator, raw = invoke("test_validator", load_prompt("test_validator", task=json.dumps(task.evidence['test_design']), artifact=json.dumps(test_sources, indent=2)), author_provider=designer.provider, artifacts=test_files, attempt=red_attempt)
+            validator, raw = invoke("test_validator", load_prompt("test_validator", task=json.dumps(task.evidence['test_design']), artifact=json.dumps(test_sources, indent=2)), author_provider=designer.provider, author_model=designer.model, author_models=[designer.model] if designer.model else None, author_role="test_designer", artifacts=test_files, attempt=red_attempt)
             if validator.success:
                 vr = parse_validation(raw or "", "test_validator", validator.model, provider=getattr(validator, "provider", None))
             else:
@@ -274,7 +291,7 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
             task.evidence.update({"red_result": red_status, "red_test_files": test_files_changed(before_red, root), "red": {"classification": red_status, "results": [{"command": result.command, "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "cause": result.cause, "classification": result.classification} for result in red_results]}})
             task.evidence["red_expected_failure_confirmed"] = red_status == "EXPECTED_FAILURE"
             if red_status == "EXPECTED_FAILURE":
-                red_validator, red_raw = invoke("test_validator", load_prompt("test_validator", task=f"Validate observed RED failures for {task.task}", artifact=json.dumps(task.evidence["red"], indent=2)), author_provider=designer.provider, artifacts=test_files, attempt=red_attempt)
+                red_validator, red_raw = invoke("test_validator", load_prompt("test_validator", task=f"Validate observed RED failures for {task.task}", artifact=json.dumps(task.evidence["red"], indent=2)), author_provider=designer.provider, author_model=designer.model, author_models=[designer.model] if designer.model else None, author_role="test_designer", artifacts=test_files, attempt=red_attempt)
                 if red_validator.success:
                     red_validation = parse_validation(red_raw or "", "test_validator", red_validator.model, provider=getattr(red_validator, "provider", None))
                 else:
@@ -322,33 +339,63 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     while task.phase==TDDPhase.GREEN_IMPLEMENT and task.attempts["green"]<max_attempts:
         protected=test_files_snapshot(root)
         task.evidence["green_test_hashes_before"]=protected
+        fixture_paths = task.evidence.get("fixture_files", [])
+        protected_fixtures = _fixture_hashes(fixture_paths)
+        task.evidence["green_fixture_hashes_before"] = protected_fixtures
         code_before=workspace_snapshot(root)
         if not gate_phase("GREEN_IMPLEMENT","coder",["production files"],design.test_commands): return task
-        coder,_=invoke("coder", f"Validated task-specific tests: {json.dumps(task.evidence['test_design'])}\nValidated RED results: {json.dumps(task.evidence['red'])}\nDo not modify tests or fixtures.", author_provider=task.evidence.get("test_designer_provider"))
+        designer_model = task.evidence.get("test_designer_model")
+        coder,_=invoke(
+            "coder",
+            f"Validated task-specific tests: {json.dumps(task.evidence['test_design'])}\nValidated RED results: {json.dumps(task.evidence['red'])}\nDo not modify tests or fixtures.",
+            author_provider=task.evidence.get("test_designer_provider"),
+            author_model=designer_model,
+            author_models=[designer_model] if designer_model else None,
+            author_role="test_designer",
+        )
         if not coder.success:
             task.attempts["green"]+=1
             task.evidence["green_attempts"]=task.attempts["green"]
             continue
         task.evidence["coder_provider"]=coder.provider
+        task.evidence["coder_model"]=coder.model
         task.evidence["coder_independent_from_test_designer"]=coder.usage.get("validation_independence")
         changed=test_files_changed(protected,root)
-        if changed:
-            task.evidence["test_tampering_detected"]=True; task.evidence["test_tampering_files"]=changed; gate.green(False,tampered=True)
+        fixture_changes = {}
+        for fpath, orig_hash in protected_fixtures.items():
+            curr_path = (root / fpath).resolve()
+            if not curr_path.is_file() or hashlib.sha256(curr_path.read_bytes()).hexdigest() != orig_hash:
+                fixture_changes[fpath] = "modified"
+        if changed or fixture_changes:
+            task.evidence["test_tampering_detected"]=True
+            if changed: task.evidence["test_tampering_files"]=changed
+            if fixture_changes: task.evidence["fixture_tampering_files"]=fixture_changes
+            gate.green(False,tampered=True)
             task.evidence["green_attempts"]=task.attempts["green"]
             tamper_prompt = (
                 "TEST_TAMPERING: inspect unauthorized GREEN changes. Return REVISE with 'RETURN_TO_RED' in issues or summary only if a legitimate test correction is needed; otherwise BLOCKED.\n"
                 "Do not attempt to read files via shell or execute any commands.\n"
-                f"Files: {json.dumps(changed)}\n"
+                f"Files: {json.dumps(list(changed.keys()) if isinstance(changed, dict) else list(changed))}\n"
+                f"Fixtures: {json.dumps(list(fixture_changes.keys()))}\n"
                 'Return strict JSON: {"status":"PASS|REVISE|BLOCKED","summary":"...","issues":[]}'
             )
             tamper_files = list(changed.keys()) if isinstance(changed, dict) else list(changed)
-            tamper_validator,tamper_raw=invoke("test_validator", tamper_prompt, author_provider=coder.provider, artifacts=tamper_files)
+            tamper_files.extend(list(fixture_changes.keys()))
+            tamper_validator,tamper_raw=invoke(
+                "test_validator",
+                tamper_prompt,
+                author_provider=coder.provider,
+                author_model=coder.model,
+                author_models=[coder.model] if coder.model else None,
+                author_role="coder",
+                artifacts=tamper_files,
+            )
 
             if tamper_validator.success:
                 tamper_review=parse_validation(tamper_raw or "","test_validator",tamper_validator.model, provider=getattr(tamper_validator,"provider",None))
             else:
                 tamper_review=ValidationResult("PARSE_ERROR" if not tamper_validator.error else "BLOCKED", [], tamper_validator.error or tamper_validator.stderr or "test_validator failed", "test_validator", tamper_validator.model, datetime.now(timezone.utc).isoformat(), tamper_raw or tamper_validator.stderr or tamper_validator.error or "")
-            _record_validation(runner, tamper_validator, tamper_review, stage="TEST_TAMPERING_VALIDATE", evidence={"task_id": task.task, "changed_files": changed})
+            _record_validation(runner, tamper_validator, tamper_review, stage="TEST_TAMPERING_VALIDATE", evidence={"task_id": task.task, "changed_files": changed, "changed_fixtures": fixture_changes})
             if tamper_review and tamper_review.status=="REVISE" and (
                 any("RETURN_TO_RED" in str(issue) for issue in tamper_review.issues)
                 or "RETURN_TO_RED" in tamper_review.summary
@@ -361,7 +408,14 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
 
         if artifact_hashes()!=protected_artifacts:
             task.evidence["artifact_tampering_detected"]=True
-            invoke("code_reviewer","ARTIFACT_TAMPERING: Coder modified a protected SDD artifact. Review and require restoration.",author_provider=coder.provider)
+            invoke(
+                "code_reviewer",
+                "ARTIFACT_TAMPERING: Coder modified a protected SDD artifact. Review and require restoration.",
+                author_provider=coder.provider,
+                author_model=coder.model,
+                author_models=[coder.model] if coder.model else None,
+                author_role="coder",
+            )
             task.advance(TDDPhase.BLOCKED); save(); return task
         code_after=workspace_snapshot(root)
         changed_production={k for k in set(code_before)|set(code_after) if code_before.get(k)!=code_after.get(k) and not _test_or_fixture(k)}
@@ -393,18 +447,38 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         task.evidence["green_attempts"]=task.attempts["green"]+1
         task.evidence["refactor_attempts"]=1
         tests_before_refactor=test_files_snapshot(root)
-        if not gate_phase("REFACTOR","refactorer",["production files"]): return task
-        refactor,_=invoke("refactorer", "Refactor only; preserve validated test files and behavior.")
-        if not refactor.success:
-            task.advance(TDDPhase.BLOCKED); save(); return task
-        refactor_test_changes=test_files_changed(tests_before_refactor,root)
-        if refactor_test_changes:
-            task.evidence["test_tampering_detected"]=True
-            task.evidence["refactor_test_files_changed"]=refactor_test_changes
-            task.advance(TDDPhase.BLOCKED); save(); return task
-        if artifact_hashes()!=protected_artifacts:
-            task.evidence["artifact_tampering_detected"]=True
-            task.advance(TDDPhase.BLOCKED); save(); return task
+        fixture_paths = task.evidence.get("fixture_files", [])
+        fixtures_before_refactor = _fixture_hashes(fixture_paths)
+        if numeric_sensitive and not snapshot_gate:
+            task.evidence["refactor_noop_numeric"] = True
+            task.evidence["refactor_result"] = "REFACTOR_NOOP_NUMERIC"
+        else:
+            if not gate_phase("REFACTOR","refactorer",["production files"]): return task
+            coder_model = task.evidence.get("coder_model")
+            refactor,_=invoke(
+                "refactorer",
+                "Refactor only; preserve validated test files and behavior.",
+                author_provider=task.evidence.get("coder_provider"),
+                author_model=coder_model,
+                author_models=[coder_model] if coder_model else None,
+                author_role="coder",
+            )
+            if not refactor.success:
+                task.advance(TDDPhase.BLOCKED); save(); return task
+            refactor_test_changes=test_files_changed(tests_before_refactor,root)
+            fixture_changes = {}
+            for fpath, orig_hash in fixtures_before_refactor.items():
+                curr_path = (root / fpath).resolve()
+                if not curr_path.is_file() or hashlib.sha256(curr_path.read_bytes()).hexdigest() != orig_hash:
+                    fixture_changes[fpath] = "modified"
+            if refactor_test_changes or fixture_changes:
+                task.evidence["test_tampering_detected"]=True
+                if refactor_test_changes: task.evidence["refactor_test_files_changed"]=refactor_test_changes
+                if fixture_changes: task.evidence["refactor_fixture_tampering_files"]=fixture_changes
+                task.advance(TDDPhase.BLOCKED); save(); return task
+            if artifact_hashes()!=protected_artifacts:
+                task.evidence["artifact_tampering_detected"]=True
+                task.advance(TDDPhase.BLOCKED); save(); return task
         if not gate_phase("REGRESSION_VERIFY","python",commands=design.test_commands+list(regression_commands or [])): return task
         regression_start=time.monotonic()
         task_results=[harness.run_command(command,category="task_tests") for command in design.test_commands]
@@ -420,7 +494,16 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
     prod_files = list(task.evidence.get("production_files_changed", []))
 
     if not gate_phase("REVIEW","code_reviewer",[],[],artifacts=prod_files): return task
-    review,raw=invoke("code_reviewer", load_prompt("code_reviewer", task=task.task, artifact=json.dumps(task.evidence, indent=2)), author_provider=task.evidence.get("coder_provider"), artifacts=prod_files)
+    coder_model = task.evidence.get("coder_model")
+    review,raw=invoke(
+        "code_reviewer",
+        load_prompt("code_reviewer", task=task.task, artifact=json.dumps(task.evidence, indent=2)),
+        author_provider=task.evidence.get("coder_provider"),
+        author_model=coder_model,
+        author_models=[coder_model] if coder_model else None,
+        author_role="coder",
+        artifacts=prod_files,
+    )
 
 
 

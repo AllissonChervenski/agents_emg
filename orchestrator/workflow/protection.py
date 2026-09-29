@@ -8,7 +8,6 @@ precede allowed_files.
 from fnmatch import fnmatchcase
 import hashlib
 from pathlib import Path
-from typing import Any
 
 
 DEFAULT_PROTECTED_PATTERNS = (
@@ -69,7 +68,9 @@ def is_protected_path(path: str, is_canary: bool = False, custom_patterns: tuple
     Protected paths prevail over allowed_files.
     For non-canary features (e.g. real DSP projects), orchestrator/** is also protected.
     """
-    clean = path.replace("\\", "/").strip().lstrip("./")
+    clean = path.replace("\\", "/").strip()
+    while clean.startswith("./"):
+        clean = clean[2:]
     patterns = list(DEFAULT_PROTECTED_PATTERNS) + list(custom_patterns)
     if not is_canary:
         patterns.append("orchestrator/**")

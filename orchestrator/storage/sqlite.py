@@ -33,17 +33,24 @@ class StateStore:
             if "attempt" not in columns: db.execute("ALTER TABLE provider_executions ADD COLUMN attempt INTEGER DEFAULT 1")
             if "invocation_id" not in columns: db.execute("ALTER TABLE provider_executions ADD COLUMN invocation_id TEXT")
             for column,definition in {
-                "task_type":"TEXT", "task_complexity":"TEXT", "task_id":"TEXT", "outcome_json":"TEXT"
+                "task_type":"TEXT", "task_complexity":"TEXT", "task_id":"TEXT", "outcome_json":"TEXT",
+                "requested_model":"TEXT", "resolved_model":"TEXT", "resolution_source":"TEXT",
+                "requested_effort":"TEXT", "resolved_effort":"TEXT", "fallback_reason":"TEXT"
             }.items():
                 if column not in columns: db.execute(f"ALTER TABLE provider_executions ADD COLUMN {column} {definition}")
             db.executescript("""
             CREATE TABLE IF NOT EXISTS schema_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS tasks(
+                workflow_id TEXT NOT NULL, task_id TEXT NOT NULL, numeric_sensitive INTEGER DEFAULT 0,
+                task_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                PRIMARY KEY(workflow_id, task_id));
             CREATE TABLE IF NOT EXISTS checkpoints(
                 id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, transition_id TEXT NOT NULL,
                 stage TEXT NOT NULL, substage TEXT, task_id TEXT, attempt INTEGER NOT NULL,
                 created_at TEXT NOT NULL, git_commit_base TEXT, git_branch TEXT, git_head TEXT,
                 fingerprint_json TEXT NOT NULL, artifact_hashes_json TEXT NOT NULL,
                 test_hashes_json TEXT NOT NULL, state_version INTEGER NOT NULL,
+                resolved_models_json TEXT,
                 UNIQUE(workflow_id, transition_id));
             CREATE TABLE IF NOT EXISTS workflow_locks(workflow_id TEXT PRIMARY KEY, pid INTEGER NOT NULL,
                 hostname TEXT NOT NULL, owner TEXT NOT NULL, acquired_at TEXT NOT NULL);
@@ -59,6 +66,12 @@ class StateStore:
             CREATE INDEX IF NOT EXISTS human_gate_lookup ON human_gate_decisions
                 (workflow_id, checkpoint_transition_id, stage, role, created_at);
             """)
+            task_cols = {row[1] for row in db.execute("PRAGMA table_info(tasks)")}
+            if "numeric_sensitive" not in task_cols:
+                db.execute("ALTER TABLE tasks ADD COLUMN numeric_sensitive INTEGER DEFAULT 0")
+            chk_cols = {row[1] for row in db.execute("PRAGMA table_info(checkpoints)")}
+            if "resolved_models_json" not in chk_cols:
+                db.execute("ALTER TABLE checkpoints ADD COLUMN resolved_models_json TEXT")
             version=db.execute("SELECT value FROM schema_meta WHERE key='state_schema_version'").fetchone()
             if version and int(version[0]) > self.SCHEMA_VERSION:
                 raise RuntimeError(f"State schema {version[0]} is newer than supported {self.SCHEMA_VERSION}")
@@ -103,11 +116,25 @@ class StateStore:
         fields=("success","first_pass_success","attempts","latency","structured_output_valid","validator_accepted","regression_passed","final_verification_passed","blocked","provider_failure","red_valid","red_attempts","green_attempts","first_pass_green","refactor_regression","test_tampering","review_accepted")
         outcome={**{key:None for key in fields},**(outcome or {})}
         outcome["latency"]=result.duration
+        requested_model = getattr(result, "requested_model", None) or result.model
+        resolved_model = getattr(result, "resolved_model", None)
+        resolution_source = getattr(result, "resolution_source", "unavailable")
+        requested_effort = getattr(result, "requested_effort", None)
+        resolved_effort = getattr(result, "resolved_effort", None)
+        fallback_reason = getattr(result, "fallback_reason", None)
         safe_result={"provider":result.provider,"model":result.model,"role":result.role,"success":result.success,"exit_code":result.exit_code,"duration":result.duration,
             "error_code":(result.error or "").split(":",1)[0] or None,"structured_output_present":result.structured_output is not None,
+            "requested_model":requested_model,"resolved_model":resolved_model,"resolution_source":resolution_source,
+            "requested_effort":requested_effort,"resolved_effort":resolved_effort,"fallback_reason":fallback_reason,
             "usage":{key:result.usage[key] for key in ("input_tokens","output_tokens","total_tokens","reported_cost") if isinstance(result.usage.get(key),(int,float))}}
         with self.connect() as db:
-            db.execute("INSERT INTO provider_executions(id,workflow_id,provider,model,role,prompt_hash,started_at,duration,exit_code,status,result_json,attempt,invocation_id,task_type,task_complexity,task_id,outcome_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (rid,workflow_id,result.provider,result.model,result.role,digest,now,result.duration,result.exit_code,"PASS" if result.success else "FAIL",json.dumps(safe_result),attempt,invocation_id,task_type,task_complexity,task_id,json.dumps(outcome)))
+            cols = {row[1] for row in db.execute("PRAGMA table_info(provider_executions)")}
+            if "requested_model" in cols:
+                db.execute("INSERT INTO provider_executions(id,workflow_id,provider,model,role,prompt_hash,started_at,duration,exit_code,status,result_json,attempt,invocation_id,task_type,task_complexity,task_id,outcome_json,requested_model,resolved_model,resolution_source,requested_effort,resolved_effort,fallback_reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (rid,workflow_id,result.provider,result.model,result.role,digest,now,result.duration,result.exit_code,"PASS" if result.success else "FAIL",json.dumps(safe_result),attempt,invocation_id,task_type,task_complexity,task_id,json.dumps(outcome),requested_model,resolved_model,resolution_source,requested_effort,resolved_effort,fallback_reason))
+            else:
+                db.execute("INSERT INTO provider_executions(id,workflow_id,provider,model,role,prompt_hash,started_at,duration,exit_code,status,result_json,attempt,invocation_id,task_type,task_complexity,task_id,outcome_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (rid,workflow_id,result.provider,result.model,result.role,digest,now,result.duration,result.exit_code,"PASS" if result.success else "FAIL",json.dumps(safe_result),attempt,invocation_id,task_type,task_complexity,task_id,json.dumps(outcome)))
             db.execute("INSERT INTO metrics VALUES(?,?,?,?,?,?,?)", (str(uuid.uuid4()),result.provider,result.model,result.role,"success",1.0 if result.success else 0.0,now))
         return rid
 
@@ -118,25 +145,66 @@ class StateStore:
                 values=json.loads(row[0] or "{}"); values.update(fields)
                 db.execute("UPDATE provider_executions SET outcome_json=? WHERE id=?",(json.dumps(values),execution_id))
 
+    def record_task(self, workflow_id, task_id, numeric_sensitive=False, task_data=None):
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO tasks(workflow_id, task_id, numeric_sensitive, task_json, created_at, updated_at) VALUES(?,?,?,?,?,?)",
+                (workflow_id, task_id, 1 if numeric_sensitive else 0, json.dumps(task_data or {}), now, now)
+            )
+
+    def get_task(self, workflow_id, task_id):
+        with self.connect() as db:
+            row = db.execute("SELECT workflow_id, task_id, numeric_sensitive, task_json, created_at, updated_at FROM tasks WHERE workflow_id=? AND task_id=?", (workflow_id, task_id)).fetchone()
+        if not row: return None
+        return {"workflow_id": row[0], "task_id": row[1], "numeric_sensitive": bool(row[2]), "data": json.loads(row[3] or "{}"), "created_at": row[4], "updated_at": row[5]}
+
     def routing_history(self, role=None, provider=None, model=None):
         with self.connect() as db:
-            rows=db.execute("SELECT provider,model,role,task_type,task_complexity,workflow_id,task_id,started_at,duration,status,attempt,outcome_json FROM provider_executions ORDER BY started_at").fetchall()
-        results=[]
-        for p,m,r,kind,difficulty,wid,tid,started,latency,status,attempt,payload in rows:
-            if role and r!=role or provider and p!=provider or model and m!=model: continue
-            outcome=json.loads(payload or "{}")
-            results.append({"provider":p,"model":m,"role":r,"task_type":kind,"task_complexity":difficulty,
-                "workflow_id":wid,"task_id":tid,"timestamp":started,"latency":latency or 0,
-                "success":outcome.get("success",status=="PASS"),"first_pass_success":outcome.get("first_pass_success",status=="PASS" and attempt==1),
-                "attempts":outcome.get("attempts",attempt or 1),"structured_output_valid":outcome.get("structured_output_valid",True),
-                "validator_accepted":outcome.get("validator_accepted",True),"regression_passed":outcome.get("regression_passed",True),
-                "final_verification_passed":outcome.get("final_verification_passed",True),"blocked":outcome.get("blocked",False),
-                "provider_failure":outcome.get("provider_failure",False),"red_valid":outcome.get("red_valid",False),
-                "red_attempts":outcome.get("red_attempts",0),"green_attempts":outcome.get("green_attempts",0),
-                "first_pass_green":outcome.get("first_pass_green",False),"refactor_regression":outcome.get("refactor_regression",False),
-                "test_tampering":outcome.get("test_tampering",False),"review_accepted":outcome.get("review_accepted",True)})
-            results[-1].update({key:outcome.get(key) for key in ("task_risk","task_scope","input_tokens","output_tokens","total_tokens","reported_cost","estimated_cost","ponytail_enabled","caveman_enabled","policy_source","escalation_level","escalation_reason","model_failure_category","model_failure_reason")})
-        return results
+            cols = {row[1] for row in db.execute("PRAGMA table_info(provider_executions)")}
+            if "resolved_model" in cols:
+                rows = db.execute("SELECT provider,model,role,task_type,task_complexity,workflow_id,task_id,started_at,duration,status,attempt,outcome_json,requested_model,resolved_model,resolution_source,requested_effort,resolved_effort,fallback_reason FROM provider_executions ORDER BY started_at").fetchall()
+                results = []
+                for p, m, r, kind, difficulty, wid, tid, started, latency, status, attempt, payload, req_m, res_m, res_src, req_eff, res_eff, fb_reas in rows:
+                    if role and r != role or provider and p != provider or model and m != model: continue
+                    outcome = json.loads(payload or "{}")
+                    results.append({
+                        "provider": p, "model": m, "role": r, "task_type": kind, "task_complexity": difficulty,
+                        "workflow_id": wid, "task_id": tid, "timestamp": started, "latency": latency or 0,
+                        "success": outcome.get("success", status == "PASS"), "first_pass_success": outcome.get("first_pass_success", status == "PASS" and attempt == 1),
+                        "attempts": outcome.get("attempts", attempt or 1), "structured_output_valid": outcome.get("structured_output_valid", True),
+                        "validator_accepted": outcome.get("validator_accepted", True), "regression_passed": outcome.get("regression_passed", True),
+                        "final_verification_passed": outcome.get("final_verification_passed", True), "blocked": outcome.get("blocked", False),
+                        "provider_failure": outcome.get("provider_failure", False), "red_valid": outcome.get("red_valid", False),
+                        "red_attempts": outcome.get("red_attempts", 0), "green_attempts": outcome.get("green_attempts", 0),
+                        "first_pass_green": outcome.get("first_pass_green", False), "refactor_regression": outcome.get("refactor_regression", False),
+                        "test_tampering": outcome.get("test_tampering", False), "review_accepted": outcome.get("review_accepted", True),
+                        "requested_model": req_m or m, "resolved_model": res_m, "resolution_source": res_src or "unavailable",
+                        "requested_effort": req_eff, "resolved_effort": res_eff, "fallback_reason": fb_reas,
+                    })
+                    results[-1].update({key: outcome.get(key) for key in ("task_risk", "task_scope", "input_tokens", "output_tokens", "total_tokens", "reported_cost", "estimated_cost", "ponytail_enabled", "caveman_enabled", "policy_source", "escalation_level", "escalation_reason", "model_failure_category", "model_failure_reason")})
+                return results
+            else:
+                rows = db.execute("SELECT provider,model,role,task_type,task_complexity,workflow_id,task_id,started_at,duration,status,attempt,outcome_json FROM provider_executions ORDER BY started_at").fetchall()
+                results = []
+                for p, m, r, kind, difficulty, wid, tid, started, latency, status, attempt, payload in rows:
+                    if role and r != role or provider and p != provider or model and m != model: continue
+                    outcome = json.loads(payload or "{}")
+                    results.append({
+                        "provider": p, "model": m, "role": r, "task_type": kind, "task_complexity": difficulty,
+                        "workflow_id": wid, "task_id": tid, "timestamp": started, "latency": latency or 0,
+                        "success": outcome.get("success", status == "PASS"), "first_pass_success": outcome.get("first_pass_success", status == "PASS" and attempt == 1),
+                        "attempts": outcome.get("attempts", attempt or 1), "structured_output_valid": outcome.get("structured_output_valid", True),
+                        "validator_accepted": outcome.get("validator_accepted", True), "regression_passed": outcome.get("regression_passed", True),
+                        "final_verification_passed": outcome.get("final_verification_passed", True), "blocked": outcome.get("blocked", False),
+                        "provider_failure": outcome.get("provider_failure", False), "red_valid": outcome.get("red_valid", False),
+                        "red_attempts": outcome.get("red_attempts", 0), "green_attempts": outcome.get("green_attempts", 0),
+                        "first_pass_green": outcome.get("first_pass_green", False), "refactor_regression": outcome.get("refactor_regression", False),
+                        "test_tampering": outcome.get("test_tampering", False), "review_accepted": outcome.get("review_accepted", True),
+                        "requested_model": m, "resolved_model": None, "resolution_source": "unavailable",
+                    })
+                    results[-1].update({key: outcome.get(key) for key in ("task_risk", "task_scope", "input_tokens", "output_tokens", "total_tokens", "reported_cost", "estimated_cost", "ponytail_enabled", "caveman_enabled", "policy_source", "escalation_level", "escalation_reason", "model_failure_category", "model_failure_reason")})
+                return results
 
     def count_provider_model_calls(self, workflow_id, provider, model, task_id=None):
         query="SELECT COUNT(*) FROM provider_executions WHERE workflow_id=? AND provider=? AND model=?"
@@ -184,12 +252,20 @@ class StateStore:
 
     def create_checkpoint(self, workflow_id, transition_id, stage, fingerprint, task_id=None, attempt=1, substage=None):
         now=datetime.now(timezone.utc).isoformat(); fp=fingerprint
+        resolved_models_json = json.dumps(fp.get("resolved_models", {}))
         with self.connect() as db:
+            cols = {row[1] for row in db.execute("PRAGMA table_info(checkpoints)")}
             previous=db.execute("SELECT transition_id FROM checkpoints WHERE workflow_id=? ORDER BY rowid DESC LIMIT 1",(workflow_id,)).fetchone()
-            inserted=db.execute("INSERT OR IGNORE INTO checkpoints VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(
-                str(uuid.uuid4()),workflow_id,transition_id,stage,substage,task_id,attempt,now,
-                fp.get("git_commit_base"),fp.get("branch"),fp.get("head"),json.dumps(fp),
-                json.dumps(fp.get("artifact_hashes",{})),json.dumps(fp.get("test_hashes",{})),self.SCHEMA_VERSION))
+            if "resolved_models_json" in cols:
+                inserted=db.execute("INSERT OR IGNORE INTO checkpoints(id,workflow_id,transition_id,stage,substage,task_id,attempt,created_at,git_commit_base,git_branch,git_head,fingerprint_json,artifact_hashes_json,test_hashes_json,state_version,resolved_models_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(
+                    str(uuid.uuid4()),workflow_id,transition_id,stage,substage,task_id,attempt,now,
+                    fp.get("git_commit_base"),fp.get("branch"),fp.get("head"),json.dumps(fp),
+                    json.dumps(fp.get("artifact_hashes",{})),json.dumps(fp.get("test_hashes",{})),self.SCHEMA_VERSION,resolved_models_json))
+            else:
+                inserted=db.execute("INSERT OR IGNORE INTO checkpoints VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(
+                    str(uuid.uuid4()),workflow_id,transition_id,stage,substage,task_id,attempt,now,
+                    fp.get("git_commit_base"),fp.get("branch"),fp.get("head"),json.dumps(fp),
+                    json.dumps(fp.get("artifact_hashes",{})),json.dumps(fp.get("test_hashes",{})),self.SCHEMA_VERSION))
             row=db.execute("SELECT id FROM checkpoints WHERE workflow_id=? AND transition_id=?",(workflow_id,transition_id)).fetchone()
             if inserted.rowcount and previous:
                 db.execute("""UPDATE human_gate_decisions SET status='CHECKPOINTED',checkpoint_id=?

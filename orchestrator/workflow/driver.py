@@ -68,7 +68,7 @@ def _record_validation(runner, result, validation, stage=None, evidence=None):
         runner.record_validation(result, validation)
 
 
-def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=None, artifacts=None, attempt=1):
+def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=None, artifacts=None, attempt=1, author_model=None, author_models=None, author_role=None, numeric_sensitive=False):
     """Dispatch a declared SpecKit skill while retaining legacy test doubles."""
     stage_role={
         "constitution": "constitution_agent", "specification": "specification_agent",
@@ -88,12 +88,18 @@ def _generate(runner, role, prompt, cwd, timeout, exclude=None, allowed_paths=No
             "do not bootstrap another feature or branch. For convergence, preserve the documented "
             "append-only/no-change contract of tasks.md."
         )
+    extra_kw = {
+        "author_model": author_model,
+        "author_models": author_models,
+        "author_role": author_role,
+        "numeric_sensitive": numeric_sensitive,
+    }
     if skill_name and hasattr(runner,"run_skill"):
         result=runner.run_skill(role,None,None,skill_name,prompt,cwd,timeout=timeout,
-                                allowed_paths=allowed_paths,exclude_providers=exclude,artifacts=artifacts,attempt=attempt)
+                                allowed_paths=allowed_paths,exclude_providers=exclude,artifacts=artifacts,attempt=attempt,**extra_kw)
     else:
         result=runner.run(role,prompt,cwd=cwd,timeout=timeout,exclude_providers=exclude,
-                          allowed_paths=allowed_paths,artifacts=artifacts,attempt=attempt)
+                          allowed_paths=allowed_paths,artifacts=artifacts,attempt=attempt,**extra_kw)
     if not result.success:
         if ("validator" in role or "reviewer" in role):
             v_res = ValidationResult(
@@ -153,7 +159,7 @@ def _create_and_validate(runner, author_role, validator_role, artifact_path, pro
                 supplied = [str(path)]
         if not _call_gate(gate_callback, validator_role.upper(), validator_role, [], [], artifacts=supplied, attempt=attempt, runner=runner):
             raise WorkflowBlocked(f"Interactive gate aborted before {validator_role}")
-        reviewer=_generate(runner,validator_role,load_prompt(validator_role,artifact=path.read_text(),feature=prompt),cwd,timeout,{author.provider},allowed_paths=[],artifacts=supplied,attempt=attempt)
+        reviewer=_generate(runner,validator_role,load_prompt(validator_role,artifact=path.read_text(),feature=prompt),cwd,timeout,{author.provider},allowed_paths=[],artifacts=supplied,attempt=attempt,author_model=author.model,author_role=author_role)
 
         validation=parse_validation(reviewer.stdout,validator_role,reviewer.model,provider=getattr(reviewer,"provider",None))
         stage_map = {"specification_validator": "SPECIFICATION_VALIDATE", "plan_validator": "PLAN_VALIDATE", "tasks_validator": "TASKS_VALIDATE"}
@@ -228,7 +234,8 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         if not store: return
         transition_id=f"{stage}:{task_id or '-'}:{attempt}"
         if transition_id in prior: return
-        fp=WorkspaceFingerprint(root).capture(workflow_id,task_id,artifact_paths=layout.fingerprint_paths(task_id))
+        resolved_models = dict(getattr(runner, "stage_resolved_models", {}))
+        fp=WorkspaceFingerprint(root).capture(workflow_id,task_id,artifact_paths=layout.fingerprint_paths(task_id),resolved_models=resolved_models)
         store.create_checkpoint(workflow_id,transition_id,stage,fp,task_id,attempt)
         prior.add(transition_id)
         item=store.get_workflow(workflow_id)
@@ -271,13 +278,14 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         if not _call_gate(gate_callback, "CONSTITUTION_VALIDATE", "constitution_validator", [], [], artifacts=[constitution_rel], runner=runner):
             raise WorkflowBlocked("Interactive gate aborted before constitution validation")
         artifact_text = constitution.read_text(encoding="utf-8")
-        result=_generate(runner,"constitution_validator",load_prompt("constitution_validator",feature=feature,artifact=artifact_text),root,config.timeouts.get("provider"),{generated.provider},allowed_paths=[],artifacts=[constitution_rel])
+        result=_generate(runner,"constitution_validator",load_prompt("constitution_validator",feature=feature,artifact=artifact_text),root,config.timeouts.get("provider"),{generated.provider},allowed_paths=[],artifacts=[constitution_rel],author_model=generated.model,author_role="constitution")
         verdict=parse_validation(result.stdout,"constitution_validator",result.model,provider=getattr(result,"provider",None))
         _record_validation(runner,result,verdict,stage="CONSTITUTION_VALIDATE",evidence={"artifact":str(constitution)})
         if verdict.status!="PASS": raise WorkflowBlocked(f"constitution_validator {verdict.status}: {verdict.summary}")
 
     checkpoint("CONSTITUTION_VALIDATED")
     authors={}
+    authors_models={}
     for author,validator,filename in ARTIFACTS[:1]:
         if author=="specification" and layout.feature_dir is None:
             path=None
@@ -296,6 +304,7 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         scope=layout.stage_scope({"specification":"SPECIFICATION","planning":"PLAN","tasks":"TASKS"}[author])
         author_result,_=_create_and_validate(runner,author,validator,path,prompt,root,config.timeouts.get("provider"),max(1,min(config.retries.get("artifact_generation",3),config.real_run.get("max_retries",3))),gate_callback,scope,artifact_resolver)
         authors[author]=author_result.provider
+        authors_models[author]=author_result.model
         if author=="specification":
             try: layout=ArtifactLayout.discover(root,workflow_dir=out)
             except ArtifactDiscoveryError as exc: raise WorkflowBlocked(str(exc)) from exc
@@ -347,7 +356,8 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         checklist_dir=layout.require_feature_dir()/"checklists"
         checklist_before={path: artifact_snapshot(path) for path in checklist_dir.glob("*.md")}
         checklist=_generate(runner,"requirements_reviewer",checklist_prompt,root,config.timeouts.get("provider"),
-                            allowed_paths=layout.stage_scope("REQUIREMENTS_CHECKLIST"),artifacts=[spec_rel])
+                            allowed_paths=layout.stage_scope("REQUIREMENTS_CHECKLIST"),artifacts=[spec_rel],
+                            author_model=authors_models.get("specification"),author_role="specification")
         if not checklist.success: raise WorkflowBlocked(f"speckit-checklist failed: {checklist.error or checklist.stderr}")
         try:
             verify_stage_postcondition("CHECKLIST_COMPLETE", checklist_dir=checklist_dir)
@@ -383,6 +393,7 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
         scope=layout.stage_scope({"specification":"SPECIFICATION","planning":"PLAN","tasks":"TASKS"}[author])
         author_result,_=_create_and_validate(runner,author,validator,path,prompt,root,config.timeouts.get("provider"),max(1,min(config.retries.get("artifact_generation",3),config.real_run.get("max_retries",3))),gate_callback,scope)
         authors[author]=author_result.provider
+        authors_models[author]=author_result.model
         checkpoint(stage)
     if not (resume and validated("ANALYSIS_COMPLETE")):
         report_path = out / "analysis-report.md"
@@ -402,7 +413,8 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
             raise WorkflowBlocked("Interactive gate aborted before SpecKit analysis")
         report_before=artifact_snapshot(report_path)
         analysis=_generate(runner,"consistency_agent",analyze_prompt,root,config.timeouts.get("provider"),
-                           {authors["tasks"]} if authors.get("tasks") else None,allowed_paths=analysis_scope,artifacts=analysis_artifacts)
+                           {authors["tasks"]} if authors.get("tasks") else None,allowed_paths=analysis_scope,artifacts=analysis_artifacts,
+                           author_model=authors_models.get("tasks"),author_role="tasks")
         if not analysis.success: raise WorkflowBlocked(f"speckit-analyze failed: {analysis.error or analysis.stderr}")
         try:
             verify_artifact_changed(report_path, report_before)
@@ -417,6 +429,9 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
             raise WorkflowBlocked(str(exc)) from exc
     tasks=_parse_tasks(layout.tasks.read_text())
     if not tasks: raise WorkflowBlocked("tasks.md must contain valid SpecKit checklist tasks and harness metadata")
+    if store:
+        for t in tasks:
+            store.record_task(workflow_id, t["id"], numeric_sensitive=t.get("numeric_sensitive", False), task_data=t)
     completed={row["task_id"] for row in store.checkpoints(workflow_id) if row["stage"]=="TASK_COMPLETE"} if store and resume else set()
     traceability=json.loads((out/"traceability.json").read_text()) if resume and (out/"traceability.json").is_file() else []
     last_coder_provider=None; tdd_tasks=[]

@@ -42,10 +42,12 @@ class AgyProvider(AgentProvider):
     def __init__(self):
         self._models: list[str] = []
         self._skip_permissions: bool = False
+        self._disable_slash_commands: bool = False
     def discover(self):
         ok, version, err = probe("agy", ["--version"])
         help_ok, help_text, help_err = probe("agy", ["--help"])
         self._skip_permissions = "--dangerously-skip-permissions" in help_text
+        self._disable_slash_commands = "--disable-slash-commands" in help_text
         model_ok, model_text, model_err = probe("agy", ["--output-format", "json", "models"],timeout=90)
         if not model_ok or not parse_models(model_text):
             model_ok, model_text, model_err = probe("agy", ["models"],timeout=90)
@@ -53,6 +55,8 @@ class AgyProvider(AgentProvider):
         return ProviderCapabilities(self.name, ok, version if ok else None, self._models, "--print" in help_text or "-p" in help_text, "json" in help_text, "--continue" in help_text or "--conversation" in help_text, "--model" in help_text, "--agent" in help_text, True, "terminal" in help_text, metadata={"help": help_text, "errors": [x for x in (err, help_err, model_err) if x], "model_discovery_error": model_err if not model_ok else None}, model_details=parse_model_details(model_text) if model_ok else [])
     def build_command(self, prompt, role, model=None, cwd=None, permissions=None):
         cmd = ["agy"]
+        if getattr(self, "_disable_slash_commands", False):
+            cmd += ["--disable-slash-commands"]
         if getattr(self, "_skip_permissions", False) and permissions != "read":
             cmd += ["--dangerously-skip-permissions"]
         cmd += ["--output-format", "json"]
@@ -64,14 +68,15 @@ class AgyProvider(AgentProvider):
     def run(self, prompt, role, model=None, cwd=None, timeout=None, permissions=None):
         return execute(self.name, model, role, self.build_command(prompt, role, model, cwd, permissions), cwd, timeout)
     def run_skill(self, skill, arguments, role, model=None, cwd=None, timeout=None, permissions=None, policy_prefix=""):
-        if skill.delivery != "native":
+        if skill.delivery != "native" or getattr(self, "_disable_slash_commands", False):
             return super().run_skill(skill, arguments, role, model, cwd, timeout, permissions, policy_prefix)
-        # AGY print mode expands installed /skill: names unless explicitly disabled.
-        prompt=f"/skill:{skill.name} {arguments}".rstrip()
-        if policy_prefix: prompt=f"{prompt}\n\n{policy_prefix}"
+        prompt = f"/skill:{skill.name} {arguments}".rstrip()
+        if policy_prefix: prompt = f"{prompt}\n\n{policy_prefix}"
         return self.run(prompt, role, model, cwd, timeout, permissions)
     def build_smoke_command(self, prompt, model=None, cwd=None, structured=False):
-        cmd=["agy"]
+        cmd = ["agy"]
+        if getattr(self, "_disable_slash_commands", False):
+            cmd += ["--disable-slash-commands"]
         if structured: cmd += ["--output-format","json"]
         if model: cmd += ["--model",model]
         cmd += ["--mode","plan","--print",prompt]

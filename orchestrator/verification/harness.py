@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
+from typing import Any
 import json
 import shlex
 import subprocess
@@ -164,7 +165,7 @@ class VerificationHarness:
             return result
 
         # ModuleNotFoundError: internal vs external dependency
-        mod_match = re.search(r"ModuleNotFoundError:\s+No module named\s+['\"]([^'\"]+)['\"]", output)
+        mod_match = re.search(r"ModuleNotFoundError:\s*(?:No module named\s*)?['\"]?([^'\"\s\n]+)['\"]?", output)
         if mod_match:
             missing_mod = mod_match.group(1)
             is_internal = self._is_internal_module(missing_mod, allowed_files, expected_failure)
@@ -174,8 +175,8 @@ class VerificationHarness:
                 result.status = result.classification
                 return result
             else:
-                result.classification = "INFRASTRUCTURE_FAILURE"
-                result.cause = f"Missing external dependency: {missing_mod}"
+                result.classification = "INVALID_TEST"
+                result.cause = f"Missing external dependency or invalid test import: {missing_mod}"
                 result.status = result.classification
                 return result
 
@@ -195,14 +196,14 @@ class VerificationHarness:
                 result.status = result.classification
                 return result
             else:
-                result.classification = "UNEXPECTED_FAILURE"
+                result.classification = "INVALID_TEST"
                 result.cause = f"ImportError/AttributeError for undeclared symbol '{missing_symbol}'; must be declared in expected_failure"
                 result.status = result.classification
                 return result
 
         discovered = any(token in lowered for token in ("collected ", "ran ", "--- fail", "test result: failed", "failed in ", "passed in "))
         infra_tokens = ("timed out", "permission denied", "connection refused", "no such file or directory")
-        invalid_tokens = ("no tests ran", "no tests collected", "collected 0 items", "error collecting", "usage error", "pytest: error: unrecognized arguments")
+        invalid_tokens = ("syntaxerror", "modulenotfounderror", "importerror", "no tests ran", "no tests collected", "collected 0 items", "error collecting", "usage error", "pytest: error: unrecognized arguments")
         assertion_tokens = ("assertionerror", "assert ", "assertion failed", "expected:", "not equal", "failed: test", "=== fail", "test result: failed")
 
         if result.classification in ("INFRASTRUCTURE_FAILURE", "BLOCKED"):

@@ -153,15 +153,16 @@ def select_model(cap, provider, tier, model_config, legacy_mapping=None, metrics
 
 
 class ModelRouter:
-    def __init__(self, capabilities: dict[str,Any], config: dict[str,Any] | None=None, metrics: dict[str,Any] | None=None, history: list[dict] | None=None, rng=None):
+    def __init__(self, capabilities: dict[str,Any], config: dict[str,Any] | None=None, metrics: dict[Any,Any] | None=None, history: list[dict] | None=None, rng=None):
         self.capabilities=capabilities
         self.config=config or {}
         self.metrics=metrics or {}
         self.history=history or []
         self.rng=rng or random.Random()
 
-    def route(self, role: str, tier: str | None=None, exclude: set[str] | None=None, override_provider: str | None=None, override_model: str | None=None, author_provider: str | None=None, task: dict | None=None, high_risk=False, blocked=False) -> Route:
+    def route(self, role: str, tier: str | None=None, exclude: set[str] | None=None, override_provider: str | None=None, override_model: str | None=None, author_provider: str | None=None, task: dict | None=None, high_risk=False, blocked=False, author_models=None, author_role=None, numeric_sensitive: bool = False) -> Route:
         from orchestrator.agents.roles import ROLES, ROLE_ALIASES
+        from orchestrator.agents.independence import is_family_independent
         canonical_role = ROLE_ALIASES.get(role, role)
         spec=ROLES.get(canonical_role) or ROLES.get(role)
         role_cfg=self.config.get("roles",{}).get(canonical_role) or self.config.get("roles",{}).get(role,{})
@@ -193,7 +194,19 @@ class ModelRouter:
         routing=self.config.get("routing",{})
         mode=routing.get("adaptive_routing_mode","observe")
         task_type,complexity=classify_task(canonical_role,task)
-        if complexity=="HIGH" and (role_cfg.get("complex_preferred_models") or (spec and spec.complex_preferred_models)):
+        is_numeric = numeric_sensitive or bool((task or {}).get("numeric_sensitive", False))
+        preferred_models: tuple[str, ...]
+        if is_numeric and canonical_role == "test_designer":
+            preferred_models = ("gpt-6-sol", "claude-sonnet-4-6")
+        elif is_numeric and canonical_role == "coder":
+            preferred_models = ("claude-sonnet-4-6", "gpt-6-sol", "opencode-go/kimi-k3")
+        elif is_numeric and canonical_role == "test_validator":
+            preferred_models = ("opencode-go/mimo-v2.6-pro", "opencode-go/kimi-k3", "gemini-3.8-flash-high")
+        elif is_numeric and canonical_role == "refactorer":
+            preferred_models = ("opencode-go/kimi-k3",)
+        elif is_numeric and canonical_role == "code_reviewer":
+            preferred_models = ("claude-sonnet-4-6", "gemini-3.8-flash-high", "opencode-go/mimo-v2.6-pro")
+        elif complexity=="HIGH" and (role_cfg.get("complex_preferred_models") or (spec and spec.complex_preferred_models)):
             preferred_models=tuple(role_cfg.get("complex_preferred_models") or (spec.complex_preferred_models if spec else ()))
         else:
             preferred_models=tuple(role_cfg.get("preferred_models") or (spec.preferred_models if spec else ()))
@@ -210,6 +223,9 @@ class ModelRouter:
                     if getattr(cap,"models",[]) and override_model not in cap.models: continue
                     model,tier_source,model_reason,model_fit=override_model,"config","manual model override",12.0
                 if model is None and candidate_model is not None and tier_source!="cli_default": continue
+                if author_models and author_role:
+                    ok_ind, _ = is_family_independent(author_models, model, author_role=author_role, validator_role=canonical_role, numeric_sensitive=is_numeric)
+                    if not ok_ind: continue
                 idx=pref_index.get(provider,len(pref_index)+1)
                 aggregate=self.metrics.get((provider,model),{}) or {}
                 failures=float(aggregate.get("recent_failures",0))
@@ -251,16 +267,19 @@ class ModelRouter:
                 configured_model_caps=[str(c).upper() for c in model_cfg_entry.get("capabilities",[])]
                 candidate_caps=sorted(actual | set(configured_model_caps))
                 scored.append({"final_score":total,"base_score":base,"provider":provider,"model":model,"reason":reason,"score_breakdown":breakdown,"tier_source":tier_source,"tier":tier,"capabilities":candidate_caps,"historical_score":historical,"historical_confidence":conf,"historical_metrics":stats,"penalties":{key:value for key,value in breakdown.items() if value<0}})
-        if not scored and author_provider and not override_provider:
+        if not scored and author_provider and not override_provider and not author_models:
             fallback=self.route(role,tier=tier,exclude=exclude,override_model=override_model,task=task,high_risk=high_risk,blocked=blocked)
             if fallback.provider!="unavailable":
                 fallback.independence=False
                 fallback.reason+="; no independent provider/model is compatible; self-validation permitted"
             return fallback
-        if not scored: return Route("unavailable",None,tier,"No provider/model matched the explicit override")
+        if not scored:
+            if author_models and author_role:
+                return Route("unavailable", None, tier, "INSUFFICIENT_INDEPENDENT_PROVIDERS: all candidate models collide in family with author")
+            return Route("unavailable",None,tier,"No provider/model matched the explicit override")
         scored.sort(key=lambda item:(-item["final_score"],item["provider"],item["model"] or ""))
         policy=sorted(scored,key=lambda item:(-item["base_score"],item["provider"],item["model"] or ""))[0]
-        historical=sorted(scored,key=lambda item:(-(item["base_score"]+item["historical_score"]*item["historical_confidence"]),item["provider"],item["model"] or ""))[0]
+        historical_item=sorted(scored,key=lambda item:(-(item["base_score"]+item["historical_score"]*item["historical_confidence"]),item["provider"],item["model"] or ""))[0]
         selected=policy if mode=="observe" else scored[0]
         selection_mode="exploitation"
         rate=float(routing.get("exploration_rate",0.05))
@@ -271,7 +290,7 @@ class ModelRouter:
             if alternatives and self.rng.random()<rate:
                 selected=self.rng.choice(alternatives); selection_mode="exploration"
         fallback_chain=[f"{item['provider']}/{item['model'] or 'CLI default'}" for item in scored if item is not selected]
-        return Route(selected["provider"],selected["model"],tier,selected["reason"],selected["final_score"],independence,selected["score_breakdown"],selected["tier_source"],fallback_chain,selection_mode,f"{policy['provider']}/{policy['model'] or 'CLI default'}",f"{historical['provider']}/{historical['model'] or 'CLI default'}",scored)
+        return Route(selected["provider"],selected["model"],tier,selected["reason"],selected["final_score"],independence,selected["score_breakdown"],selected["tier_source"],fallback_chain,selection_mode,f"{policy['provider']}/{policy['model'] or 'CLI default'}",f"{historical_item['provider']}/{historical_item['model'] or 'CLI default'}",scored)
 
     def explain(self, role, task=None):
         from orchestrator.agents.roles import ROLE_ALIASES

@@ -12,7 +12,7 @@ from orchestrator.agents.router import ModelRouter, describe_model
 from orchestrator.agents.plan import build_route_plan, format_route
 from orchestrator.providers import PROVIDERS
 from orchestrator.storage.sqlite import StateStore
-from orchestrator.verification.harness import VerificationHarness, final_verification_pass
+from orchestrator.verification.harness import VerificationHarness
 from orchestrator.agents.history import summarize, confidence
 from orchestrator.agents.cost import CostAwareRouter, TaskProfile
 from orchestrator.agents.execution_policy import ExecutionPolicyRouter
