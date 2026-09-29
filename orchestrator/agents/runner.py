@@ -64,8 +64,11 @@ def load_prompt(role: str, **values: Any) -> str:
 
 
 
+from orchestrator.workflow.protection import snapshot_protected_paths, verify_protected_paths, is_protected_path
+
+
 class AgentRunner:
-    def __init__(self, providers, router, store=None, workflow_id=None, safety=None, cost_router=None, execution_policy_router=None, skill_dispatcher=None):
+    def __init__(self, providers, router, store=None, workflow_id=None, safety=None, cost_router=None, execution_policy_router=None, skill_dispatcher=None, is_canary=None):
         self.providers, self.router, self.store = providers, router, store
         self.on_fallback=None
         self.on_call=None
@@ -83,6 +86,14 @@ class AgentRunner:
         self.active_stage_name=None
         self.active_stage_role=None
         self.active_stage_artifacts=[]
+        if is_canary is not None:
+            self.is_canary = is_canary
+        elif store and workflow_id:
+            wf = store.get_workflow(workflow_id)
+            feat = (wf or {}).get("feature", "")
+            self.is_canary = "provider-summary" in str(feat)
+        else:
+            self.is_canary = False
         if store and workflow_id:
             self.calls,self.task_calls=store.agent_call_counts(workflow_id)
             self.active_elapsed=store.active_execution_seconds(workflow_id)
@@ -317,9 +328,10 @@ class AgentRunner:
             effective_prompt=(policy.prefix+"\n\n"+scoped_prompt) if policy and policy.prefix else scoped_prompt
             permissions="read" if ROLES[role].validation else None
             try:
-                before=self._snapshot(cwd) if enforce_scope else {}
+                protected_before = snapshot_protected_paths(cwd, is_canary=self.is_canary) if cwd else {}
+                before = self._snapshot(cwd) if enforce_scope else {}
             except OSError as exc:
-                return AgentResult(chosen.provider,chosen.model,role,False,
+                return AgentResult(chosen.provider, chosen.model, role, False,
                                    error=f"SCOPE_VIOLATION: workspace cannot be inspected: {exc}")
             try:
                 if skill_name:
@@ -330,6 +342,13 @@ class AgentRunner:
             except Exception as exc:
                 result=AgentResult(chosen.provider,chosen.model,role,False,
                                    error=f"PROVIDER_FAILURE: {type(exc).__name__}: {exc}")
+            if cwd:
+                protected_violations = verify_protected_paths(cwd, protected_before, is_canary=self.is_canary)
+                if protected_violations:
+                    result.success = False
+                    result.error = "PROTECTED_PATH_VIOLATION: " + ", ".join(protected_violations)
+                    result.usage["protected_path_violations"] = protected_violations
+                    return result
             if enforce_scope:
                 try:
                     after=self._snapshot(cwd)
@@ -338,7 +357,7 @@ class AgentRunner:
                     result.error=f"SCOPE_VIOLATION: workspace cannot be inspected: {exc}"
                     return result
                 changed=sorted(path for path in set(before)|set(after) if before.get(path)!=after.get(path))
-                violations=[path for path in changed if not self._in_scope(path,permitted)]
+                violations=[path for path in changed if not self._in_scope(path,permitted) or is_protected_path(path, is_canary=self.is_canary)]
                 if violations:
                     result.success=False; result.error="SCOPE_VIOLATION: "+", ".join(violations)
                     result.usage["scope_violations"]=violations

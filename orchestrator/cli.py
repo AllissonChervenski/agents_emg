@@ -451,12 +451,9 @@ def resume(args):
 
 
 def verify(args):
-    root=Path.cwd(); cfg=load_config(args.config); harness=VerificationHarness(root,cfg.verification)
-    results=harness.run()
-    for r in results: print(f"{r.status}: {r.name or r.category or 'command'}: {' '.join(r.command)} ({r.duration:.2f}s)")
-    for item in harness.requirement_results: print(f"Requirement {item.requirement_id}: {item.status}")
-    if not results: print("No verification commands configured")
-    if not final_verification_pass(results,harness.requirement_results): raise SystemExit(1)
+    from orchestrator.verification.harness import run_verify_command
+    run_verify_command(Path.cwd(), args.config)
+
 
 
 def validate(args):

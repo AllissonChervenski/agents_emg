@@ -263,10 +263,12 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
                     if task.attempts["red"] >= max_attempts:
                         task.advance(TDDPhase.BLOCKED); save(); return task
                     continue
-                task.advance(TDDPhase.BLOCKED); save(); return task
+                elif vr.status != "PASS":
+                    task.advance(TDDPhase.BLOCKED); save(); return task
             if not gate_phase("RED_VERIFY", "python", task.evidence["test_files_changed"], design.test_commands, attempt=red_attempt): return task
+            red_files = (task_data.get("allowed_files") or task_data.get("production_files") or []) if task_data else task.evidence.get("allowed_files", ())
             red_start = time.monotonic()
-            red_results = [harness.run_red(command, expected_test_ids=[test_id for test_id in design.created_tests if test_id in command]) for command in design.test_commands]
+            red_results = [harness.run_red(command, expected_test_ids=[test_id for test_id in design.created_tests if test_id in command], expected_failure=getattr(design, "expected_failure", None), allowed_files=red_files, expected_markers=[design.expected_failure] if getattr(design, "expected_failure", None) else ()) for command in design.test_commands]
             task.evidence["task_test_duration"] = time.monotonic() - red_start
             red_status = "EXPECTED_FAILURE" if red_results and all(result.classification == "EXPECTED_FAILURE" for result in red_results) else next((result.classification for result in red_results if result.classification != "EXPECTED_FAILURE"), "INVALID_TEST")
             task.evidence.update({"red_result": red_status, "red_test_files": test_files_changed(before_red, root), "red": {"classification": red_status, "results": [{"command": result.command, "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "cause": result.cause, "classification": result.classification} for result in red_results]}})

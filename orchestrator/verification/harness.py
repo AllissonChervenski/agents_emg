@@ -133,32 +133,147 @@ class VerificationHarness:
             self.requirement_results.append(RequirementVerification(requirement_id,[r.name for r in results],results,status))
         return self.requirement_results
 
-    def run_red(self, command, expected_markers=(), expected_test_ids=()):
-        result = self.run_command(command,category="task_tests")
+    def run_red(self, command, expected_markers=(), expected_test_ids=(), expected_failure=None, allowed_files=()):
+        result = self.run_command(command, category="task_tests")
         output = result.stdout + result.stderr
-        lowered=output.lower()
+        lowered = output.lower()
+
+        # Exit codes 2, 3, 4, 5 from pytest indicate interrupted, internal, usage, or no tests collected
+        if result.exit_code in (2, 3, 4, 5):
+            result.classification = "INVALID_TEST"
+            result.cause = f"Pytest exit code {result.exit_code} indicates internal/usage/collection error"
+            result.status = result.classification
+            return result
+
+        # Tests skipped or xfailed never count as functional RED
+        has_skipped = bool(re.search(r"\b\d+\s+skipped\b", lowered) or "skipped [" in lowered or "=== skipped" in lowered)
+        has_xfailed = bool(re.search(r"\b\d+\s+xfailed\b", lowered) or "xfail [" in lowered)
+        has_failed = bool(re.search(r"\b\d+\s+failed\b", lowered) or "failed [" in lowered or "failed in " in lowered)
+
+        if (has_skipped or has_xfailed) and not has_failed:
+            result.classification = "INVALID_TEST"
+            result.cause = "Tests skipped or xfailed cannot serve as functional RED"
+            result.status = result.classification
+            return result
+
+        # Syntax and collection errors
+        if "syntaxerror:" in lowered:
+            result.classification = "INVALID_TEST"
+            result.cause = "Syntax error in test or imported source"
+            result.status = result.classification
+            return result
+
+        # ModuleNotFoundError: internal vs external dependency
+        mod_match = re.search(r"ModuleNotFoundError:\s+No module named\s+['\"]([^'\"]+)['\"]", output)
+        if mod_match:
+            missing_mod = mod_match.group(1)
+            is_internal = self._is_internal_module(missing_mod, allowed_files, expected_failure)
+            if is_internal:
+                result.classification = "EXPECTED_FAILURE"
+                result.cause = f"Discovered task test failed with missing internal module: {missing_mod}"
+                result.status = result.classification
+                return result
+            else:
+                result.classification = "INFRASTRUCTURE_FAILURE"
+                result.cause = f"Missing external dependency: {missing_mod}"
+                result.status = result.classification
+                return result
+
+        # ImportError: cannot import name ... from ... and AttributeError
+        import_match = re.search(r"ImportError:\s+cannot import name\s+['\"]([^'\"]+)['\"]", output)
+        attr_match = re.search(r"AttributeError:\s+(?:module\s+['\"][^'\"]+['\"]\s+has no attribute|type object\s+['\"][^'\"]+['\"]\s+has no attribute|.*has no attribute)\s+['\"]([^'\"]+)['\"]", output)
+        missing_symbol = import_match.group(1) if import_match else (attr_match.group(1) if attr_match else None)
+
+        if missing_symbol:
+            declared = (
+                (expected_failure and missing_symbol in expected_failure)
+                or any(missing_symbol.lower() in str(m).lower() for m in expected_markers)
+            )
+            if declared:
+                result.classification = "EXPECTED_FAILURE"
+                result.cause = f"Discovered task test failed with missing declared symbol: {missing_symbol}"
+                result.status = result.classification
+                return result
+            else:
+                result.classification = "UNEXPECTED_FAILURE"
+                result.cause = f"ImportError/AttributeError for undeclared symbol '{missing_symbol}'; must be declared in expected_failure"
+                result.status = result.classification
+                return result
+
         discovered = any(token in lowered for token in ("collected ", "ran ", "--- fail", "test result: failed", "failed in ", "passed in "))
-        infra_tokens=("timed out","permission denied","connection refused","no such file or directory")
-        invalid_tokens=("syntaxerror", "modulenotfounderror", "importerror", "no tests ran", "no tests collected", "collected 0 items", "error collecting", "usage error", "pytest: error: unrecognized arguments")
-        assertion_tokens=("assertionerror", "assert ", "assertion failed", "expected:", "not equal", "failed: test", "=== fail", "test result: failed")
-        if result.classification in ("INFRASTRUCTURE_FAILURE","BLOCKED"):
-            result.cause=result.stderr or "Command could not run"
+        infra_tokens = ("timed out", "permission denied", "connection refused", "no such file or directory")
+        invalid_tokens = ("no tests ran", "no tests collected", "collected 0 items", "error collecting", "usage error", "pytest: error: unrecognized arguments")
+        assertion_tokens = ("assertionerror", "assert ", "assertion failed", "expected:", "not equal", "failed: test", "=== fail", "test result: failed")
+
+        if result.classification in ("INFRASTRUCTURE_FAILURE", "BLOCKED"):
+            result.cause = result.stderr or "Command could not run"
         elif any(token in lowered for token in infra_tokens):
-            result.classification="INFRASTRUCTURE_FAILURE"; result.cause="Test infrastructure failed"
+            result.classification = "INFRASTRUCTURE_FAILURE"
+            result.cause = "Test infrastructure failed"
         elif not discovered or any(token in lowered for token in invalid_tokens):
-            result.classification="INVALID_TEST"; result.cause="No valid discovered test execution or test collection/import/syntax error"
+            result.classification = "INVALID_TEST"
+            result.cause = "No valid discovered test execution or test collection/syntax error"
         elif result.success:
-            result.classification="UNEXPECTED_FAILURE"; result.cause="RED test passed before implementation"
+            result.classification = "UNEXPECTED_FAILURE"
+            result.cause = "RED test passed before implementation"
         elif not any(token in lowered for token in assertion_tokens):
-            result.classification="UNEXPECTED_FAILURE"; result.cause="Failure did not show an assertion about missing behavior"
+            result.classification = "UNEXPECTED_FAILURE"
+            result.cause = "Failure did not show an assertion about missing behavior"
         elif expected_test_ids and not any(test_id in output for test_id in expected_test_ids):
-            result.classification="UNEXPECTED_FAILURE"; result.cause="Failure was not linked to a declared task test"
+            result.classification = "UNEXPECTED_FAILURE"
+            result.cause = "Failure was not linked to a declared task test"
         elif expected_markers and not any(marker.lower() in lowered for marker in expected_markers):
-            result.classification="UNEXPECTED_FAILURE"; result.cause="Failure did not match the expected behavior marker"
+            result.classification = "UNEXPECTED_FAILURE"
+            result.cause = "Failure did not match the expected behavior marker"
         else:
-            result.classification="EXPECTED_FAILURE"; result.cause="Discovered task test failed with a linked assertion"
-        result.status=result.classification
+            result.classification = "EXPECTED_FAILURE"
+            result.cause = "Discovered task test failed with a linked assertion"
+
+        result.status = result.classification
         return result
 
+    def _is_internal_module(self, mod_name: str, allowed_files: Any = (), expected_failure: Any = None) -> bool:
+        """Check if a missing module is internal to the project under test."""
+        # 1. Check against declared allowed_files
+        allowed_list = [str(p).replace("\\", "/") for p in (allowed_files or ())]
+        for allowed in allowed_list:
+            mod_path = mod_name.replace(".", "/")
+            if mod_path in allowed or allowed.endswith(mod_name.split(".")[-1] + ".py"):
+                return True
+
+        # 2. Check if declared in expected_failure
+        if expected_failure and mod_name in str(expected_failure):
+            return True
+
+        # 3. Check workspace top-level packages and python files
+        parts = mod_name.split(".")
+        root_pkg = parts[0]
+        ws_pkg = self.workspace / root_pkg
+        src_pkg = self.workspace / "src" / root_pkg
+        if ws_pkg.exists() or src_pkg.exists() or (self.workspace / f"{root_pkg}.py").is_file():
+            return True
+
+        return False
+
     def save(self, path, results):
-        Path(path).parent.mkdir(parents=True, exist_ok=True); Path(path).write_text(json.dumps([asdict(r) for r in results], indent=2))
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_text(json.dumps([asdict(r) for r in results], indent=2))
+
+
+def run_verify_command(root, config_path="orchestrator.yaml"):
+    """Protected verification entrypoint isolated from CLI editing scope."""
+    from orchestrator.config.loader import load_config
+    root_path = Path(root).resolve()
+    cfg_file = Path(config_path) if Path(config_path).is_absolute() else root_path / config_path
+    cfg = load_config(cfg_file)
+    harness = VerificationHarness(root_path, cfg.verification)
+    results = harness.run()
+    for r in results:
+        print(f"{r.status}: {r.name or r.category or 'command'}: {' '.join(r.command)} ({r.duration:.2f}s)")
+    for item in harness.requirement_results:
+        print(f"Requirement {item.requirement_id}: {item.status}")
+    if not results:
+        print("No verification commands configured")
+    if not final_verification_pass(results, harness.requirement_results):
+        raise SystemExit(1)
+    return results
