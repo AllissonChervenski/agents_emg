@@ -63,7 +63,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Independent Test**: Filter arbitrary continuous signals in a single batch call versus successive fragmented chunks (1 sample to $N$ samples); verify chunk invariance $\max \| \text{concat}(F(C_i)) - F(\text{concat}(C_i)) \| \le \text{TOL-CHUNK-INVARIANCE}$; assert strict `float32` state and outputs; verify zero lookahead.
 
-- [ ] T004 [US2] Implement CausalSosFilter with Direct Form II Transposed state and chunk-invariance in semg_dsp/filter.py
+- [x] T004 [US2] Implement CausalSosFilter with Direct Form II Transposed state and chunk-invariance in semg_dsp/filter.py
   <!-- harness-task {"requirements":["FR-003","FR-004","FR-005","FR-008","FR-010","FR-011"],"acceptance_criteria":["AC-002","AC-003","AC-006","AC-011"],"plan_decisions":["D-002","D-003","D-005","D-006"],"dependencies":["T003"],"test_type":"UNIT","allowed_files":["semg_dsp/filter.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true,"fixture_files":["tests/fixtures/dsp/sos_test_filter.npz"]} -->
 
 **Checkpoint**: Story 2 complete; filter operates sample-by-sample and chunk-by-chunk with zero future-sample lookahead and verified chunk invariance.
