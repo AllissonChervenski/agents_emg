@@ -13,6 +13,7 @@ from orchestrator.agents.history import classify_task
 from orchestrator.agents.cost import TaskProfile
 from orchestrator.agents.skills import SkillDispatcher
 from orchestrator.validation.parser import sanitize_text
+from orchestrator.workflow.protection import snapshot_protected_paths, verify_protected_paths, is_protected_path
 
 
 def load_prompt(role: str, **values: Any) -> str:
@@ -64,8 +65,9 @@ def load_prompt(role: str, **values: Any) -> str:
 
 
 
+
 class AgentRunner:
-    def __init__(self, providers, router, store=None, workflow_id=None, safety=None, cost_router=None, execution_policy_router=None, skill_dispatcher=None):
+    def __init__(self, providers, router, store=None, workflow_id=None, safety=None, cost_router=None, execution_policy_router=None, skill_dispatcher=None, is_canary=None):
         self.providers, self.router, self.store = providers, router, store
         self.on_fallback=None
         self.on_call=None
@@ -83,6 +85,14 @@ class AgentRunner:
         self.active_stage_name=None
         self.active_stage_role=None
         self.active_stage_artifacts=[]
+        if is_canary is not None:
+            self.is_canary = is_canary
+        elif store and workflow_id:
+            wf = store.get_workflow(workflow_id)
+            feat = (wf or {}).get("feature", "")
+            self.is_canary = "provider-summary" in str(feat)
+        else:
+            self.is_canary = False
         if store and workflow_id:
             self.calls,self.task_calls=store.agent_call_counts(workflow_id)
             self.active_elapsed=store.active_execution_seconds(workflow_id)
@@ -218,15 +228,15 @@ class AgentRunner:
 
     def run_skill(self, role, provider, model, skill_name, arguments, cwd, execution_policy=None,
                   timeout=None, fallback=True, task=None, task_id=None, allowed_paths=None,
-                  expected_outputs=None, exclude_providers=None, artifacts=None, attempt=1):
+                  expected_outputs=None, exclude_providers=None, artifacts=None, attempt=1, **kwargs):
         """Run a skill through the normal router, safety, retry, and telemetry path."""
         return self.run(role, arguments, cwd=cwd, timeout=timeout, override_provider=provider,
                         override_model=model, fallback=fallback, task=task, task_id=task_id,
                         allowed_paths=allowed_paths, expected_outputs=expected_outputs,
                         skill_name=skill_name, execution_policy=execution_policy,
-                        exclude_providers=exclude_providers, artifacts=artifacts, attempt=attempt)
+                        exclude_providers=exclude_providers, artifacts=artifacts, attempt=attempt, **kwargs)
 
-    def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None, skill_name=None, execution_policy=None, artifacts=None, attempt=1):
+    def run(self, role: str, prompt: str, cwd=None, timeout=None, override_provider=None, override_model=None, fallback=True, exclude_providers=None, author_provider=None, task=None, task_id=None, allowed_paths=None, expected_outputs=None, skill_name=None, execution_policy=None, artifacts=None, attempt=1, author_model=None, author_models=None, author_role=None, numeric_sensitive: bool = False):
         artifacts_list = list(artifacts or ())
         if (
             self.active_stage_role == role
@@ -245,13 +255,28 @@ class AgentRunner:
         task_id=task_id or (task or {}).get("id")
         kind,difficulty=classify_task(role,task)
         profile=TaskProfile.derive(role,task)
-        route = self.router.route(role, override_provider=override_provider, override_model=override_model, exclude=route_excludes, author_provider=author_provider,task=task)
+        if author_models:
+            auth_models_list = list(author_models)
+            if author_model and not any(author_model == (item[0] if isinstance(item, tuple) else item) for item in auth_models_list):
+                auth_models_list.append((author_model, author_role or ""))
+        elif author_model:
+            auth_models_list = [(author_model, author_role or "")]
+        else:
+            auth_models_list = []
+        is_numeric = numeric_sensitive or bool((task or {}).get("numeric_sensitive", False))
+        route = self.router.route(
+            role, override_provider=override_provider, override_model=override_model,
+            exclude=route_excludes, author_provider=author_provider, task=task,
+            author_models=auth_models_list, author_role=author_role, numeric_sensitive=is_numeric
+        )
         decision=None
         if self.cost_router and route.provider!="unavailable":
             failures=(self.store.model_failure_events(self.workflow_id,task_id,role) if self.store and self.workflow_id else self.model_feedback)
             decision=self.cost_router.assess(role,route,task,author_provider,failures,override_model,(task or {}).get("astra_escalation_reason"))
             route=decision["actual_route"]
         if route.provider == "unavailable":
+            if "INSUFFICIENT_INDEPENDENT_PROVIDERS" in getattr(route, "reason", ""):
+                return AgentResult("unavailable", None, role, False, error="INSUFFICIENT_INDEPENDENT_PROVIDERS")
             return AgentResult("unavailable", None, role, False, error="PROVIDER_FAILURE: no provider available")
         def cost_safety_error(chosen, assessment):
             if not assessment: return None
@@ -316,10 +341,17 @@ class AgentRunner:
                                       "This scope overrides broader file-writing steps in the installed skill.")
             effective_prompt=(policy.prefix+"\n\n"+scoped_prompt) if policy and policy.prefix else scoped_prompt
             permissions="read" if ROLES[role].validation else None
+            prov = self.providers.get(chosen.provider)
+            if prov and hasattr(prov, "list_models"):
+                catalog = prov.list_models()
+                if catalog and chosen.model and chosen.model not in catalog:
+                    return AgentResult(chosen.provider, chosen.model, role, False,
+                                       error=f"MODEL_CATALOG_UNAVAILABLE: model '{chosen.model}' not in {chosen.provider} catalog")
             try:
-                before=self._snapshot(cwd) if enforce_scope else {}
+                protected_before = snapshot_protected_paths(cwd, is_canary=self.is_canary) if cwd else {}
+                before = self._snapshot(cwd) if enforce_scope else {}
             except OSError as exc:
-                return AgentResult(chosen.provider,chosen.model,role,False,
+                return AgentResult(chosen.provider, chosen.model, role, False,
                                    error=f"SCOPE_VIOLATION: workspace cannot be inspected: {exc}")
             try:
                 if skill_name:
@@ -330,6 +362,13 @@ class AgentRunner:
             except Exception as exc:
                 result=AgentResult(chosen.provider,chosen.model,role,False,
                                    error=f"PROVIDER_FAILURE: {type(exc).__name__}: {exc}")
+            if cwd:
+                protected_violations = verify_protected_paths(cwd, protected_before, is_canary=self.is_canary)
+                if protected_violations:
+                    result.success = False
+                    result.error = "PROTECTED_PATH_VIOLATION: " + ", ".join(protected_violations)
+                    result.usage["protected_path_violations"] = protected_violations
+                    return result
             if enforce_scope:
                 try:
                     after=self._snapshot(cwd)
@@ -338,7 +377,7 @@ class AgentRunner:
                     result.error=f"SCOPE_VIOLATION: workspace cannot be inspected: {exc}"
                     return result
                 changed=sorted(path for path in set(before)|set(after) if before.get(path)!=after.get(path))
-                violations=[path for path in changed if not self._in_scope(path,permitted)]
+                violations=[path for path in changed if not self._in_scope(path,permitted) or is_protected_path(path, is_canary=self.is_canary)]
                 if violations:
                     result.success=False; result.error="SCOPE_VIOLATION: "+", ".join(violations)
                     result.usage["scope_violations"]=violations
@@ -355,6 +394,27 @@ class AgentRunner:
             result.usage["routing_selection_mode"]=chosen.selection_mode
             result.usage["task_type"]=kind; result.usage["task_complexity"]=difficulty
             result.usage["task_id"]=task_id
+            res_model = result.resolved_model or result.model or chosen.model
+            if not result.resolution_source or result.resolution_source == "unavailable":
+                res_src = "adapter_explicit" if (result.model or result.resolved_model) else "cli_default"
+            else:
+                res_src = result.resolution_source
+            result.resolved_model = res_model
+            result.resolution_source = res_src
+            result.usage["requested_model"] = chosen.model
+            result.usage["resolved_model"] = res_model
+            result.usage["resolution_source"] = res_src
+            result.usage["requested_effort"] = result.requested_effort
+            result.usage["resolved_effort"] = result.resolved_effort
+            result.usage["fallback_reason"] = getattr(result, "fallback_reason", None)
+            if not hasattr(self, "stage_resolved_models"):
+                self.stage_resolved_models = {}
+            self.stage_resolved_models[role] = {
+                "requested_model": chosen.model,
+                "resolved_model": res_model,
+                "resolution_source": res_src,
+                "provider": chosen.provider,
+            }
             if policy:
                 result.usage.update({"ponytail_enabled":policy.ponytail_enabled,"caveman_enabled":policy.caveman_enabled,
                     "policy_source":policy.policy_source,"policy_overhead_estimate":policy.policy_overhead_estimate,
@@ -377,7 +437,15 @@ class AgentRunner:
         result=execute(route,attempt)
         provider_failure=(result.error or "").startswith("PROVIDER_FAILURE") or (result.error is None and result.exit_code not in {None,0})
         if not result.success and fallback and provider_failure:
-            second = self.router.route(role, exclude=route_excludes | {route.provider}, author_provider=author_provider)
+            second = self.router.route(
+                role, exclude=route_excludes | {route.provider},
+                author_provider=author_provider, task=task,
+                author_models=auth_models_list, author_role=author_role, numeric_sensitive=is_numeric
+            )
+            if second.provider == "unavailable":
+                if "INSUFFICIENT_INDEPENDENT_PROVIDERS" in getattr(second, "reason", ""):
+                    result.error = "INSUFFICIENT_INDEPENDENT_PROVIDERS"
+                    return result
             if self.cost_router and second.provider!="unavailable":
                 second_decision=self.cost_router.assess(role,second,task,author_provider,(),override_model=None)
                 second=second_decision["actual_route"]
@@ -388,7 +456,10 @@ class AgentRunner:
                 if self.on_fallback and not self.on_fallback(role,second.provider,second.model):
                     result.error="PROVIDER_FAILURE: interactive fallback aborted"
                     return result
-                result=execute(second,attempt)
+                fallback_res = execute(second, attempt)
+                fallback_res.fallback_reason = f"cross_provider_fallback_from_{route.provider}"
+                fallback_res.usage["fallback_reason"] = fallback_res.fallback_reason
+                result = fallback_res
         if self.active_stage_role == role:
             self.active_stage_name = None
             self.active_stage_role = None

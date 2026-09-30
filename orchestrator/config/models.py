@@ -57,6 +57,11 @@ class AgentResult:
     usage: dict[str, Any] = field(default_factory=dict)
     session_id: str | None = None
     error: str | None = None
+    resolved_model: str | None = None
+    resolution_source: str = "unavailable"
+    requested_effort: str | None = None
+    resolved_effort: str | None = None
+    fallback_reason: str | None = None
 
 
 @dataclass

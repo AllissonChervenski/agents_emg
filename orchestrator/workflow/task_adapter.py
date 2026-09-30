@@ -52,7 +52,18 @@ def _contract(task_id: str, description: str, metadata: object) -> dict:
         raise TaskContractError(f"{task_id}: missing requirement or acceptance criterion links")
     if not metadata["allowed_files"] and test_type != "NOT_AUTOMATABLE":
         raise TaskContractError(f"{task_id}: allowed_files must name production scope")
-    return {**metadata, "id": task_id, "description": description}
+    numeric_sensitive = metadata.get("numeric_sensitive", False)
+    if not isinstance(numeric_sensitive, bool):
+        raise TaskContractError(f"{task_id}: numeric_sensitive must be a boolean")
+    if not numeric_sensitive:
+        text_corpus = " ".join([description] + metadata.get("requirements", []) + metadata.get("acceptance_criteria", []))
+        forbidden_match = re.search(r"\b(filter|dsp|rms|envelope|sampling|emg)\b", text_corpus, re.IGNORECASE)
+        if forbidden_match:
+            raise TaskContractError(
+                f"MISCLASSIFIED_TASK: task {task_id} contains numerical/DSP keyword '{forbidden_match.group(1)}' "
+                f"but numeric_sensitive is false"
+            )
+    return {**metadata, "numeric_sensitive": numeric_sensitive, "id": task_id, "description": description}
 
 
 def parse_speckit_tasks(text: str) -> list[dict]:

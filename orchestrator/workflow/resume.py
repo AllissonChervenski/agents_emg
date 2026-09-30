@@ -29,7 +29,7 @@ def _safe(path):
 class WorkspaceFingerprint:
     def __init__(self, root): self.root=Path(root).resolve()
 
-    def capture(self, workflow_id=None, task_id=None, artifact_paths=None, test_paths=None, code_paths=None):
+    def capture(self, workflow_id=None, task_id=None, artifact_paths=None, test_paths=None, code_paths=None, fixture_paths=None, resolved_models=None):
         branch=_git(self.root,"branch","--show-current")
         head=_git(self.root,"rev-parse","HEAD")
         tracked=(_git(self.root,"ls-files","-m") or "").splitlines()
@@ -55,6 +55,7 @@ class WorkspaceFingerprint:
                     data=json.loads(report.read_text())
                     test_paths=list(test_paths or [])+data.get("red_test_files",[])
                     code_paths=list(code_paths or [])+data.get("production_files_changed",[])
+                    fixture_paths=list(fixture_paths or [])+data.get("fixture_files",[])
         def hash_paths(paths):
             result={}
             for name in paths:
@@ -67,7 +68,8 @@ class WorkspaceFingerprint:
         return {"branch":branch,"head":head,"git_commit_base":head,"tracked_modified":sorted(set(tracked)-set(safe_files)),
             "untracked_relevant":sorted(set(untracked)-set(safe_files)),"safe_files":safe_files,
             "workspace_hashes":hash_paths(relevant),"artifact_hashes":hash_paths(artifacts),
-            "test_hashes":hash_paths(test_paths or []),"code_hashes":hash_paths(code_paths or [])}
+            "test_hashes":hash_paths(test_paths or []),"code_hashes":hash_paths(code_paths or []),
+            "fixture_hashes":hash_paths(fixture_paths or []),"resolved_models":dict(resolved_models or {})}
 
 
 def compare_fingerprints(saved, current):
@@ -79,7 +81,7 @@ def compare_fingerprints(saved, current):
     if saved.get("head")!=current.get("head"):
         return "BASE_CHANGED",[{"field":"head","before":saved.get("head"),"after":current.get("head")}]
     missing=False
-    for field in ("artifact_hashes","test_hashes","code_hashes","workspace_hashes"):
+    for field in ("artifact_hashes","test_hashes","code_hashes","workspace_hashes","fixture_hashes"):
         old=saved.get(field,{})
         new=current.get(field,{})
         for path in sorted(set(old)|set(new)):
