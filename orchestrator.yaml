@@ -63,7 +63,7 @@
     "strong_model_budgets": {"sol": {"task": 3, "workflow": 20}, "sonnet": {"task": 2, "workflow": 8}, "astra": {"task": 1, "workflow": 2}, "opus": {"task": 0, "workflow": 0}}
   },
   "execution_policies": {"prompt_fallback": true, "ponytail_roles": ["coder", "refactorer"], "caveman_excluded_roles": []},
-  "real_run": {"safety_mode": "strict", "max_agent_calls_per_task": 16, "max_agent_calls_per_workflow": 100, "max_retries": 5, "max_wall_time": 7200, "max_convergence_iterations": 3,
+  "real_run": {"safety_mode": "strict", "max_agent_calls_per_task": 16, "max_agent_calls_per_workflow": 100, "max_retries": 5, "max_wall_time": 43200, "max_convergence_iterations": 3,
     "file_scopes": {
       "constitution": ["constitution.md", ".specify/memory/constitution.md"],
       "specification": ["specs/", ".specify/"],

@@ -76,7 +76,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Independent Test**: Stream variable-length chunks into `StatefulWindowBuffer`; verify exact window shapes, correct stride offsets, channel preservation, and retention of residual samples during streaming with safe handling on `finalize()`. Assert that the sequence of emitted windows is identical regardless of input chunk fragmentation.
 
-- [ ] T005 [US3] Implement StatefulWindowBuffer causal sliding window accumulator in semg_dsp/window.py
+- [x] T005 [US3] Implement StatefulWindowBuffer causal sliding window accumulator in semg_dsp/window.py
   <!-- harness-task {"requirements":["FR-006","FR-007","FR-008","FR-010","FR-011"],"acceptance_criteria":["AC-004","AC-005","AC-006","AC-011"],"plan_decisions":["D-003","D-005","D-007"],"dependencies":["T004"],"test_type":"UNIT","allowed_files":["semg_dsp/window.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 **Checkpoint**: Story 3 complete; continuous sample streams are deterministically partitioned into sliding windows without dropping samples between chunks.
