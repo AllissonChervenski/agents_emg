@@ -50,7 +50,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Independent Test**: Instantiate `SyntheticSampleSource` with analytical test cases; call `read_chunk` across varying chunk lengths (1 to 64 samples); assert exact match against mathematical formulas within `TOL-ANALYTICAL-L0` tolerance and continuous phase.
 
-- [ ] T003 [US1] Implement SyntheticSampleSource with L0 analytical waveforms and phase continuity in semg_dsp/source.py
+- [x] T003 [US1] Implement SyntheticSampleSource with L0 analytical waveforms and phase continuity in semg_dsp/source.py
   <!-- harness-task {"requirements":["FR-002","FR-008","FR-010","FR-011"],"acceptance_criteria":["AC-001","AC-005","AC-006","AC-011"],"plan_decisions":["D-001","D-003","D-004","D-005"],"dependencies":["T002"],"test_type":"UNIT","allowed_files":["semg_dsp/source.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true,"fixture_files":["tests/fixtures/dsp/l0_analytical_cases.npz"]} -->
 
 **Checkpoint**: Story 1 complete; synthetic signal source produces deterministic multichannel streaming chunks.
