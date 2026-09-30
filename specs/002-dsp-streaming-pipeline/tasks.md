@@ -26,7 +26,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Purpose**: Initialize the core package structure for `semg_dsp` without premature symbol exports.
 
-- [ ] T001 [P] Setup core package layout in semg_dsp/__init__.py
+- [x] T001 [P] Setup core package layout in semg_dsp/__init__.py
   <!-- harness-task {"requirements":["FR-001"],"acceptance_criteria":["AC-010"],"plan_decisions":["D-001"],"dependencies":[],"test_type":"UNIT","allowed_files":["semg_dsp/__init__.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: Package importable and exposes clean namespace without importing nonexistent modules.
