@@ -223,7 +223,7 @@ class ModelRouter:
                     if getattr(cap,"models",[]) and override_model not in cap.models: continue
                     model,tier_source,model_reason,model_fit=override_model,"config","manual model override",12.0
                 if model is None and candidate_model is not None and tier_source!="cli_default": continue
-                if author_models and author_role:
+                if author_models:
                     ok_ind, _ = is_family_independent(author_models, model, author_role=author_role, validator_role=canonical_role, numeric_sensitive=is_numeric)
                     if not ok_ind: continue
                 idx=pref_index.get(provider,len(pref_index)+1)
@@ -274,7 +274,7 @@ class ModelRouter:
                 fallback.reason+="; no independent provider/model is compatible; self-validation permitted"
             return fallback
         if not scored:
-            if author_models and author_role:
+            if author_models:
                 return Route("unavailable", None, tier, "INSUFFICIENT_INDEPENDENT_PROVIDERS: all candidate models collide in family with author")
             return Route("unavailable",None,tier,"No provider/model matched the explicit override")
         scored.sort(key=lambda item:(-item["final_score"],item["provider"],item["model"] or ""))

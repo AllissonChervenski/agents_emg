@@ -71,20 +71,20 @@ def convergence_outcome(before: bytes, after: bytes, report: str) -> str:
 
 def run_convergence_loop(
     max_iterations: int,
-    verify: Callable[[int], None],
     converge: Callable[[int], str],
     implement_remaining: Callable[[int], None],
 ) -> int:
-    """Run deterministic verification and semantic convergence in a bounded loop.
+    """Run semantic convergence in a bounded loop until stabilized.
 
     The initial implementation pass has already run through the harness's
     task-level TDD engine. ``implement_remaining`` is called only after
     converge appends work, so that same engine remains the sole task executor.
+    Once convergence returns 'converged', the loop exits so final verification
+    can run on the stabilized codebase.
     """
     if max_iterations < 1:
         raise ValueError("max_convergence_iterations must be at least 1")
     for iteration in range(1, max_iterations + 1):
-        verify(iteration)
         outcome = converge(iteration)
         if outcome == "converged":
             return iteration

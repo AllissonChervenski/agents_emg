@@ -255,7 +255,14 @@ class AgentRunner:
         task_id=task_id or (task or {}).get("id")
         kind,difficulty=classify_task(role,task)
         profile=TaskProfile.derive(role,task)
-        auth_models_list = list(author_models or ()) + ([author_model] if author_model else [])
+        if author_models:
+            auth_models_list = list(author_models)
+            if author_model and not any(author_model == (item[0] if isinstance(item, tuple) else item) for item in auth_models_list):
+                auth_models_list.append((author_model, author_role or ""))
+        elif author_model:
+            auth_models_list = [(author_model, author_role or "")]
+        else:
+            auth_models_list = []
         is_numeric = numeric_sensitive or bool((task or {}).get("numeric_sensitive", False))
         route = self.router.route(
             role, override_provider=override_provider, override_model=override_model,

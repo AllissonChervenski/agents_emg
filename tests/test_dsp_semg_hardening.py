@@ -141,6 +141,81 @@ def test_router_skips_same_family_and_fails_closed_when_insufficient():
     assert "INSUFFICIENT_INDEPENDENT_PROVIDERS" in route_collided.reason
 
 
+def test_numeric_sensitive_enforces_test_validator_not_equal_coder():
+    # 1. Direct pair check: test_validator (gemini) vs coder (gemini) MUST be rejected when numeric_sensitive=True
+    ok, reason = is_family_independent(
+        [("gemini-3.8-flash-high", "test_validator")],
+        "gemini-3.8-flash-medium",
+        validator_role="coder",
+        numeric_sensitive=True,
+    )
+    assert ok is False
+    assert "gemini" in reason
+
+    # 2. Both test_designer and test_validator present in author_models:
+    # test_designer = Sol (gpt), test_validator = MiMo (mimo)
+    authors = [("gpt-6-sol", "test_designer"), ("opencode-go/mimo-v2.6-pro", "test_validator")]
+
+    # Coder candidate Astra (gpt) -> REJECTED (collides with test_designer)
+    ok, reason = is_family_independent(authors, "gpt-6-astra", validator_role="coder", numeric_sensitive=True)
+    assert ok is False
+    assert "gpt" in reason
+
+    # Coder candidate MiMo (mimo) -> REJECTED (collides with test_validator)
+    ok, reason = is_family_independent(authors, "opencode-go/mimo-v2.5-pro", validator_role="coder", numeric_sensitive=True)
+    assert ok is False
+    assert "mimo" in reason
+
+    # Coder candidate Sonnet (claude) -> ACCEPTED (independent of both!)
+    ok, reason = is_family_independent(authors, "claude-sonnet-4-6", validator_role="coder", numeric_sensitive=True)
+    assert ok is True
+    assert reason == "independent"
+
+    # Coder candidate Kimi (kimi) -> ACCEPTED (independent of both!)
+    ok, reason = is_family_independent(authors, "opencode-go/kimi-k3", validator_role="coder", numeric_sensitive=True)
+    assert ok is True
+    assert reason == "independent"
+
+    # 3. When numeric_sensitive=False:
+    # test_validator (gemini) and coder (gemini) is PERMITTED (advisory collision only)
+    ok, reason = is_family_independent(
+        [("gemini-3.8-flash-high", "test_validator")],
+        "gemini-3.8-flash-medium",
+        validator_role="coder",
+        numeric_sensitive=False,
+    )
+    assert ok is True
+
+
+def test_router_enforces_test_validator_diff_coder_in_numeric():
+    # Router with 3 providers: Codex (gpt), OpenCode (mimo), AGY (claude)
+    caps = {
+        "codex": ProviderCapabilities("codex", True, "1.0", ["gpt-6-sol"], True, True, True, True, False, supports_file_editing=True, supports_shell=True),
+        "opencode": ProviderCapabilities("opencode", True, "1.0", ["opencode-go/mimo-v2.6-pro"], True, True, True, True, False, supports_file_editing=True, supports_shell=True),
+        "agy": ProviderCapabilities("agy", True, "1.0", ["claude-sonnet-4-6"], True, True, True, True, False, supports_file_editing=True, supports_shell=True),
+    }
+    router = ModelRouter(caps)
+
+    # Given test_designer = gpt-6-sol and test_validator = opencode-go/mimo-v2.6-pro:
+    authors = [("gpt-6-sol", "test_designer"), ("opencode-go/mimo-v2.6-pro", "test_validator")]
+
+    # Routing coder with numeric_sensitive=True MUST NOT pick gpt or mimo -> must pick claude
+    route = router.route("coder", author_models=authors, numeric_sensitive=True)
+    assert route.provider == "agy"
+    assert route.model == "claude-sonnet-4-6"
+    assert model_family(route.model) not in ("gpt", "mimo")
+
+    # If only Codex (gpt) and OpenCode (mimo) were available, routing coder must fail closed
+    restricted_caps = {
+        "codex": ProviderCapabilities("codex", True, "1.0", ["gpt-6-sol"], True, True, True, True, False, supports_file_editing=True, supports_shell=True),
+        "opencode": ProviderCapabilities("opencode", True, "1.0", ["opencode-go/mimo-v2.6-pro"], True, True, True, True, False, supports_file_editing=True, supports_shell=True),
+    }
+    restricted_router = ModelRouter(restricted_caps)
+    route_fail = restricted_router.route("coder", author_models=authors, numeric_sensitive=True)
+    assert route_fail.provider == "unavailable"
+    assert "INSUFFICIENT_INDEPENDENT_PROVIDERS" in route_fail.reason
+
+
 # ---------------------------------------------------------------------------
 # 10. Task Parser: Numeric Keyword Lint
 # ---------------------------------------------------------------------------

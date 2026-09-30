@@ -341,9 +341,10 @@ def test_scenario_a_happy_path_full_lifecycle(tmp_path):
     assert "TASKS_VALIDATED" in checkpoints
     assert "ANALYSIS_COMPLETE" in checkpoints
     assert "TASK_COMPLETE" in checkpoints
-    assert "FINAL_VERIFIED" in checkpoints
     assert "CONVERGED" in checkpoints
+    assert "FINAL_VERIFIED" in checkpoints
     assert "FINAL_REVIEWED" in checkpoints
+    assert checkpoints.index("CONVERGED") < checkpoints.index("FINAL_VERIFIED") < checkpoints.index("FINAL_REVIEWED")
 
 
 def test_scenario_b_provider_success_without_artifact_blocks(tmp_path):
@@ -662,7 +663,9 @@ def test_scenario_j_convergence_appends_residual_task_and_executes_it(tmp_path):
     checkpoints = [row["stage"] for row in store.checkpoints(wid)]
     assert "TASKS_APPENDED" in checkpoints
     assert "CONVERGED" in checkpoints
+    assert "FINAL_VERIFIED" in checkpoints
     assert "FINAL_REVIEWED" in checkpoints
+    assert checkpoints.index("CONVERGED") < checkpoints.index("FINAL_VERIFIED") < checkpoints.index("FINAL_REVIEWED")
 
 
 def test_scenario_k_test_tampering_detected_during_green(tmp_path):

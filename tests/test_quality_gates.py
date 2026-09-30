@@ -51,19 +51,18 @@ def test_convergence_requires_append_only_or_explicit_converged_result():
         convergence_outcome(original, original, "Analysis finished")
 
 
-def test_convergence_loop_reimplements_appended_work_then_verifies_again():
+def test_convergence_loop_reimplements_appended_work_then_converges_again():
     events = []
     outcomes = iter(["tasks_appended", "converged"])
     result = run_convergence_loop(
         3,
-        lambda iteration: events.append(("verify", iteration)),
         lambda iteration: (events.append(("converge", iteration)), next(outcomes))[1],
         lambda iteration: events.append(("implement", iteration)),
     )
     assert result == 2
     assert events == [
-        ("verify", 1), ("converge", 1), ("implement", 2),
-        ("verify", 2), ("converge", 2),
+        ("converge", 1), ("implement", 2),
+        ("converge", 2),
     ]
 
 
@@ -72,30 +71,31 @@ def test_convergence_loop_stops_at_limit_without_unbounded_implementation():
     with pytest.raises(ValueError, match="max_convergence_iterations=1"):
         run_convergence_loop(
             1,
-            lambda iteration: events.append(("verify", iteration)),
-            lambda iteration: "tasks_appended",
+            lambda iteration: (events.append(("converge", iteration)), "tasks_appended")[1],
             lambda iteration: events.append(("implement", iteration)),
         )
-    assert events == [("verify", 1)]
+    assert events == [("converge", 1)]
 
 
 def test_convergence_loop_rejects_zero_limit_before_running_work():
     with pytest.raises(ValueError, match="at least 1"):
-        run_convergence_loop(0, lambda _: None, lambda _: "converged", lambda _: None)
+        run_convergence_loop(0, lambda _: "converged", lambda _: None)
 
 
-def test_deterministic_verification_failure_prevents_semantic_convergence():
+def test_final_verification_runs_only_after_convergence_stabilizes():
     events = []
+    outcomes = iter(["tasks_appended", "converged"])
+    limit = 3
 
-    def fail_verification(iteration):
-        events.append(("verify", iteration))
-        raise RuntimeError("deterministic verification failed")
+    last_attempt = run_convergence_loop(
+        limit,
+        lambda iteration: (events.append(("converge", iteration)), next(outcomes))[1],
+        lambda iteration: events.append(("implement", iteration)),
+    )
+    events.append(("verify", last_attempt))
 
-    with pytest.raises(RuntimeError, match="deterministic verification failed"):
-        run_convergence_loop(
-            2,
-            fail_verification,
-            lambda iteration: events.append(("converge", iteration)) or "converged",
-            lambda iteration: events.append(("implement", iteration)),
-        )
-    assert events == [("verify", 1)]
+    assert last_attempt == 2
+    assert events == [
+        ("converge", 1), ("implement", 2),
+        ("converge", 2), ("verify", 2),
+    ]

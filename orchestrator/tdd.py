@@ -345,12 +345,18 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
         code_before=workspace_snapshot(root)
         if not gate_phase("GREEN_IMPLEMENT","coder",["production files"],design.test_commands): return task
         designer_model = task.evidence.get("test_designer_model")
+        validator_model = task.evidence.get("test_validator_model")
+        coder_authors = []
+        if designer_model:
+            coder_authors.append((designer_model, "test_designer"))
+        if validator_model:
+            coder_authors.append((validator_model, "test_validator"))
         coder,_=invoke(
             "coder",
             f"Validated task-specific tests: {json.dumps(task.evidence['test_design'])}\nValidated RED results: {json.dumps(task.evidence['red'])}\nDo not modify tests or fixtures.",
             author_provider=task.evidence.get("test_designer_provider"),
             author_model=designer_model,
-            author_models=[designer_model] if designer_model else None,
+            author_models=coder_authors if coder_authors else ([designer_model] if designer_model else None),
             author_role="test_designer",
         )
         if not coder.success:
@@ -495,12 +501,21 @@ def execute_tdd_task(task: TDDTask, runner, harness, workspace, task_test_comman
 
     if not gate_phase("REVIEW","code_reviewer",[],[],artifacts=prod_files): return task
     coder_model = task.evidence.get("coder_model")
+    designer_model = task.evidence.get("test_designer_model")
+    validator_model = task.evidence.get("test_validator_model")
+    reviewer_authors = []
+    if coder_model:
+        reviewer_authors.append((coder_model, "coder"))
+    if designer_model:
+        reviewer_authors.append((designer_model, "test_designer"))
+    if validator_model:
+        reviewer_authors.append((validator_model, "test_validator"))
     review,raw=invoke(
         "code_reviewer",
         load_prompt("code_reviewer", task=task.task, artifact=json.dumps(task.evidence, indent=2)),
         author_provider=task.evidence.get("coder_provider"),
         author_model=coder_model,
-        author_models=[coder_model] if coder_model else None,
+        author_models=reviewer_authors if reviewer_authors else ([coder_model] if coder_model else None),
         author_role="coder",
         artifacts=prod_files,
     )

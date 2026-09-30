@@ -1,7 +1,7 @@
 """Model family classification and author-validator independence checking."""
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Any, Iterable
 
 
 def model_family(model_id: str | None) -> str:
@@ -50,7 +50,6 @@ MANDATORY_INDEPENDENCE_PAIRS = (
     ("planning", "plan_validator"),
     ("tasks", "tasks_validator"),
     ("test_designer", "test_validator"),
-    ("coder", "test_validator"),
     ("coder", "code_reviewer"),
     ("refactorer", "code_reviewer"),
 )
@@ -59,6 +58,8 @@ MANDATORY_INDEPENDENCE_PAIRS = (
 NUMERIC_INDEPENDENCE_PAIRS = (
     ("test_designer", "code_reviewer"),
     ("test_designer", "coder"),
+    ("test_validator", "coder"),
+    ("test_validator", "code_reviewer"),
 )
 
 
@@ -78,13 +79,14 @@ def check_independence(
     auth_role = canonical_role(pair[0])
     val_role = canonical_role(pair[1])
     canonical_pair = (auth_role, val_role)
-    
-    is_mandatory = canonical_pair in MANDATORY_INDEPENDENCE_PAIRS
-    is_numeric = canonical_pair in NUMERIC_INDEPENDENCE_PAIRS
-    
+    reverse_pair = (val_role, auth_role)
+
+    is_mandatory = canonical_pair in MANDATORY_INDEPENDENCE_PAIRS or reverse_pair in MANDATORY_INDEPENDENCE_PAIRS
+    is_numeric = canonical_pair in NUMERIC_INDEPENDENCE_PAIRS or reverse_pair in NUMERIC_INDEPENDENCE_PAIRS
+
     if not is_mandatory and not is_numeric:
         return True, auth_fam, val_fam, "unconstrained_pair"
-        
+
     if is_numeric and not numeric_sensitive:
         # In normal tasks, log advisory note without blocking
         collision = (auth_fam == val_fam and auth_fam != "unknown")
@@ -93,12 +95,12 @@ def check_independence(
 
     if auth_fam != "unknown" and auth_fam == val_fam:
         return False, auth_fam, val_fam, f"family_collision: both belong to '{auth_fam}'"
-        
+
     return True, auth_fam, val_fam, "independent_families"
 
 
 def is_family_independent(
-    author_models: str | Iterable[str | None] | None,
+    author_models: str | Iterable[Any] | dict[str, str] | None,
     candidate_model: str | None,
     author_role: str | None = None,
     validator_role: str | None = None,
@@ -109,25 +111,40 @@ def is_family_independent(
         return True, "no_candidate_model"
     if not author_models:
         return True, "no_author_models"
-        
-    if isinstance(author_models, str):
-        auth_list = [author_models]
-    else:
-        auth_list = [m for m in author_models if m is not None]
-        
+
     cand_fam = model_family(candidate_model)
     if cand_fam in ("unknown", "other"):
         return True, "unclassified_candidate"
-        
-    pair = (author_role or "", validator_role or "")
-    for auth_m in auth_list:
+
+    entries: list[tuple[str, str]] = []
+    if isinstance(author_models, str):
+        entries.append((author_models, author_role or ""))
+    elif isinstance(author_models, dict):
+        for k, v in author_models.items():
+            if not k or not v:
+                continue
+            if any(term in k for term in ("designer", "validator", "coder", "spec", "plan", "task", "review")):
+                entries.append((str(v), str(k)))
+            else:
+                entries.append((str(k), str(v)))
+    else:
+        for item in author_models:
+            if item is None:
+                continue
+            if isinstance(item, tuple) and len(item) == 2:
+                entries.append((str(item[0]), str(item[1])))
+            elif isinstance(item, str):
+                entries.append((item, author_role or ""))
+
+    for auth_m, auth_r in entries:
         auth_fam = model_family(auth_m)
         if auth_fam in ("unknown", "other"):
             continue
+        pair = (auth_r, validator_role or "")
         ok, _, _, reason = check_independence(
             auth_m, candidate_model, pair, numeric_sensitive=numeric_sensitive
         )
         if not ok:
             return False, reason
-            
+
     return True, "independent"

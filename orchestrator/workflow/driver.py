@@ -560,13 +560,14 @@ def run_sdd_workflow(feature, workspace, runner, harness, config, workflow_dir, 
             verify_convergence_receipt(out/f"convergence-report-{converged_checkpoint['attempt']}.json", layout.tasks, "converged")
         except ValueError as exc:
             raise WorkflowBlocked(str(exc)) from exc
-        verify_iteration(converged_checkpoint["attempt"])
+        last_attempt = converged_checkpoint["attempt"]
     else:
         try:
             limit=int(config.real_run.get("max_convergence_iterations",3))
-            run_convergence_loop(limit,verify_iteration,converge_iteration,implement_remaining)
+            last_attempt = run_convergence_loop(limit,converge_iteration,implement_remaining)
         except (TypeError,ValueError) as exc:
             raise WorkflowBlocked(str(exc)) from exc
+    verify_iteration(last_attempt)
     if not (resume and validated("FINAL_REVIEWED")):
         final_artifacts = ["traceability.json", "final-verification.json"]
         if not _call_gate(gate_callback, "FINAL_REVIEW", "final_reviewer", [], [], artifacts=final_artifacts, runner=runner): raise WorkflowBlocked("Interactive gate aborted before final review")

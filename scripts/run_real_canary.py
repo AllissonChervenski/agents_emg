@@ -490,28 +490,12 @@ def main():
     checkpoint("TASK_COMPLETE", task_id="T001")
 
     # -------------------------------------------------------------------------
-    # STAGE 9: FINAL DETERMINISTIC VERIFICATION & CONVERGENCE
+    # STAGE 9: CONVERGENCE & FINAL DETERMINISTIC VERIFICATION
     # -------------------------------------------------------------------------
-    print("\n--- [STAGE 9] Deterministic Verification & Convergence ---")
-    final_results = harness.run()
-    deterministic_ok = final_verification_pass(final_results, harness.requirement_results)
-    print(f"  Deterministic Verification Results ({len(final_results)} checks):")
-    for r in final_results:
-        print(f"    [{r.status}] {r.name} (exit={r.exit_code})")
-    assert deterministic_ok, "Deterministic verification failed"
+    print("\n--- [STAGE 9] Convergence & Final Deterministic Verification ---")
 
-    (run_dir / "final-verification.json").write_text(
-        json.dumps([{"name": r.name, "command": r.command, "status": r.status, "exit_code": r.exit_code} for r in final_results], indent=2),
-        encoding="utf-8",
-    )
-    (run_dir / "requirement-verification.json").write_text(
-        json.dumps([asdict(item) for item in harness.requirement_results], indent=2),
-        encoding="utf-8",
-    )
-    checkpoint("FINAL_VERIFIED")
-
-    # Convergence agent (OpenCode mimo-v2.6-pro)
-    print("  [9.2 CONVERGENCE] Live Convergence Agent (OpenCode)")
+    # 9.1 CONVERGENCE: Live convergence_agent (OpenCode)
+    print("  [9.1 CONVERGENCE] Live Convergence Agent (OpenCode)")
     res_converge = runner.run(
         "convergence_agent",
         "Assess 001-provider-summary implementation against spec and tasks. Report convergence.",
@@ -533,6 +517,25 @@ def main():
     (run_dir / "convergence-report-1.json").write_text(json.dumps(conv_receipt, indent=2), encoding="utf-8")
     verify_convergence_receipt(run_dir / "convergence-report-1.json", layout.tasks, "converged")
     checkpoint("CONVERGED", attempt=1)
+
+    # 9.2 FINAL DETERMINISTIC VERIFICATION:
+    print("  [9.2 FINAL VERIFICATION] Deterministic Harness Checks on Stabilized Codebase")
+    final_results = harness.run()
+    deterministic_ok = final_verification_pass(final_results, harness.requirement_results)
+    print(f"  Deterministic Verification Results ({len(final_results)} checks):")
+    for r in final_results:
+        print(f"    [{r.status}] {r.name} (exit={r.exit_code})")
+    assert deterministic_ok, "Deterministic verification failed"
+
+    (run_dir / "final-verification.json").write_text(
+        json.dumps([{"name": r.name, "command": r.command, "status": r.status, "exit_code": r.exit_code} for r in final_results], indent=2),
+        encoding="utf-8",
+    )
+    (run_dir / "requirement-verification.json").write_text(
+        json.dumps([asdict(item) for item in harness.requirement_results], indent=2),
+        encoding="utf-8",
+    )
+    checkpoint("FINAL_VERIFIED")
 
     # -------------------------------------------------------------------------
     # STAGE 10: FINAL REVIEW (Live Codex gpt-6-sol)
@@ -646,6 +649,13 @@ def main():
     assert "CONVERGED" in stages_traversed
     assert "FINAL_VERIFIED" in stages_traversed
     assert "FINAL_REVIEWED" in stages_traversed
+    idx_conv = stages_traversed.index("CONVERGED")
+    idx_fver = stages_traversed.index("FINAL_VERIFIED")
+    idx_frev = stages_traversed.index("FINAL_REVIEWED")
+    assert idx_conv < idx_fver < idx_frev, (
+        f"Lifecycle ordering violation: expected CONVERGED -> FINAL_VERIFIED -> FINAL_REVIEWED, "
+        f"got CONVERGED at {idx_conv}, FINAL_VERIFIED at {idx_fver}, FINAL_REVIEWED at {idx_frev}"
+    )
     print(f"  Final Verification: {len(final_results)}/ {len(final_results)} checks PASS")
     print(f"  Convergence Outcome: converged (receipt verified)")
     print(f"  Final Review: PASS (reviewed by {res_fr.provider}/{res_fr.resolved_model})")
