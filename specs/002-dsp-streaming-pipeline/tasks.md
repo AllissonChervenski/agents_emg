@@ -14,7 +14,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 - TDD applies to all implementation tasks (T001–T006): each runs RED → GREEN → REFACTOR under the Python orchestrator.
 - In RED, the TestDesigner creates task-specific tests in `tests/`, declares the focused test command, and demonstrates `EXPECTED_FAILURE` caused by the missing behavior. The orchestrator snapshots those tests; GREEN and REFACTOR must not edit or weaken them.
-- All numerical tasks (T001–T007) are marked with `"numeric_sensitive": true`. The orchestrator enforces strict provider family independence (`test_designer` ≠ `test_validator` and `test_validator` ≠ `coder`).
+- Algorithmic and numerical transformation tasks (T003, T004, T005, T006) are marked with `"numeric_sensitive": true`. The orchestrator enforces strict provider family independence (`test_designer` ≠ `test_validator` e `test_validator` ≠ `coder`). Structural and audit tasks (T001, T002, T007) are marked `"numeric_sensitive": false`.
 - Fixtures and reference golden vectors created by test design are declared under `fixture_files` and tracked via SHA-256 snapshots against tampering (`TEST_TAMPERING`).
 - Under Constitution Principle VI, test oracles MUST be computed independently (analytical L0 formulas or SciPy offline routines); code under test in `semg_dsp/` MUST NEVER generate its own expected test assertions.
 - REFACTOR for `numeric_sensitive` tasks operates as a safe no-op.
@@ -24,12 +24,12 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 ## Phase 1: Setup
 
-**Purpose**: Initialize the package structure and public symbol exports for `semg_dsp`.
+**Purpose**: Initialize the core package structure for `semg_dsp` without premature symbol exports.
 
-- [ ] T001 [P] Setup semg_dsp package structure and public symbol exports in semg_dsp/__init__.py
-  <!-- harness-task {"requirements":["FR-001","FR-011"],"acceptance_criteria":["AC-010"],"plan_decisions":["D-001"],"dependencies":[],"test_type":"UNIT","allowed_files":["semg_dsp/__init__.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+- [ ] T001 [P] Setup core package layout in semg_dsp/__init__.py
+  <!-- harness-task {"requirements":["FR-001"],"acceptance_criteria":["AC-010"],"plan_decisions":["D-001"],"dependencies":[],"test_type":"UNIT","allowed_files":["semg_dsp/__init__.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
-**Checkpoint**: Package importable and exposes clean namespace.
+**Checkpoint**: Package importable and exposes clean namespace without importing nonexistent modules.
 
 ---
 
@@ -38,7 +38,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 **Purpose**: Establish base contracts for streaming sample ingestion and data containers.
 
 - [ ] T002 [US1] Implement SampleSource abstract protocol and ChunkData container in semg_dsp/source.py
-  <!-- harness-task {"requirements":["FR-001","FR-008","FR-011"],"acceptance_criteria":["AC-001","AC-005","AC-010"],"plan_decisions":["D-001","D-003"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_dsp/source.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+  <!-- harness-task {"requirements":["FR-001","FR-008"],"acceptance_criteria":["AC-001","AC-005","AC-010"],"plan_decisions":["D-001","D-003"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_dsp/source.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: `SampleSource` base abstraction ready; `ChunkData` enforces `float32` and temporal metadata.
 
@@ -61,12 +61,12 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Goal**: Filter streaming chunks using Direct Form II Transposed (DF2T) biquad cascade with explicit state array `(n_sections, 2, n_channels)`, strict causality, and chunk invariance.
 
-**Independent Test**: Filter arbitrary signals in a single batch call versus successive fragmented chunks (1 sample to $N$ samples); verify chunk invariance error $\le \text{TOL-CHUNK-INVARIANCE}$; assert strict `float32` state and outputs; verify zero lookahead.
+**Independent Test**: Filter arbitrary continuous signals in a single batch call versus successive fragmented chunks (1 sample to $N$ samples); verify chunk invariance $\max \| \text{concat}(F(C_i)) - F(\text{concat}(C_i)) \| \le \text{TOL-CHUNK-INVARIANCE}$; assert strict `float32` state and outputs; verify zero lookahead.
 
 - [ ] T004 [US2] Implement CausalSosFilter with Direct Form II Transposed state and chunk-invariance in semg_dsp/filter.py
   <!-- harness-task {"requirements":["FR-003","FR-004","FR-005","FR-008","FR-010","FR-011"],"acceptance_criteria":["AC-002","AC-003","AC-006","AC-011"],"plan_decisions":["D-002","D-003","D-005","D-006"],"dependencies":["T003"],"test_type":"UNIT","allowed_files":["semg_dsp/filter.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true,"fixture_files":["tests/fixtures/dsp/sos_test_filter.npz"]} -->
 
-**Checkpoint**: Story 2 complete; filter operates sample-by-sample and chunk-by-chunk with zero future-sample lookahead and perfect chunk invariance.
+**Checkpoint**: Story 2 complete; filter operates sample-by-sample and chunk-by-chunk with zero future-sample lookahead and verified chunk invariance.
 
 ---
 
@@ -74,12 +74,12 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Goal**: Slice continuous filtered streams into fixed-length sliding windows `(window_length, num_channels)` in `float32` according to `stride`, maintaining state across chunks with safe residual handling.
 
-**Independent Test**: Stream variable-length chunks into `StatefulWindowBuffer`; verify exact window shapes, correct stride offsets, channel preservation, and safe residual retention under default `drop` policy.
+**Independent Test**: Stream variable-length chunks into `StatefulWindowBuffer`; verify exact window shapes, correct stride offsets, channel preservation, and retention of residual samples during streaming with safe handling on `finalize()`. Assert that the sequence of emitted windows is identical regardless of input chunk fragmentation.
 
 - [ ] T005 [US3] Implement StatefulWindowBuffer causal sliding window accumulator in semg_dsp/window.py
   <!-- harness-task {"requirements":["FR-006","FR-007","FR-008","FR-010","FR-011"],"acceptance_criteria":["AC-004","AC-005","AC-006","AC-011"],"plan_decisions":["D-003","D-005","D-007"],"dependencies":["T004"],"test_type":"UNIT","allowed_files":["semg_dsp/window.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
-**Checkpoint**: Story 3 complete; continuous sample streams are deterministically partitioned into sliding windows.
+**Checkpoint**: Story 3 complete; continuous sample streams are deterministically partitioned into sliding windows without dropping samples between chunks.
 
 ---
 
@@ -98,8 +98,8 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 ## Final Phase: Polish & Cross-Cutting Concerns
 
-- [ ] T007 Scope, scientific integrity, and Constitution Principle VI audit in specs/002-dsp-streaming-pipeline/tasks.md
-  <!-- harness-task {"requirements":["FR-009","FR-010","FR-011","FR-012"],"acceptance_criteria":["AC-008","AC-009","AC-010","AC-012"],"plan_decisions":["D-004","D-005","D-008"],"dependencies":["T006"],"test_type":"NOT_AUTOMATABLE","justification":"Human review of the final feature diff, verification of Principle VI oracle independence, absence of real dataset assumptions, and confirmation of deterministic quality gates.","alternative_verification":"Review git diff to verify no out-of-scope files were modified; verify no runtime dependency on scipy; verify all numerical tests pass against independent SciPy oracles under registered tolerances; run full quality gate: pytest -q, ruff check, mypy, compileall.","allowed_files":[],"tdd_phases":[],"numeric_sensitive":true} -->
+- [ ] T007 Final audit of scope boundaries, oracle independence, and Constitution Principle VI
+  <!-- harness-task {"requirements":["FR-009","FR-010"],"acceptance_criteria":["AC-008","AC-010","AC-012"],"plan_decisions":["D-004","D-005","D-008"],"dependencies":["T006"],"test_type":"NOT_AUTOMATABLE","justification":"Human review of the final feature diff, verification of Principle VI oracle independence, absence of real dataset assumptions, and confirmation of deterministic quality gates.","alternative_verification":"Review git diff to verify no out-of-scope files were modified; verify no runtime dependency on scipy; verify all numerical tests pass against independent SciPy oracles under registered tolerances; run full quality gate: pytest -q, ruff check, mypy, compileall.","allowed_files":[],"tdd_phases":[],"numeric_sensitive":false} -->
 
 ---
 

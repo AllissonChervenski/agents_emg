@@ -8,7 +8,7 @@
 
 ## Summary
 
-Implement a host-only, strictly causal, streaming digital signal processing (DSP) pipeline for sEMG signals using synthetic sample generation, Direct Form II Transposed (DF2T) SOS/biquad filtering with explicit state, and deterministic stateful windowing. All operations enforce `numpy.float32` precision, chunk-invariance ($process(X) \approx \sum process(chunk_i)$), and independent numerical verification under Principle VI of the Constitution using analytical L0 signals and SciPy L1 oracles.
+Implement a host-only, strictly causal, streaming digital signal processing (DSP) pipeline for sEMG signals using synthetic sample generation, Direct Form II Transposed (DF2T) SOS/biquad filtering with explicit state, and deterministic stateful windowing. All operations enforce `numpy.float32` precision, chunk-invariance ($\text{concat}(F(C_1), \dots, F(C_k)) \approx F(\text{concat}(C_1, \dots, C_k))$ e identidade ordenada da sequência de janelas), e verificação numérica independente sob o Princípio VI da Constituição usando sinais analíticos L0 e oráculos SciPy L1.
 
 ---
 
@@ -19,12 +19,13 @@ Implement a host-only, strictly causal, streaming digital signal processing (DSP
 - **Testing & Oracle Dependencies**: `pytest`, `scipy` (strictly restricted to test oracles/fixtures, never imported in production runtime `semg_dsp`)
 - **New Dependencies**: Zero new runtime dependencies. Property-based testing (Hypothesis) is marked `DECISION_REQUIRED` and deferred.
 - **Storage**: In-memory streaming state; golden reference vectors stored as immutable fixtures in `tests/fixtures/dsp/`
-- **Target Platform**: Host Python execution, designed for future 1:1 structural transposition to C++ / ESP32-S3 (CMSIS-DSP / ESP-DSP compatible layout)
+- **Target Platform**: Host Python execution, designed for future 1:1 structural transposition to C++ / embedded targets (CMSIS-DSP / standard biquad layout)
 - **Constraints**:
   - Strictly causal runtime (no `filtfilt`, no lookahead, no whole-recording normalization);
   - Single-precision floating point (`float32`) without silent promotion to `float64`;
   - Code under test NEVER generates its own test references (Principle VI);
-  - All numerical tasks marked `numeric_sensitive: true` with mutual provider family independence (`test_designer` ≠ `test_validator` ≠ `coder`).
+  - O runtime host deve usar buffers internos de tamanho limitado e shapes determinísticos, evitar crescimento não limitado e evitar buffering da gravação completa. Zero dynamic allocation é requisito futuro do port C++/embedded, não uma garantia do runtime Python da Feature 002;
+  - Todas as tarefas de transformação e aritmética numérica marcadas como `numeric_sensitive: true` com separação mútua de famílias de provedores (`test_designer` ≠ `test_validator` ≠ `coder`).
 
 ---
 
@@ -46,12 +47,12 @@ Implement a host-only, strictly causal, streaming digital signal processing (DSP
 | ID | Decision | Rationale | Alternatives Considered |
 |---|---|---|---|
 | **D-001** | Package layout in dedicated `semg_dsp/` root (`source.py`, `filter.py`, `window.py`, `pipeline.py`). | Separates scientific DSP codebase cleanly from orchestrator engine infrastructure, allowing independent packaging and eventual C++ porting. | Placing under `orchestrator/dsp/` (rejected: couples scientific domain code to orchestration harness). |
-| **D-002** | Direct Form II Transposed (DF2T) biquad cascade with explicit state array `(n_sections, 2, n_channels)`. | DF2T minimizes floating-point roundoff noise in single precision, requires only 2 delay elements per biquad section per channel, and supports streaming sample-by-sample without lookahead. | Direct Form I (requires more state storage); Direct Form II non-transposed (more sensitive to coefficient quantization). |
-| **D-003** | Strict `np.float32` precision across inputs, state, and outputs. | Directly models target embedded FPU (ESP32-S3 single-precision) and minimizes memory bandwidth. Promotion to `float64` is guarded against at boundary and state updates. | `float64` (rejected: misleading numerical stability that fails when ported to microcontrollers). |
+| **D-002** | Direct Form II Transposed (DF2T) biquad cascade com vetor de estado explícito `(n_sections, 2, n_channels)`. | DF2T minimiza ruído de quantização em precisão simples, consome apenas 2 elementos de atraso por seção/canal e opera amostra a amostra sem lookahead. | Direct Form I (maior uso de memória); Direct Form II canônica não-transposta (mais sensível a quantização). |
+| **D-003** | Precisão estrita `np.float32` em entradas, estados e saídas. | `float32` é a referência numérica do pipeline host por ser um dtype explícito, reproduzível e adequado à futura migração para runtimes embedded com precisão simples. Evita consumo excessivo de memória de buffer e discrepâncias de ponto flutuante. | `float64` (rejeitado: mascara estabilidade numérica que falharia em microcontroladores). |
 | **D-004** | Dual-tier independent oracle strategy (L0 analytical + L1 SciPy `sosfilt`). | Satisfies Constitution Principle VI. L0 proves fundamental DSP theory (impulse response, step response, DC gain); L1 verifies arbitrary filter responses against established scientific software without self-reference. | Self-generated test assertions (strictly forbidden by Principle VI); pure L0 only (insufficient for complex multi-pole filters). |
-| **D-005** | Formal catalog of tolerance contracts (`tolerance_id`). | Eliminates arbitrary ad-hoc tolerances. Every test asserts against an explicitly justified contract (`TOL-ANALYTICAL-L0`, `TOL-SOS-FILTER-L1`, `TOL-CHUNK-INVARIANCE`, `TOL-WINDOW-ACCUMULATION`). | Global hardcoded `rtol=1e-7` (unrealistic for cascaded IIR float32 operations). |
-| **D-006** | Chunk-invariance verification harness. | Proves that streaming state is preserved continuously across arbitrary buffer fragmentation ($1$ sample, $7$ samples, $64$ samples) matching monolithic execution. | Testing only fixed chunk sizes (misses boundary accumulator errors). |
-| **D-007** | Stateful window buffer with circular/FIFO array and explicit residual policy (`drop` vs `pad`). | Decouples incoming chunk sizes from window stride. Streaming default `drop` avoids edge artifacts from synthetic padding. | Pure batch array slicing (fails in streaming runtime); generator-only approach (lacks explicit state inspectability). |
+| **D-005** | Formal catalog of tolerance contracts (`tolerance_id`) com status `PROVISIONAL`. | Elimina tolerâncias arbitrárias. Cada asserção referencia um contrato explícito (`TOL-ANALYTICAL-L0`, `TOL-SOS-FILTER-L1`, `TOL-CHUNK-INVARIANCE`, `TOL-WINDOW-ACCUMULATION`) documentado com proveniência e justificativa. | Tolerância universal hardcoded `rtol=1e-7` (inviável para filtros IIR em cascata em float32). |
+| **D-006** | Chunk-invariance verification harness para filtro e janelador. | Comprova que para o filtro $\text{concat}(F(C_1), \dots, F(C_k)) \approx F(\text{concat}(C_1, \dots, C_k))$ e que para o janelador a sequência de janelas emitida é exatamente idêntica independente do particionamento de chunks. | Testar apenas chunks de tamanho fixo (não detecta erros de acumulador em fronteiras). |
+| **D-007** | Stateful window buffer retendo amostras residuais entre chunks com descarte apenas em `finalize()`. | `process_chunk()` NUNCA descarta amostras parciais durante o streaming; elas permanecem no buffer com estado para os próximos chunks. O descarte sob a política `"drop"` ocorre exclusivamente em `finalize()`. | Descartar residual ao fim de cada chunk (quebraria a propriedade de streaming). |
 | **D-008** | Safe no-op REFACTOR for all `numeric_sensitive` tasks. | Protects mathematically delicate implementations from unguided agent modifications that maintain green tests by loosening precision or restructuring operations. | Active refactoring without snapshot harness (high risk of numerical regression). |
 
 ---
@@ -63,11 +64,11 @@ Implement a host-only, strictly causal, streaming digital signal processing (DSP
 | **FR-001, FR-002** (SampleSource & SyntheticSource) | D-001, D-003: Abstract `SampleSource` base class; `SyntheticSampleSource` supporting zeros, DC, impulse, step, sine, multi-tone, saturation. | `tests/test_dsp_source.py`: Assert exact waveform generation, continuity of phase across multiple `read_chunk` calls, `float32` dtype, and error on invalid parameters. |
 | **FR-003, FR-004** (Causal SOS Filter & Strict Causality) | D-002, D-003, D-006: `CausalSosFilter` with DF2T state `(n_sections, 2, n_channels)`. No `filtfilt`, no lookahead. | `tests/test_dsp_filter.py`: Assert output matches causal difference equations; verify non-causal outputs are zero before input arrival ($t < t_0$). |
 | **FR-005** (Versioned SOS Coefficients) | D-002: Coefficients passed as pre-computed array `(n_sections, 6)`. | `tests/test_dsp_filter.py`: Reject coefficients with invalid shapes or non-float32 dtypes. |
-| **FR-006, FR-007** (Stateful Windowing & Partial Policy) | D-007: `StatefulWindowBuffer` managing circular buffer with `window_length` and `stride`, returning `list[np.ndarray]`. | `tests/test_dsp_window.py`: Test variable chunk arrivals ($1$ to $3 \times W$), verify window shapes `(W, C)`, verify residual sample handling under `drop` policy. |
+| **FR-006, FR-007** (Stateful Windowing & Partial Policy) | D-007: `StatefulWindowBuffer` managing circular buffer with `window_length` and `stride`, returning `list[np.ndarray]` via `process_chunk`, retaining residuals across streaming calls, and applying `drop` only on `finalize()`. | `tests/test_dsp_window.py`: Test variable chunk arrivals ($1$ to $3 \times W$), verify window shapes `(W, C)`, verify residual retention during streaming and safe handling under `finalize()`. |
 | **FR-008** (Strict `float32` Invariant) | D-003: Explicit casting and dtype checks at ingestion and state update. | `tests/test_dsp_filter.py`, `tests/test_dsp_window.py`: Validate `array.dtype == np.float32` on every returned chunk, window, and internal state. |
-| **FR-009, FR-010** (Oracle Integrity & Tolerance Catalog) | D-004, D-005: Independent reference fixtures in `tests/fixtures/dsp/` generated with SciPy / math formulas; verified against tolerance IDs. | `tests/test_dsp_oracles.py`: Compare filter output with `scipy.signal.sosfilt` reference; assert discrepancies are within `TOL-SOS-FILTER-L1`. |
-| **FR-011, FR-012** (Numeric Sensitivity & Family Separation) | D-008: Metadata `"numeric_sensitive": true` on tasks; harness enforces `test_designer` ≠ `test_validator` ≠ `coder`. | Orchestrator runner telemetry validates distinct provider families assigned for each role in numerical tasks. |
-| **Chunk Invariance** | D-006: Partition signal into random chunks, stream through filter, compare to batch. | `tests/test_dsp_filter.py`: Assert $\max \| y_{\text{batch}} - y_{\text{stream}} \| \le \text{TOL-CHUNK-INVARIANCE}$. |
+| **FR-009, FR-010** (Oracle Integrity & Tolerance Catalog) | D-004, D-005: Independent reference fixtures in `tests/fixtures/dsp/` generated with SciPy / math formulas; verified against tolerance IDs with `PROVISIONAL` status. | `tests/test_dsp_oracles.py`: Compare filter output with `scipy.signal.sosfilt` reference; assert discrepancies are within `TOL-SOS-FILTER-L1`. |
+| **FR-011, FR-012** (Numeric Sensitivity & Family Separation) | D-008: Metadata `"numeric_sensitive": true` on algorithmic tasks; harness enforces `test_designer` ≠ `test_validator` ≠ `coder`. | Orchestrator runner telemetry validates distinct provider families assigned for each role in numerical tasks. |
+| **Chunk Invariance** | D-006: Partition continuous signals into variable chunks, stream through filter and window buffer, compare with monolithic execution. | `tests/test_dsp_filter.py`: Assert $\max \| \text{concat}(F(C_i)) - F(\text{concat}(C_i)) \| \le \text{TOL-CHUNK-INVARIANCE}$. `tests/test_dsp_window.py`: Assert identical sequence of emitted windows regardless of chunk partition. |
 
 ---
 
@@ -118,6 +119,10 @@ class StatefulWindowBuffer:
         # returns list of windows: [(window_length, num_channels), ...]
         ...
 
+    def finalize(self) -> list[np.ndarray]:
+        # handles end-of-stream residuals according to partial_policy
+        ...
+
     def reset(self) -> None: ...
 ```
 
@@ -132,6 +137,10 @@ class StreamingPipeline:
         # pulls chunk from source -> filters -> pushes to window buffer -> returns emitted windows
         ...
 
+    def finalize(self) -> list[np.ndarray]:
+        # flushes remaining windows from window buffer
+        ...
+
     def reset(self) -> None: ...
 ```
 
@@ -139,12 +148,12 @@ class StreamingPipeline:
 
 ## Tolerance Catalog (`tolerance_id`)
 
-| Tolerance ID | `rtol` | `atol` | Target Metric | Scientific / Mathematical Rationale |
-|---|---|---|---|---|
-| `TOL-ANALYTICAL-L0` | `1e-6` | `1e-6` | L0 Analytical signals | Exact single-precision floating point limit for pure mathematical formulas (step, DC, zero). |
-| `TOL-SOS-FILTER-L1` | `1e-5` | `1e-5` | Filter output vs SciPy `sosfilt` | Accounts for minor floating-point summation order differences between SciPy C-routine and explicit DF2T loop in `float32`. |
-| `TOL-CHUNK-INVARIANCE`| `1e-6` | `1e-6` | Streaming chunks vs batch processing | Internal filter state maintains exact sample-to-sample continuity; discrepancy is zero or limited to machine epsilon. |
-| `TOL-WINDOW-ACCUMULATION`| `0.0` | `0.0` | Window buffer sample reproduction | Pure discrete buffer indexing and sliding; values must be bitwise identical. |
+| Tolerance ID | Runtime Dtype | Comparison Target | `rtol` | `atol` | Status | Scientific / Mathematical Rationale |
+|---|---|---|---|---|---|---|
+| `TOL-ANALYTICAL-L0` | `float32` | Pure analytical formulas (step, DC, zero, impulse) | `1e-6` | `1e-6` | `PROVISIONAL` | Exact single-precision floating point limit for pure mathematical formulas (24-bit mantissa IEEE 754). |
+| `TOL-SOS-FILTER-L1` | `float32` | SciPy high-precision reference (`scipy.signal.sosfilt`) | `1e-5` | `1e-5` | `PROVISIONAL` | Accounts for minor floating-point summation order differences between SciPy C-routine and explicit DF2T loop in `float32`. |
+| `TOL-CHUNK-INVARIANCE`| `float32` | Streaming concatenated chunks vs batch execution | `1e-6` | `1e-6` | `PROVISIONAL` | Internal filter state maintains exact sample-to-sample continuity; discrepancy is zero or limited to machine epsilon. |
+| `TOL-WINDOW-ACCUMULATION`| `float32` | Window buffer sample reproduction | `0.0` | `0.0` | `PROVISIONAL` | Pure discrete buffer indexing and sliding; values must be bitwise identical. |
 
 ---
 
@@ -159,7 +168,7 @@ specs/002-dsp-streaming-pipeline/
     └── requirements.md         # Requirements-quality checklist
 
 semg_dsp/                       # Scientific DSP production code
-├── __init__.py                 # Export public pipeline symbols
+├── __init__.py                 # Core package layout (exports added progressively)
 ├── source.py                   # SampleSource and SyntheticSampleSource
 ├── filter.py                   # CausalSosFilter with DF2T state
 ├── window.py                   # StatefulWindowBuffer

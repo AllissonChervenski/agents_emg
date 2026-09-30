@@ -28,16 +28,16 @@ Como engenheiro de sistemas biomédicos ou pesquisador de DSP, desejo que o sist
 
 ### User Story 2 - Filtragem Causal SOS/Biquad com Estado Explícito (Priority: P1)
 
-Como engenheiro de firmware e DSP, desejo filtrar os sinais sEMG em streaming através de uma estrutura biquad/SOS (Second-Order Sections) causal com estado interno explícito mantido entre chunks, para garantir processamento causal em tempo real compatível com futuras implementações em C++ em microcontroladores (ESP32).
+Como engenheiro de firmware e DSP, desejo filtrar os sinais sEMG em streaming através de uma estrutura biquad/SOS (Second-Order Sections) causal com estado interno explícito mantido entre chunks, para garantir processamento causal em tempo real compatível com futuras implementações em C++ em microcontroladores.
 
 **Why this priority**: A filtragem analógica/digital é a operação central do processamento sEMG. O estado explícito e a causalidade estrita garantem que a saída não dependa de dados futuros nem de processamento em lote completo.
 
-**Independent Test**: Executar a filtragem de um sinal longo em uma única chamada de bloco grande e, separadamente, em uma sequência de pequenos blocos arbitrários; validar que a saída concatenada dos pequenos blocos é numericamente equivalente à saída do bloco único dentro da tolerância registrada (invariância por chunks).
+**Independent Test**: Executar a filtragem de um sinal longo em uma única chamada de bloco grande e, separadamente, em uma sequência de pequenos blocos arbitrários; validar que a concatenação das saídas parciais é numericamente equivalente à saída do bloco único dentro da tolerância registrada (invariância por chunks).
 
 **Acceptance Scenarios**:
 
 1. **Given** coeficientes SOS conhecidos e um sinal de entrada sintético, **When** o filtro causal for alimentado com chunks sucessivos preservando seu estado interno (`sos_state`), **Then** a saída produzida é matematicamente causal ($y[n]$ depende apenas de $x[k]$ e $y[k]$ para $k \le n$) e sem dependência de amostras futuras.
-2. **Given** uma sequência temporal completa $X$ dividida arbitrariamente em $K$ chunks $\{C_1, C_2, \dots, C_K\}$, **When** o filtro processar a sequência particionada, **Then** a concatenação das saídas parciais $\bigcup_{i=1}^K Filter(C_i)$ é idêntica a $Filter(X)$ respeitando a tolerância numérica registrada `TOL-CHUNK-INVARIANCE`.
+2. **Given** uma sequência temporal contínua particionada arbitrariamente em $K$ chunks $\{C_1, C_2, \dots, C_K\}$, **When** o filtro processar a sequência preservando o estado interno entre chamadas sucessivas, **Then** a concatenação das saídas $\text{concat}(F(C_1), F(C_2), \dots, F(C_K))$ é numericamente equivalente a $F(\text{concat}(C_1, C_2, \dots, C_K))$ respeitando a tolerância numérica registrada `TOL-CHUNK-INVARIANCE`.
 3. **Given** a execução do filtro em tempo de execução, **When** os tipos de entrada e saída forem verificados, **Then** as operações preservam precisão `float32` sem promoção silenciosa para `float64` nas estruturas de estado.
 
 ---
@@ -48,13 +48,14 @@ Como desenvolvedor de algoritmos de extração de características/classificaç�
 
 **Why this priority**: A transição entre amostras contínuas e janelas de análise para extração de atributos/inferência requer bufferização causal com retenção de histórico.
 
-**Independent Test**: Enviar fluxos de amostras em parcelas irregulares para o `StatefulWindowBuffer` e verificar que janelas são emitidas exatamente nos instantes em que o stride é completado, com dimensões `(window_length, num_channels)` e preservação estrita da ordem das amostras e dos canais.
+**Independent Test**: Enviar fluxos de amostras em parcelas irregulares para o `StatefulWindowBuffer` e verificar que a sequência ordenada de janelas emitida é exatamente idêntica, independentemente de como o mesmo stream contínuo for particionado em chunks. Amostras residuais a cada chunk devem ser retidas no estado e nunca descartadas prematuramente.
 
 **Acceptance Scenarios**:
 
-1. **Given** um buffer com `window_length = W` e `stride = S`, **When** um número de amostras inferior a $W$ é recebido, **Then** nenhuma janela é emitida e as amostras permanecem retidas no buffer interno com estado.
+1. **Given** um buffer com `window_length = W` e `stride = S`, **When** um número de amostras inferior a $W$ é recebido via `process_chunk()`, **Then** nenhuma janela é emitida e todas as amostras permanecem retidas no buffer interno com estado aguardando os próximos chunks.
 2. **Given** a chegada da amostra de índice $W + k \cdot S$, **When** o buffer processar o chunk, **Then** a respectiva janela temporal de comprimento $W$ é emitida imediatamente contendo os dados mais recentes em precisão `float32`.
-3. **Given** um fluxo total de amostras finalizado com amostras residuais insuficientes para uma janela completa, **When** a política de finalização for consultada, **Then** o buffer comporta-se conforme a política configurada (`partial_window_policy`), descartando deterministicamente ou completando apenas se expressamente configurado.
+3. **Given** a ingestão contínua de chunks, **When** amostras parciais não completarem uma nova janela, **Then** o buffer NUNCA descarta o residual durante o streaming.
+4. **Given** a finalização explícita do stream (`finalize()`), **When** restarem amostras insuficientes para uma janela completa, **Then** o buffer aplica a política configurada (`partial_window_policy`), descartando deterministicamente sob a política padrão `"drop"`.
 
 ---
 
@@ -103,17 +104,21 @@ Como validador de conformidade científica e constitucional (Princípio VI), exi
   - Janelamento com consulta a amostras futuras (*lookahead*).
 - **FR-005 (Coeficientes SOS Versionados como Dados)**: Os coeficientes dos filtros SOS DEVEM ser recebidos como matrizes de dados numéricos pré-calculados e versionados (`shape = (n_sections, 6)`), e NUNCA projetados ou recalculados dinamicamente no laço crítico de streaming.
 - **FR-006 (Janelador com Estado `StatefulWindowBuffer`)**: O sistema DEVE implementar um buffer deslizante com estado que armazena amostras recebidas em chunks contínuos e emite matrizes de janelas completas com formato `(window_length, num_channels)` em `float32` a cada intervalo de `stride` amostras.
-- **FR-007 (Política de Janela Parcial)**: O `StatefulWindowBuffer` DEVE definir a política padrão para tratamento de amostras residuais no encerramento do stream (`partial_window_policy: "drop" | "pad"`). A política padrão inicial para streaming em tempo real deve ser o descarte seguro de amostras residuais insuficientes para uma janela completa (`drop`), evitando artefatos de preenchimento artificial.
-- **FR-008 (Tipagem Numérica Estrita `float32`)**: Todas as matrizes de entrada, coeficientes de filtro, buffers de estado e janelas de saída DEVEM manter precisão `numpy.float32`. Promoções implícitas para `float64` durante o processamento em streaming devem ser evitadas para refletir a fidelidade matemática de microcontroladores com FPU single-precision (ESP32).
+- **FR-007 (Política de Janela Parcial)**: O `StatefulWindowBuffer` NUNCA descarta amostras residuais durante a ingestão contínua de chunks (`process_chunk`). As amostras parciais permanecem obrigatoriamente retidas no buffer com estado para serem combinadas com chunks subsequentes. No encerramento explícito do stream (`finalize`), a política `partial_window_policy` define o comportamento para amostras remanescentes insuficientes para uma janela completa (`"drop"` descarta deterministicamente; `"pad"` completa com zeros).
+- **FR-008 (Tipagem Numérica Estrita `float32`)**: Todas as matrizes de entrada, coeficientes de filtro, buffers de estado e janelas de saída DEVEM manter precisão `numpy.float32`. Promoções implícitas para `float64` durante o processamento em streaming devem ser evitadas. `float32` é a referência numérica do pipeline host por ser um dtype explícito, reproduzível e adequado à futura migração para runtimes embedded com precisão simples.
 - **FR-009 (Integridade de Oráculo Independente - Princípio VI)**:
   - Os vetores de teste esperados (golden vectors) DEVEM ser calculados por oráculo independente (SciPy ou equações matemáticas L0) no escopo dos testes ou fixtures geradas independentemente.
   - O código de produção (`orchestrator` ou `semg_dsp`) NUNCA deve ser invocado para gerar os próprios dados de teste esperados.
   - Fixtures de teste armazenadas em `tests/fixtures/` devem ser declaradas no campo `fixture_files` das tarefas para proteção de hash SHA-256 contra adulteração (`TEST_TAMPERING`).
-- **FR-010 (Catálogo Formal de Tolerâncias Numéricas)**: Toda validação numérica DEVE associar asserções a um identificador formal de tolerância com justificativa analítica:
-  - `TOL-ANALYTICAL-L0`: Tolerância exata/de ponto flutuante de máquina para sinais analíticos L0 (`rtol=1e-6`, `atol=1e-6`);
-  - `TOL-SOS-FILTER-L1`: Tolerância de filtragem SOS causal frente ao oráculo SciPy `sosfilt` (`rtol=1e-5`, `atol=1e-5` justificadas por ordem de soma em ponto flutuante `float32`);
-  - `TOL-CHUNK-INVARIANCE`: Tolerância de invariância por chunks ($process(sinal) \approx \sum process(chunk_i)$) (`rtol=1e-6`, `atol=1e-6`);
-  - `TOL-WINDOW-ACCUMULATION`: Tolerância de reconstituição e segmentação de janelas (`rtol=0.0`, `atol=0.0`, indexação e valores idênticos).
+- **FR-010 (Catálogo Formal de Tolerâncias Numéricas)**: Toda validação numérica DEVE associar asserções a um identificador formal de tolerância com metadados explícitos de proveniência, tipo, alvo de comparação, status e justificativa analítica:
+
+| Tolerance ID | Runtime Dtype | Comparison Target | rtol | atol | Status | Rationale |
+|---|---|---|---|---|---|---|
+| `TOL-ANALYTICAL-L0` | `float32` | Fórmulas analíticas (degrau, DC, impulso, zeros) | `1e-6` | `1e-6` | `PROVISIONAL` | Resolução limite de máquina para mantissa de 24 bits IEEE 754 em precisão simples. |
+| `TOL-SOS-FILTER-L1` | `float32` | Oráculo independente SciPy `scipy.signal.sosfilt` | `1e-5` | `1e-5` | `PROVISIONAL` | Compensa pequenas diferenças de acumulação de arredondamento entre o loop explícito DF2T em float32 e a rotina C do SciPy. |
+| `TOL-CHUNK-INVARIANCE` | `float32` | Concatenação de saídas streaming vs processamento em bloco | `1e-6` | `1e-6` | `PROVISIONAL` | Garante que o estado interno do filtro retém continuidade exata sem deriva numérica através de fronteiras de chunks. |
+| `TOL-WINDOW-ACCUMULATION` | `float32` | Janelamento contínuo em bloco vs janelamento streaming com estado | `0.0` | `0.0` | `PROVISIONAL` | Indexação temporal e cópias de buffers discretos devem ser estritamente bit a bit idênticos. |
+
 - **FR-011 (Marcação de Tarefas `numeric_sensitive`)**: Todas as tarefas de especificação, planejamento e código envolvendo aritmética de filtros, janelamento, buffers circulares e transformações numéricas DEVEM conter `"numeric_sensitive": true` no metadata `harness-task`.
 - **FR-012 (Isolamento de Famílias em Tarefas Numéricas)**: Para todas as tarefas com `"numeric_sensitive": true`, o orquestrador garantirá que a família do autor do teste (`test_designer`), do validador do teste (`test_validator`) e do implementador (`coder`) sejam mutuamente independentes (`test_designer` ≠ `test_validator` e `test_validator` ≠ `coder`).
 
@@ -123,8 +128,8 @@ Como validador de conformidade científica e constitucional (Princípio VI), exi
 
 - **AC-001**: `SyntheticSampleSource` gera deterministicamente sinais analíticos L0 (zeros, DC, impulse, step, sine, multi-tone, saturation) em precisão `np.float32`, mantendo continuidade de fase e amostras idênticas entre chamadas sucessivas de chunks.
 - **AC-002**: `CausalSosFilter` executa filtragem causal via Direct Form II Transposed com vetor de estado explícito `(n_sections, 2, num_channels)`, sem lookahead e sem uso de `filtfilt` em tempo de execução.
-- **AC-003**: A invariância por chunks é satisfeita: para qualquer partição arbitrária de chunks, a diferença máxima entre saída em streaming e saída em lote respeita estritamente `TOL-CHUNK-INVARIANCE`.
-- **AC-004**: `StatefulWindowBuffer` emite janelas deslizantes de formato `(window_length, num_channels)` em `np.float32` conforme o `stride`, retendo amostras residuais com segurança sob a política padrão `drop`.
+- **AC-003**: A invariância por chunks é satisfeita: para o filtro, $\text{concat}(F(C_1), \dots, F(C_k)) \approx F(\text{concat}(C_1, \dots, C_k))$ respeitando `TOL-CHUNK-INVARIANCE`; para o janelador, a sequência ordenada de janelas emitidas é exatamente idêntica, independentemente do particionamento dos chunks de entrada.
+- **AC-004**: `StatefulWindowBuffer` emite janelas deslizantes de formato `(window_length, num_channels)` em `np.float32` conforme o `stride`, retendo amostras residuais no estado durante o streaming e descartando-as deterministicamente apenas quando `finalize()` for explicitamente invocado sob a política `"drop"`.
 - **AC-005**: A ordenação de canais e sincronia temporal multicanal são estritamente preservadas através de todos os estágios do pipeline.
 - **AC-006**: Injeção de dados contendo `NaN` ou `Inf`, ou discrepância no número de canais configurados, levanta deterministicamente `ValueError` descritivo.
 - **AC-007**: A filtragem causal é comprovada contra o oráculo independente `scipy.signal.sosfilt` satisfazendo os limites do contrato de tolerância `TOL-SOS-FILTER-L1`.
@@ -179,7 +184,7 @@ Como validador de conformidade científica e constitucional (Princípio VI), exi
 
 2. **Precisão Numérica do Runtime**:
    - *Decisão*: Adotado `np.float32` como padrão uniforme para entradas, estados e saídas.
-   - *Justificativa*: A arquitetura de processamento visa o microcontrolador ESP32-S3, cujo hardware de FPU opera nativamente em precisão simples (`float32`). Evitar `float64` economiza memória de buffer e reflete o comportamento numérico real do alvo embarcado.
+   - *Justificativa*: `float32` é a referência numérica do pipeline host por ser um dtype explícito, reproduzível e adequado à futura migração para runtimes embedded com precisão simples. Evita consumo desnecessário de memória de buffer e previne divergências numéricas em ponto flutuante.
 
 3. **Interface do `SampleSource` e Continuidade Temporal**:
    - *Decisão*: Classe base / protocolo abstrato `SampleSource` com método `read_chunk(n_samples: int) -> ChunkData`. `SyntheticSampleSource` mantém um contador de amostra corrente interno que garante continuidade de fase estrita através de chamadas sucessivas a `read_chunk`, independente de tamanhos variáveis de chunks.
@@ -189,9 +194,9 @@ Como validador de conformidade científica e constitucional (Princípio VI), exi
    - *Decisão*: Implementação da Direct Form II Transposed (DF2T) para a cascata de seções de segunda ordem, mantendo vetor de estado `sos_state` com shape `(n_sections, 2, n_channels)`.
    - *Justificativa*: A forma DF2T apresenta melhor imunidade a erros de quantização em ponto flutuante e permite avanço amostra a amostra com estado mínimo e causalidade perfeita.
 
-5. **Semântica de Retorno do `StatefulWindowBuffer`**:
-   - *Decisão*: O método `process_chunk(chunk: np.ndarray) -> list[np.ndarray]` consome o chunk de amostras e retorna uma lista ordenada contendo zero ou mais janelas completas (cada uma de shape `(window_length, num_channels)`). Se a chegada de amostras completar múltiplos strides, todas as janelas geradas são emitidas em ordem cronológica estrita.
-   - *Justificativa*: Fornece semântica desacoplada do tamanho do chunk de entrada e do stride de saída.
+5. **Semântica de Retorno e Retenção Residual do `StatefulWindowBuffer`**:
+   - *Decisão*: O método `process_chunk(chunk: np.ndarray) -> list[np.ndarray]` consome o chunk de amostras e retorna uma lista ordenada contendo zero ou mais janelas completas (cada uma de shape `(window_length, num_channels)`). Amostras parciais insuficientes para uma janela completa NUNCA são descartadas pelo término do chunk; elas permanecem retidas no buffer de estado aguardando a chegada dos chunks subsequentes. O descarte de amostras residuais sob a política `"drop"` ocorre estritamente na finalização explícita do stream via `finalize()`.
+   - *Justificativa*: Garante causalidade contínua e invariância estrita de janelamento independente do tamanho ou fragmentação dos chunks recebidos.
 
 6. **Tratamento de Refatoração Numérica**:
    - *Decisão*: Em tarefas marcadas com `numeric_sensitive: true`, a fase de refatoração pelo orquestrador operará como *safe no-op*, mantendo a implementação aprovada e testada no GREEN até que um harness de snapshot numérico seja configurado.
