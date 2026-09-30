@@ -37,7 +37,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Purpose**: Establish base contracts for streaming sample ingestion and data containers.
 
-- [ ] T002 [US1] Implement SampleSource abstract protocol and ChunkData container in semg_dsp/source.py
+- [x] T002 [US1] Implement SampleSource abstract protocol and ChunkData container in semg_dsp/source.py
   <!-- harness-task {"requirements":["FR-001","FR-008"],"acceptance_criteria":["AC-001","AC-005","AC-010"],"plan_decisions":["D-001","D-003"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_dsp/source.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: `SampleSource` base abstraction ready; `ChunkData` enforces `float32` and temporal metadata.
