@@ -89,7 +89,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Independent Test**: Run end-to-end streaming pipeline test with synthetic multi-frequency signal; compare filter output against independent SciPy `sosfilt` reference; verify all deviations meet `TOL-SOS-FILTER-L1`; verify window emission timing and channel integrity.
 
-- [ ] T006 [US4] Implement StreamingPipeline coordinator connecting source, filter, and window stages in semg_dsp/pipeline.py
+- [x] T006 [US4] Implement StreamingPipeline coordinator connecting source, filter, and window stages in semg_dsp/pipeline.py
   <!-- harness-task {"requirements":["FR-008","FR-009","FR-010","FR-011","FR-012"],"acceptance_criteria":["AC-003","AC-005","AC-007","AC-008","AC-009","AC-011"],"plan_decisions":["D-001","D-003","D-004","D-005","D-006"],"dependencies":["T005"],"test_type":"INTEGRATION","allowed_files":["semg_dsp/pipeline.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true,"fixture_files":["tests/fixtures/dsp/sos_test_filter.npz"]} -->
 
 **Checkpoint**: Story 4 complete; end-to-end streaming pipeline verified against independent scientific oracles.
