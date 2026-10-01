@@ -93,15 +93,16 @@ class CausalSosFilter:
         Maintains internal delay states across calls. Preserves exact start_sample_idx
         when invoked with ChunkData.
         """
-        is_chunk_data = isinstance(chunk, ChunkData)
-        if is_chunk_data:
+        if isinstance(chunk, ChunkData):
             raw_data = chunk.data
             start_idx = chunk.start_sample_idx
             rate_hz = chunk.sampling_rate_hz
+            is_chunk_data = True
         elif isinstance(chunk, np.ndarray):
             raw_data = chunk
             start_idx = 0
             rate_hz = 1000.0
+            is_chunk_data = False
         else:
             raise TypeError(f"chunk must be ChunkData or np.ndarray, got {type(chunk).__name__}")
 
@@ -114,7 +115,7 @@ class CausalSosFilter:
         if not np.all(np.isfinite(raw_data)):
             raise ValueError("chunk data contains non-finite values (NaN or Inf)")
 
-        num_samples = raw_data.shape[0]
+        num_samples = int(raw_data.shape[0])
         if num_samples == 0:
             empty_arr = np.empty((0, self.num_channels), dtype=np.float32)
             return ChunkData(data=empty_arr, start_sample_idx=start_idx, sampling_rate_hz=rate_hz) if is_chunk_data else empty_arr
@@ -123,7 +124,7 @@ class CausalSosFilter:
 
         # Sample-by-sample DF2T cascade per channel to enforce strict causality and zero crosstalk
         for ch in range(self.num_channels):
-            cur_x = raw_data[:, ch].copy()
+            cur_x = np.array(raw_data[:, ch], copy=True)
             for s in range(self.n_sections):
                 b0 = self.sos_coefficients[s, 0]
                 b1 = self.sos_coefficients[s, 1]
