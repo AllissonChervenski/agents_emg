@@ -74,7 +74,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 **Goal**: Slice continuous filtered streams into fixed-length sliding windows `(window_length, num_channels)` in `float32` according to `stride`, maintaining state across chunks with safe residual handling.
 
-**Independent Test**: Stream variable-length chunks into `StatefulWindowBuffer`; verify exact window shapes, correct stride offsets, channel preservation, and retention of residual samples during streaming with safe handling on `finalize()`. Assert that the sequence of emitted windows is identical regardless of input chunk fragmentation.
+**Independent Test**: Stream variable-length chunks into `StatefulWindowBuffer`; verify exact window shapes, correct stride offsets, channel preservation, and retention of residual samples during streaming with safe handling on `finalize()` under `partial_policy` (`"drop"` and `"pad"`). Assert that the sequence of emitted windows is identical regardless of input chunk fragmentation.
 
 - [x] T005 [US3] Implement StatefulWindowBuffer causal sliding window accumulator in semg_dsp/window.py
   <!-- harness-task {"requirements":["FR-006","FR-007","FR-008","FR-010","FR-011"],"acceptance_criteria":["AC-004","AC-005","AC-006","AC-011"],"plan_decisions":["D-003","D-005","D-007"],"dependencies":["T004"],"test_type":"UNIT","allowed_files":["semg_dsp/window.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
@@ -98,7 +98,7 @@ Each task has adjacent harness metadata. Implementation `allowed_files` lists on
 
 ## Final Phase: Polish & Cross-Cutting Concerns
 
-- [ ] T007 Final audit of scope boundaries, oracle independence, and Constitution Principle VI
+- [x] T007 Final audit of scope boundaries, oracle independence, and Constitution Principle VI
   <!-- harness-task {"requirements":["FR-009","FR-010"],"acceptance_criteria":["AC-008","AC-010","AC-012"],"plan_decisions":["D-004","D-005","D-008"],"dependencies":["T006"],"test_type":"NOT_AUTOMATABLE","justification":"Human review of the final feature diff, verification of Principle VI oracle independence, absence of real dataset assumptions, and confirmation of deterministic quality gates.","alternative_verification":"Review git diff to verify no out-of-scope files were modified; verify no runtime dependency on scipy; verify all numerical tests pass against independent SciPy oracles under registered tolerances; run full quality gate: pytest -q, ruff check, mypy, compileall.","allowed_files":[],"tdd_phases":[],"numeric_sensitive":false} -->
 
 ---
