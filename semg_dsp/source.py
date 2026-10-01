@@ -7,6 +7,7 @@ coupling to concrete hardware, files, or signal synthesis generators.
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 
 import numpy as np
 
@@ -38,11 +39,13 @@ class ChunkData:
 
     data: np.ndarray
     start_sample_idx: int = 0
+    sampling_rate_hz: float = 1000.0
 
     def __post_init__(self) -> None:
         """Enforce strict chunk invariants, deep immutability, and canonical representations."""
         self._validate_data()
         idx = self._normalize_start_sample_idx()
+        rate = self._normalize_sampling_rate_hz()
 
         # Back the chunk with a deeply immutable, canonicalized copy:
         # 1. Defensive copy decouples the caller's buffer and prevents view aliasing.
@@ -52,12 +55,14 @@ class ChunkData:
         #    cannot be re-enabled.
         arr_copy = np.array(self.data, dtype=np.float32, copy=True)
         arr_copy[arr_copy == 0.0] = 0.0
+        arr_copy[np.isnan(arr_copy)] = np.nan
         immutable_data = np.frombuffer(
             arr_copy.tobytes(), dtype=np.float32
         ).reshape(arr_copy.shape)
 
         object.__setattr__(self, "data", immutable_data)
         object.__setattr__(self, "start_sample_idx", idx)
+        object.__setattr__(self, "sampling_rate_hz", rate)
 
     def _validate_data(self) -> None:
         """Validate the type, dimensionality, and dtype of ``data``."""
@@ -77,6 +82,20 @@ class ChunkData:
                 "ChunkData data must have np.float32 dtype "
                 f"(strict float32 invariant), got {self.data.dtype}"
             )
+
+    def _normalize_sampling_rate_hz(self) -> float:
+        if isinstance(self.sampling_rate_hz, bool) or not isinstance(
+            self.sampling_rate_hz, (int, float, np.floating, np.integer)
+        ):
+            raise TypeError(
+                f"sampling_rate_hz must be a float, got {type(self.sampling_rate_hz).__name__}"
+            )
+        rate = float(self.sampling_rate_hz)
+        if not np.isfinite(rate) or rate <= 0.0:
+            raise ValueError(
+                f"sampling_rate_hz must be strictly positive and finite, got {rate}"
+            )
+        return rate
 
     def _normalize_start_sample_idx(self) -> int:
         """Validate ``start_sample_idx`` and return it as a plain Python int."""
@@ -111,9 +130,10 @@ class ChunkData:
             return NotImplemented
         return (
             self.start_sample_idx == other.start_sample_idx
+            and self.sampling_rate_hz == other.sampling_rate_hz
             and self.data.shape == other.data.shape
             and self.data.dtype == other.data.dtype
-            and bool(np.array_equal(self.data, other.data))
+            and bool(np.array_equal(self.data, other.data, equal_nan=True))
         )
 
     def __hash__(self) -> int:
@@ -121,6 +141,7 @@ class ChunkData:
         return hash(
             (
                 self.start_sample_idx,
+                self.sampling_rate_hz,
                 self.data.shape,
                 self.data.dtype,
                 self.data.tobytes(),
@@ -245,26 +266,39 @@ class SyntheticSampleSource(SampleSource):
                 f"got {event_sample_idx}"
             )
 
-        if len(clip_limits) != 2 or not clip_limits[0] < clip_limits[1]:
+        if len(clip_limits) != 2:
             raise ValueError(
-                "clip_limits must be an ordered (lower, upper) pair with "
-                f"lower < upper, got {clip_limits}"
+                f"clip_limits must be an ordered (lower, upper) pair, got {clip_limits}"
             )
+        lower = np.float32(clip_limits[0])
+        upper = np.float32(clip_limits[1])
+        if not np.isfinite(lower) or not np.isfinite(upper) or not lower < upper:
+            raise ValueError(
+                "clip_limits must be an ordered (lower, upper) pair of finite float32 with "
+                f"lower < upper, got ({lower}, {upper})"
+            )
+
+        def _to_float32_param(
+            val: float | Sequence[float],
+        ) -> np.float32 | tuple[np.float32, ...]:
+            if isinstance(val, Sequence) and not isinstance(val, (str, bytes)):
+                return tuple(np.float32(x) for x in val)
+            return np.float32(val)
 
         self.waveform = waveform
         self.num_channels = int(num_channels)
         self.sampling_rate_hz = rate
-        self.amplitude = amplitude
-        self.frequency_hz = frequency_hz
-        self.phase_rad = phase_rad
-        self.dc_offset = float(dc_offset)
+        self.amplitude = _to_float32_param(amplitude)
+        self.frequency_hz = _to_float32_param(frequency_hz)
+        self.phase_rad = _to_float32_param(phase_rad)
+        self.dc_offset = np.float32(dc_offset)
         self.event_sample_idx = int(event_sample_idx)
-        self.clip_limits = (float(clip_limits[0]), float(clip_limits[1]))
+        self.clip_limits = (lower, upper)
         self.total_samples_emitted = 0
 
-        self._amplitudes = np.atleast_1d(np.asarray(amplitude, dtype=np.float64))
-        self._frequencies = np.atleast_1d(np.asarray(frequency_hz, dtype=np.float64))
-        self._phases = np.atleast_1d(np.asarray(phase_rad, dtype=np.float64))
+        self._amplitudes = np.atleast_1d(np.asarray(amplitude, dtype=np.float32))
+        self._frequencies = np.atleast_1d(np.asarray(frequency_hz, dtype=np.float32))
+        self._phases = np.atleast_1d(np.asarray(phase_rad, dtype=np.float32))
         if waveform == "multi_tone" and not (
             self._amplitudes.size == self._frequencies.size == self._phases.size
         ):
@@ -274,6 +308,18 @@ class SyntheticSampleSource(SampleSource):
                 f"{self._amplitudes.size}, {self._frequencies.size} and "
                 f"{self._phases.size}"
             )
+
+        # Precompute exact rational period denominator and numerator for periodic phase modulo
+        denoms = []
+        nums = []
+        for f in self._frequencies:
+            f_str = str(float(f))
+            rate_str = str(float(self.sampling_rate_hz))
+            frac = Fraction(f_str) / Fraction(rate_str)
+            denoms.append(frac.denominator)
+            nums.append(frac.numerator % frac.denominator)
+        self._denominators = denoms
+        self._numerators = nums
 
     def read_chunk(self, num_samples: int) -> ChunkData:
         """Generate the next chunk, preserving global phase continuity.
@@ -300,43 +346,80 @@ class SyntheticSampleSource(SampleSource):
                 f"num_samples must be a strictly positive integer, got {num_samples}"
             )
 
+        max_idx = int(np.iinfo(np.int64).max)
+        if self.total_samples_emitted > max_idx - int(num_samples):
+            raise OverflowError(
+                f"Sample index counter {self.total_samples_emitted} + {num_samples} "
+                f"exceeds signed 64-bit integer limit ({max_idx})"
+            )
+
         start = self.total_samples_emitted
-        t = (self.total_samples_emitted + np.arange(num_samples)) / self.sampling_rate_hz
-        idx = self.total_samples_emitted + np.arange(num_samples)
-        mono = self._render(idx, t).astype(np.float32)
+        idx = start + np.arange(num_samples, dtype=np.int64)
+        rate = np.float32(self.sampling_rate_hz)
+        t = (np.float32(start) + np.arange(num_samples, dtype=np.float32)) / rate
+        mono = self._render(idx, t)
 
         data = np.empty((num_samples, self.num_channels), dtype=np.float32)
         data[:] = mono[:, np.newaxis]
 
         self.total_samples_emitted += int(num_samples)
-        return ChunkData(data=data, start_sample_idx=start)
+        return ChunkData(data=data, start_sample_idx=start, sampling_rate_hz=float(self.sampling_rate_hz))
 
     def reset(self) -> None:
         """Reset the global emission counter to zero."""
         self.total_samples_emitted = 0
 
+    @staticmethod
+    def _int_fraction_to_float32(r: int, denom: int) -> np.float32:
+        """Convert exact arbitrary-precision fraction r / denom to np.float32 with zero float64 promotion."""
+        if r == 0:
+            return np.float32(0.0)
+        shift = denom.bit_length() - r.bit_length()
+        mantissa = (r << (24 + shift)) // denom
+        return np.ldexp(np.float32(mantissa), -(24 + shift))
+
+    def _compute_phase_cycles(self, idx: np.ndarray, num: int, denom: int) -> np.ndarray:
+        """Compute cyclic phase in [0, 1) strictly in float32 with zero integer overflow."""
+        B = denom.bit_length()
+        if (denom - 1) * num < 2**63 - 1 and B <= 127:
+            n_step = ((idx % denom) * num) % denom
+            return (n_step.astype(np.float32) / np.float32(denom)).astype(np.float32)
+        else:
+            return np.fromiter(
+                (self._int_fraction_to_float32((int(i) * num) % denom, denom) for i in idx),
+                dtype=np.float32,
+                count=len(idx),
+            )
+
     def _render(self, idx: np.ndarray, t: np.ndarray) -> np.ndarray:
-        """Evaluate the configured waveform at global sample indices/times."""
+        """Evaluate the configured waveform at global sample indices/times in strict float32."""
         if self.waveform == "zeros":
-            return np.zeros(idx.shape, dtype=np.float64)
+            return np.zeros(idx.shape, dtype=np.float32)
         if self.waveform == "dc":
-            return np.full(idx.shape, self.dc_offset, dtype=np.float64)
+            return np.full(idx.shape, self.dc_offset, dtype=np.float32)
         if self.waveform == "impulse":
-            return (idx == self.event_sample_idx).astype(np.float64)
+            return (idx == self.event_sample_idx).astype(np.float32)
         if self.waveform == "step":
-            return (idx >= self.event_sample_idx).astype(np.float64)
+            return (idx >= self.event_sample_idx).astype(np.float32)
+
+        two_pi = np.float32(2.0 * np.pi)
+
         if self.waveform == "sine":
-            return self._amplitudes[0] * np.sin(
-                2.0 * np.pi * self._frequencies[0] * t + self._phases[0]
-            )
+            cycles = self._compute_phase_cycles(idx, self._numerators[0], self._denominators[0])
+            ang = two_pi * cycles + self._phases[0]
+            return (self._amplitudes[0] * np.sin(ang)).astype(np.float32)
         if self.waveform == "multi_tone":
-            components = self._amplitudes * np.sin(
-                2.0 * np.pi * np.outer(t, self._frequencies) + self._phases
-            )
-            return np.sum(components, axis=1)
+            col = np.zeros(idx.shape, dtype=np.float32)
+            for a, denom_val, num_val, p in zip(
+                self._amplitudes, self._denominators, self._numerators, self._phases
+            ):
+                cycles = self._compute_phase_cycles(idx, int(num_val), int(denom_val))
+                ang = two_pi * cycles + p
+                col += a * np.sin(ang)
+            return col.astype(np.float32)
         # saturation: sinusoid hard-clipped to clip_limits
-        signal = self._amplitudes[0] * np.sin(
-            2.0 * np.pi * self._frequencies[0] * t + self._phases[0]
-        )
-        return np.clip(signal, self.clip_limits[0], self.clip_limits[1])
+        cycles = self._compute_phase_cycles(idx, self._numerators[0], self._denominators[0])
+        ang = two_pi * cycles + self._phases[0]
+        signal = self._amplitudes[0] * np.sin(ang)
+        return np.clip(signal, self.clip_limits[0], self.clip_limits[1]).astype(np.float32)
 

@@ -7,7 +7,7 @@ description: "SpecKit task checklist with harness metadata"
 **Input**: Design documents from `/specs/002-dsp-streaming-pipeline/`
 **Prerequisites**: `spec.md` and `plan.md` (reviewed and compliant with Constitution v1.1.0 Principle VI).
 
-Keep the SpecKit checklist format exactly: `- [ ] T001 [P?] [US1?] Description with file path`.
+Keep the SpecKit checklist format exactly: `- [x] T001 [P?] [US1?] Description with file path`.
 Each task has adjacent harness metadata. Implementation `allowed_files` lists only exact production paths; the RED TestDesigner declares the task-specific test files and commands before implementation.
 
 ## TDD Contract & Numerical Integrity Invariants
@@ -133,3 +133,25 @@ Tasks T001–T006 represent sequential pipeline pipeline layers and shared modul
 4. **Window Buffer Assembly (T005)**: Implement causal sliding buffer with deterministic stride advancement and safe residual sample handling.
 5. **Integrated Pipeline & Oracle Validation (T006)**: Connect stages and validate numerically against independent SciPy golden vectors under registered tolerance contracts.
 6. **Final Audit (T007)**: Review scope, immutability of test fixtures, and full deterministic verification pass.
+
+---
+
+## Phase 7: Convergence
+
+- [x] T008 Add provisional `sampling_rate_hz` metadata field to `ChunkData` in semg_dsp/source.py per FR-001 (partial)
+  <!-- harness-task {"requirements":["FR-001","FR-008"],"acceptance_criteria":["AC-001","AC-005","AC-010"],"plan_decisions":["D-001","D-003"],"dependencies":["T002"],"test_type":"UNIT","allowed_files":["semg_dsp/source.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+- [x] T009 Reject non-finite (NaN/Inf) input chunks with descriptive `ValueError` in `CausalSosFilter.process_chunk` per AC-006 (partial)
+  <!-- harness-task {"requirements":["FR-003","FR-004"],"acceptance_criteria":["AC-006"],"plan_decisions":["D-002"],"dependencies":["T004"],"test_type":"UNIT","allowed_files":["semg_dsp/filter.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+- [x] T010 Materialize `tests/test_dsp_oracles.py` named in plan.md Project Structure with FR-009/FR-010 independent-oracle assertions per plan: Project Structure & File Layout (partial)
+  <!-- harness-task {"requirements":["FR-009","FR-010"],"acceptance_criteria":["AC-007","AC-008"],"plan_decisions":["D-004","D-005"],"dependencies":["T006"],"test_type":"INTEGRATION","allowed_files":["semg_dsp/pipeline.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true,"fixture_files":["tests/fixtures/dsp/sos_test_filter.npz","tests/fixtures/dsp/l0_analytical_cases.npz"]} -->
+
+---
+
+## Phase 8: Convergence
+
+- [x] T011 CRITICAL: Remove the two unused imports (`pytest`, `ChunkData`) from tests/test_dsp_oracles.py — assertion-neutral cleanup requiring orchestrator-authorized test-file revision under TEST_TAMPERING — so `python -m ruff check orchestrator tests` exits 0 per Constitution: Quality Gates & Principle I (contradicts)
+  <!-- harness-task {"requirements":[],"acceptance_criteria":[],"plan_decisions":[],"dependencies":["T010"],"test_type":"NOT_AUTOMATABLE","justification":"Assertion-neutral lint remediation in a RED-protected test file; deterministic gate python -m ruff check orchestrator tests must pass before sign-off per Constitution Quality Gates.","alternative_verification":"python -m ruff check orchestrator tests exits 0; python -m pytest -q, python -m mypy and python -m compileall -q orchestrator tests remain green.","allowed_files":["tests/test_dsp_oracles.py"],"tdd_phases":[],"numeric_sensitive":false} -->
+- [x] T012 Reject non-float32 ndarray SOS coefficient dtypes with descriptive TypeError in CausalSosFilter.__init__ (preserving Python-sequence acceptance) and assert the rejection in tests/test_dsp_filter.py per plan: FR-005 Test Traceability (partial)
+  <!-- harness-task {"requirements":["FR-005"],"acceptance_criteria":["AC-011"],"plan_decisions":["D-002"],"dependencies":["T004"],"test_type":"UNIT","allowed_files":["semg_dsp/filter.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+- [x] T013 Cite the formal tolerance identifier `TOL-ANALYTICAL-L0` on the coefficient-normalization assertion in tests/test_dsp_filter.py per FR-010 / US4-AS3 (partial)
+  <!-- harness-task {"requirements":["FR-010"],"acceptance_criteria":[],"plan_decisions":["D-005"],"dependencies":["T004"],"test_type":"NOT_AUTOMATABLE","justification":"Assertion-neutral tolerance-catalog citation in a RED-protected test file; FR-010 requires every numeric assertion to formally cite its tolerance_id.","alternative_verification":"grep confirms every assert_allclose in tests/test_dsp_*.py references a registered tolerance_id; python -m pytest -q remains green.","allowed_files":["tests/test_dsp_filter.py"],"tdd_phases":[],"numeric_sensitive":false} -->

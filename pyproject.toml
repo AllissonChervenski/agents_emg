@@ -12,6 +12,10 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=7", "PyYAML>=6", "ruff", "mypy"]
 
+[tool.setuptools.packages.find]
+include = ["orchestrator*", "semg_dsp*"]
+exclude = ["specs*", "tests*"]
+
 [tool.setuptools.package-data]
 orchestrator = ["prompts/*.md"]
 
@@ -20,7 +24,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py310"
-include = ["orchestrator/**/*.py", "tests/**/*.py"]
+include = ["orchestrator/**/*.py", "tests/**/*.py", "semg_dsp/**/*.py"]
 
 [tool.ruff.lint]
 select = ["E4", "E9", "F"]

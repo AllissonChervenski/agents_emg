@@ -35,11 +35,18 @@ class CausalSosFilter:
         if int(num_channels) < 1:
             raise ValueError(f"num_channels must be a positive integer, got {num_channels}")
 
+        if isinstance(sos_coefficients, np.ndarray) and sos_coefficients.dtype != np.float32:
+            raise TypeError(
+                f"sos_coefficients ndarray must have np.float32 dtype, got {sos_coefficients.dtype}"
+            )
+
         raw_sos = np.asarray(sos_coefficients, dtype=np.float32)
         if raw_sos.ndim != 2 or raw_sos.shape[1] != 6:
             raise ValueError(f"sos_coefficients must have shape (n_sections, 6), got {raw_sos.shape}")
         if raw_sos.shape[0] < 1:
             raise ValueError("sos_coefficients must contain at least one biquad section")
+        if not np.all(np.isfinite(raw_sos)):
+            raise ValueError("sos_coefficients must contain only finite numerical values (no NaN or Inf)")
 
         self.n_sections = int(raw_sos.shape[0])
         self.num_channels = int(num_channels)
@@ -50,13 +57,23 @@ class CausalSosFilter:
             b0, b1, b2, a0, a1, a2 = raw_sos[s]
             if a0 == 0.0 or not np.isfinite(a0):
                 raise ValueError(f"Section {s} has invalid leading denominator coefficient a0={a0}")
-            inv_a0 = np.float32(1.0) / a0
+            with np.errstate(divide="ignore", over="ignore"):
+                inv_a0 = np.float32(1.0) / a0
+            if not np.isfinite(inv_a0):
+                raise ValueError(
+                    f"Section {s} leading coefficient a0={a0} causes reciprocal overflow to Inf"
+                )
             norm_sos[s, 0] = b0 * inv_a0
             norm_sos[s, 1] = b1 * inv_a0
             norm_sos[s, 2] = b2 * inv_a0
             norm_sos[s, 3] = np.float32(1.0)
             norm_sos[s, 4] = a1 * inv_a0
             norm_sos[s, 5] = a2 * inv_a0
+
+        if not np.all(np.isfinite(norm_sos)):
+            raise ValueError(
+                "Normalized SOS coefficients contain non-finite values (overflow or division by near-zero a0)"
+            )
 
         self.sos_coefficients = norm_sos
         self._state = np.zeros((self.n_sections, 2, self.num_channels), dtype=np.float32)
@@ -80,9 +97,11 @@ class CausalSosFilter:
         if is_chunk_data:
             raw_data = chunk.data
             start_idx = chunk.start_sample_idx
+            rate_hz = chunk.sampling_rate_hz
         elif isinstance(chunk, np.ndarray):
             raw_data = chunk
             start_idx = 0
+            rate_hz = 1000.0
         else:
             raise TypeError(f"chunk must be ChunkData or np.ndarray, got {type(chunk).__name__}")
 
@@ -92,11 +111,13 @@ class CausalSosFilter:
             raise ValueError(f"chunk has {raw_data.shape[1]} channels, but filter configured for {self.num_channels}")
         if raw_data.dtype != np.float32:
             raise TypeError(f"chunk data must have np.float32 dtype, got {raw_data.dtype}")
+        if not np.all(np.isfinite(raw_data)):
+            raise ValueError("chunk data contains non-finite values (NaN or Inf)")
 
         num_samples = raw_data.shape[0]
         if num_samples == 0:
             empty_arr = np.empty((0, self.num_channels), dtype=np.float32)
-            return ChunkData(data=empty_arr, start_sample_idx=start_idx) if is_chunk_data else empty_arr
+            return ChunkData(data=empty_arr, start_sample_idx=start_idx, sampling_rate_hz=rate_hz) if is_chunk_data else empty_arr
 
         out_data = np.empty_like(raw_data, dtype=np.float32)
 
@@ -127,5 +148,5 @@ class CausalSosFilter:
             out_data[:, ch] = cur_x
 
         if is_chunk_data:
-            return ChunkData(data=out_data, start_sample_idx=start_idx)
+            return ChunkData(data=out_data, start_sample_idx=start_idx, sampling_rate_hz=rate_hz)
         return out_data

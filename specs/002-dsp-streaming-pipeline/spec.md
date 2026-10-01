@@ -114,10 +114,10 @@ Como validador de conformidade científica e constitucional (Princípio VI), exi
 
 | Tolerance ID | Runtime Dtype | Comparison Target | rtol | atol | Status | Rationale |
 |---|---|---|---|---|---|---|
-| `TOL-ANALYTICAL-L0` | `float32` | Fórmulas analíticas (degrau, DC, impulso, zeros) | `1e-6` | `1e-6` | `PROVISIONAL` | Resolução limite de máquina para mantissa de 24 bits IEEE 754 em precisão simples. |
-| `TOL-SOS-FILTER-L1` | `float32` | Oráculo independente SciPy `scipy.signal.sosfilt` | `1e-5` | `1e-5` | `PROVISIONAL` | Compensa pequenas diferenças de acumulação de arredondamento entre o loop explícito DF2T em float32 e a rotina C do SciPy. |
-| `TOL-CHUNK-INVARIANCE` | `float32` | Concatenação de saídas streaming vs processamento em bloco | `1e-6` | `1e-6` | `PROVISIONAL` | Garante que o estado interno do filtro retém continuidade exata sem deriva numérica através de fronteiras de chunks. |
-| `TOL-WINDOW-ACCUMULATION` | `float32` | Janelamento contínuo em bloco vs janelamento streaming com estado | `0.0` | `0.0` | `PROVISIONAL` | Indexação temporal e cópias de buffers discretos devem ser estritamente bit a bit idênticos. |
+| `TOL-ANALYTICAL-L0` | `float32` | Fórmulas analíticas (degrau, DC, impulso, zeros) | `1e-6` | `1e-6` | `ACCEPTED (Feature 002 Sign-off)` | Margem conservadora para operações float32 do pipeline sintético IEEE 754 em precisão simples. |
+| `TOL-SOS-FILTER-L1` | `float32` | Oráculo independente SciPy `scipy.signal.sosfilt` | `1e-5` | `1e-5` | `ACCEPTED (Feature 002 Sign-off)` | Compensa pequenas diferenças de acumulação de arredondamento entre o loop explícito DF2T em float32 e a rotina C do SciPy. |
+| `TOL-CHUNK-INVARIANCE` | `float32` | Concatenação de saídas streaming vs processamento em bloco | `1e-6` | `1e-6` | `ACCEPTED (Feature 002 Sign-off)` | Garante que o estado interno do filtro retém continuidade exata sem deriva numérica através de fronteiras de chunks. |
+| `TOL-WINDOW-ACCUMULATION` | `float32` | Janelamento contínuo em bloco vs janelamento streaming com estado | `0.0` | `0.0` | `ACCEPTED (Feature 002 Sign-off)` | Indexação temporal e cópias de buffers discretos devem ser estritamente bit a bit idênticos. |
 
 - **FR-011 (Marcação de Tarefas `numeric_sensitive`)**: Todas as tarefas de especificação, planejamento e código envolvendo aritmética de filtros, janelamento, buffers circulares e transformações numéricas DEVEM conter `"numeric_sensitive": true` no metadata `harness-task`.
 - **FR-012 (Isolamento de Famílias em Tarefas Numéricas)**: Para todas as tarefas com `"numeric_sensitive": true`, o orquestrador garantirá que a família do autor do teste (`test_designer`), do validador do teste (`test_validator`) e do implementador (`coder`) sejam mutuamente independentes (`test_designer` ≠ `test_validator` e `test_validator` ≠ `coder`).

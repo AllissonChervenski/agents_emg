@@ -180,12 +180,22 @@ def test_causal_sos_filter_coefficient_normalization():
 
     # Normalized coefficients: divided by a0 = 2.0
     expected_norm = np.array([[0.1, 0.2, 0.1, 1.0, 0.3, 0.1]], dtype=np.float32)
-    np.testing.assert_allclose(filt.sos_coefficients, expected_norm, rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(
+        filt.sos_coefficients,
+        expected_norm,
+        rtol=1e-6,
+        atol=1e-6,
+        err_msg="TOL-ANALYTICAL-L0: coefficient normalization deviates beyond tolerance",
+    )
 
 
 def test_causal_sos_filter_validation_errors(sos_fixture):
     from semg_dsp.filter import CausalSosFilter
     sos = sos_fixture["sos"]
+
+    # Invalid sos ndarray dtype (float64 rejected per FR-005)
+    with pytest.raises(TypeError, match="float32"):
+        CausalSosFilter(sos_coefficients=np.zeros((2, 6), dtype=np.float64), num_channels=2)
 
     # Invalid sos shape
     with pytest.raises(ValueError, match="shape"):

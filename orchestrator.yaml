@@ -86,9 +86,9 @@
     "regression_tests": [{"name": "regression suite", "command": ["python", "-m", "pytest", "-q"]}],
     "build": [{"name": "Python wheel", "command": ["python", "-m", "pip", "wheel", "--no-deps", ".", "--wheel-dir", ".orchestrator/build"]}],
     "tests": [{"name": "full pytest suite", "command": ["python", "-m", "pytest", "-q"]}],
-    "lint": [{"name": "Ruff lint", "command": ["python", "-m", "ruff", "check", "orchestrator", "tests"]}],
+    "lint": [{"name": "Ruff lint", "command": ["python", "-m", "ruff", "check", "orchestrator", "tests", "semg_dsp"]}],
     "type": [{"name": "mypy type checking", "command": ["python", "-m", "mypy"]}],
-    "syntax": [{"name": "Python syntax", "command": ["python", "-m", "compileall", "-q", "orchestrator", "tests"]}],
+    "syntax": [{"name": "Python syntax", "command": ["python", "-m", "compileall", "-q", "orchestrator", "tests", "semg_dsp"]}],
     "static": [],
     "requirements": [
       {"requirement_id": "ORCH-MODEL-DISCOVERY", "checks": [{"name": "model discovery tests", "command": ["python", "-m", "pytest", "-q", "tests/test_model_discovery.py"]}]},

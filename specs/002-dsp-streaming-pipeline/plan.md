@@ -150,10 +150,10 @@ class StreamingPipeline:
 
 | Tolerance ID | Runtime Dtype | Comparison Target | `rtol` | `atol` | Status | Scientific / Mathematical Rationale |
 |---|---|---|---|---|---|---|
-| `TOL-ANALYTICAL-L0` | `float32` | Pure analytical formulas (step, DC, zero, impulse) | `1e-6` | `1e-6` | `PROVISIONAL` | Exact single-precision floating point limit for pure mathematical formulas (24-bit mantissa IEEE 754). |
-| `TOL-SOS-FILTER-L1` | `float32` | SciPy high-precision reference (`scipy.signal.sosfilt`) | `1e-5` | `1e-5` | `PROVISIONAL` | Accounts for minor floating-point summation order differences between SciPy C-routine and explicit DF2T loop in `float32`. |
-| `TOL-CHUNK-INVARIANCE`| `float32` | Streaming concatenated chunks vs batch execution | `1e-6` | `1e-6` | `PROVISIONAL` | Internal filter state maintains exact sample-to-sample continuity; discrepancy is zero or limited to machine epsilon. |
-| `TOL-WINDOW-ACCUMULATION`| `float32` | Window buffer sample reproduction | `0.0` | `0.0` | `PROVISIONAL` | Pure discrete buffer indexing and sliding; values must be bitwise identical. |
+| `TOL-ANALYTICAL-L0` | `float32` | Pure analytical formulas (step, DC, zero, impulse) | `1e-6` | `1e-6` | `ACCEPTED (Feature 002 Sign-off)` | Conservative bound for single-precision IEEE 754 float32 synthetic pipeline operations. |
+| `TOL-SOS-FILTER-L1` | `float32` | SciPy high-precision reference (`scipy.signal.sosfilt`) | `1e-5` | `1e-5` | `ACCEPTED (Feature 002 Sign-off)` | Accounts for minor floating-point summation order differences between SciPy C-routine and explicit DF2T loop in `float32`. |
+| `TOL-CHUNK-INVARIANCE`| `float32` | Streaming concatenated chunks vs batch execution | `1e-6` | `1e-6` | `ACCEPTED (Feature 002 Sign-off)` | Internal filter state maintains exact sample-to-sample continuity; discrepancy is zero or limited to machine epsilon. |
+| `TOL-WINDOW-ACCUMULATION`| `float32` | Window buffer sample reproduction | `0.0` | `0.0` | `ACCEPTED (Feature 002 Sign-off)` | Pure discrete buffer indexing and sliding; values must be bitwise identical. |
 
 ---
 

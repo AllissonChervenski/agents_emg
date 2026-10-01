@@ -102,19 +102,26 @@ class StatefulWindowBuffer:
         if raw_data.shape[0] == 0:
             return []
 
-        # Append incoming chunk to existing residual buffer
-        if self._buffer.shape[0] == 0:
-            self._buffer = raw_data.copy()
-        else:
-            self._buffer = np.concatenate([self._buffer, raw_data], axis=0)
-
         windows: list[np.ndarray] = []
-        # Emit windows as long as at least window_length samples are available
-        while self._buffer.shape[0] >= self.window_length:
-            win = self._buffer[:self.window_length].copy()
-            windows.append(win)
-            # Advance buffer by stride (preserving overlap!)
-            self._buffer = self._buffer[self.stride:]
+        chunk_len = raw_data.shape[0]
+        cursor = 0
+
+        while cursor < chunk_len:
+            # Buffer memory is strictly bounded by window_length: only ingest what is needed
+            needed = self.window_length - self._buffer.shape[0]
+            take = min(needed, chunk_len - cursor)
+            slice_to_add = raw_data[cursor : cursor + take]
+            cursor += take
+
+            if self._buffer.shape[0] == 0:
+                self._buffer = slice_to_add.copy()
+            else:
+                self._buffer = np.concatenate([self._buffer, slice_to_add], axis=0)
+
+            # Emit window as soon as window_length samples are reached, advancing by stride
+            if self._buffer.shape[0] == self.window_length:
+                windows.append(self._buffer.copy())
+                self._buffer = self._buffer[self.stride :].copy()
 
         return windows
 
