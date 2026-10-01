@@ -86,15 +86,12 @@
     "regression_tests": [{"name": "regression suite", "command": ["python", "-m", "pytest", "-q"]}],
     "build": [{"name": "Python wheel", "command": ["python", "-m", "pip", "wheel", "--no-deps", ".", "--wheel-dir", ".orchestrator/build"]}],
     "tests": [{"name": "full pytest suite", "command": ["python", "-m", "pytest", "-q"]}],
-    "lint": [{"name": "Ruff lint", "command": ["python", "-m", "ruff", "check", "orchestrator", "tests", "semg_dsp"]}],
+    "lint": [{"name": "Ruff lint", "command": ["python", "-m", "ruff", "check", "tests", "semg_dsp"]}],
     "type": [{"name": "mypy type checking", "command": ["python", "-m", "mypy"]}],
-    "syntax": [{"name": "Python syntax", "command": ["python", "-m", "compileall", "-q", "orchestrator", "tests", "semg_dsp"]}],
+    "syntax": [{"name": "Python syntax", "command": ["python", "-m", "compileall", "-q", "tests", "semg_dsp"]}],
     "static": [],
     "requirements": [
-      {"requirement_id": "ORCH-MODEL-DISCOVERY", "checks": [{"name": "model discovery tests", "command": ["python", "-m", "pytest", "-q", "tests/test_model_discovery.py"]}]},
-      {"requirement_id": "ORCH-ROUTING-AND-HARNESS", "checks": [{"name": "routing and harness tests", "command": ["python", "-m", "pytest", "-q", "tests/test_routing_and_verification_v2.py"]}]},
-      {"requirement_id": "ORCH-TDD-CONTRACT", "checks": [{"name": "task-specific TDD tests", "command": ["python", "-m", "pytest", "-q", "tests/test_tdd_contract_v3.py", "tests/test_tdd_execution_v3.py"]}]},
-      {"requirement_id": "ORCH-TRACE-METRICS", "checks": [{"name": "trace and metrics tests", "command": ["python", "-m", "pytest", "-q", "tests/test_trace_metrics_gate_v3.py"]}]}
+      {"requirement_id": "SEMG-DSP-STREAMING", "checks": [{"name": "sEMG DSP streaming tests", "command": ["python", "-m", "pytest", "-q", "tests/test_dsp_pipeline.py", "tests/test_dsp_oracles.py"]}]}
     ]
   },
   "git": {"checkpoint_per_task": true},

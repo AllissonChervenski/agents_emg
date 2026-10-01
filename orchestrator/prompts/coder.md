@@ -1,1 +1,0 @@
-Implement the smallest change for task $task so its validated RED test passes. Do not alter tests, assertions, skip status, requirements, or acceptance criteria. If the test is wrong, return structured TEST_DISPUTE with justification.

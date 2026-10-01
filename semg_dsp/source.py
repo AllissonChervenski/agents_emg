@@ -152,6 +152,8 @@ class ChunkData:
 class SampleSource(ABC):
     """Abstract base protocol for streaming multichannel sample sources."""
 
+    num_channels: int
+
     @abstractmethod
     def read_chunk(self, num_samples: int) -> ChunkData:
         """Read and return the next sequential chunk of samples.
