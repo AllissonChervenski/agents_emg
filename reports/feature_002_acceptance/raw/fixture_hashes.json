@@ -1,0 +1,16 @@
+{
+  "tests/fixtures/dsp/l0_analytical_cases.npz": {
+    "path": "tests/fixtures/dsp/l0_analytical_cases.npz",
+    "actual_sha256": "cb503647c62630255f2ecfc99f84b1022fc139795d485765e2e71c9bad383163",
+    "registered_sha256": "cb503647c62630255f2ecfc99f84b1022fc139795d485765e2e71c9bad383163",
+    "size_bytes": 2786,
+    "status": "PASS"
+  },
+  "tests/fixtures/dsp/sos_test_filter.npz": {
+    "path": "tests/fixtures/dsp/sos_test_filter.npz",
+    "actual_sha256": "715842f96afbbbb706cd8b6045a985a4454d7fd874d53c826595b3fbee46425b",
+    "registered_sha256": "715842f96afbbbb706cd8b6045a985a4454d7fd874d53c826595b3fbee46425b",
+    "size_bytes": 10661,
+    "status": "PASS"
+  }
+}

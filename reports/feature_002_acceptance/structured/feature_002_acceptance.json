@@ -1,0 +1,775 @@
+{
+  "schema_version": "1.0",
+  "feature": "002-dsp-streaming-pipeline",
+  "commit": "f6d43c5672e52044937a431c898e211c318bb128",
+  "branch": "audit/feature-002-acceptance",
+  "timestamp": "2026-10-01T08:17:57.770779+00:00",
+  "execution_duration_seconds": 9.922068938998564,
+  "environment": {
+    "os": "Linux",
+    "platform": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+    "architecture": "x86_64",
+    "python_version": "3.14.7",
+    "python_implementation": "CPython",
+    "numpy_version": "2.5.3",
+    "scipy_version": "1.18.1",
+    "processor": "unknown",
+    "timezone": "-03"
+  },
+  "fixtures": {
+    "tests/fixtures/dsp/l0_analytical_cases.npz": {
+      "path": "tests/fixtures/dsp/l0_analytical_cases.npz",
+      "actual_sha256": "cb503647c62630255f2ecfc99f84b1022fc139795d485765e2e71c9bad383163",
+      "registered_sha256": "cb503647c62630255f2ecfc99f84b1022fc139795d485765e2e71c9bad383163",
+      "size_bytes": 2786,
+      "status": "PASS"
+    },
+    "tests/fixtures/dsp/sos_test_filter.npz": {
+      "path": "tests/fixtures/dsp/sos_test_filter.npz",
+      "actual_sha256": "715842f96afbbbb706cd8b6045a985a4454d7fd874d53c826595b3fbee46425b",
+      "registered_sha256": "715842f96afbbbb706cd8b6045a985a4454d7fd874d53c826595b3fbee46425b",
+      "size_bytes": 10661,
+      "status": "PASS"
+    }
+  },
+  "tolerances": {
+    "TOL-ANALYTICAL-L0": {
+      "runtime_dtype": "float32",
+      "comparison_target": "F\u00f3rmulas anal\u00edticas (degrau, DC, impulso, zeros, sen\u00f3ide, multi-tom)",
+      "rtol": 1e-06,
+      "atol": 1e-06,
+      "status": "ACCEPTED (Feature 002 Sign-off)",
+      "rationale": "Margem conservadora para opera\u00e7\u00f5es float32 do pipeline sint\u00e9tico IEEE 754 em precis\u00e3o simples.",
+      "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+    },
+    "TOL-SOS-FILTER-L1": {
+      "runtime_dtype": "float32",
+      "comparison_target": "Or\u00e1culo independente SciPy scipy.signal.sosfilt",
+      "rtol": 1e-05,
+      "atol": 1e-05,
+      "status": "ACCEPTED (Feature 002 Sign-off)",
+      "rationale": "Compensa pequenas diferen\u00e7as de acumula\u00e7\u00e3o de arredondamento entre o loop expl\u00edcito DF2T em float32 e a rotina C do SciPy.",
+      "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+    },
+    "TOL-CHUNK-INVARIANCE": {
+      "runtime_dtype": "float32",
+      "comparison_target": "Concatena\u00e7\u00e3o de sa\u00eddas streaming vs processamento em bloco",
+      "rtol": 1e-06,
+      "atol": 1e-06,
+      "status": "ACCEPTED (Feature 002 Sign-off)",
+      "rationale": "Garante que o estado interno do filtro ret\u00e9m continuidade exata sem deriva num\u00e9rica atrav\u00e9s de fronteiras de chunks.",
+      "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+    },
+    "TOL-WINDOW-ACCUMULATION": {
+      "runtime_dtype": "float32",
+      "comparison_target": "Janelamento cont\u00ednuo em bloco vs janelamento streaming com estado",
+      "rtol": 0.0,
+      "atol": 0.0,
+      "status": "ACCEPTED (Feature 002 Sign-off)",
+      "rationale": "Indexa\u00e7\u00e3o temporal e c\u00f3pias de buffers discretos devem ser estritamente bit a bit id\u00eanticos.",
+      "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+    }
+  },
+  "tests": {
+    "FIXTURE-INTEGRITY": {
+      "name": "Frozen Fixture SHA-256 Hashes",
+      "status": "PASS",
+      "details": {
+        "tests/fixtures/dsp/l0_analytical_cases.npz": {
+          "path": "tests/fixtures/dsp/l0_analytical_cases.npz",
+          "actual_sha256": "cb503647c62630255f2ecfc99f84b1022fc139795d485765e2e71c9bad383163",
+          "registered_sha256": "cb503647c62630255f2ecfc99f84b1022fc139795d485765e2e71c9bad383163",
+          "size_bytes": 2786,
+          "status": "PASS"
+        },
+        "tests/fixtures/dsp/sos_test_filter.npz": {
+          "path": "tests/fixtures/dsp/sos_test_filter.npz",
+          "actual_sha256": "715842f96afbbbb706cd8b6045a985a4454d7fd874d53c826595b3fbee46425b",
+          "registered_sha256": "715842f96afbbbb706cd8b6045a985a4454d7fd874d53c826595b3fbee46425b",
+          "size_bytes": 10661,
+          "status": "PASS"
+        }
+      }
+    },
+    "ORACLE-INDEPENDENCE": {
+      "name": "Oracle Generator Script Independence (No semg_dsp imports)",
+      "status": "PASS",
+      "details": {
+        "scripts": [
+          "scripts/generate_l0_fixtures.py",
+          "scripts/generate_sos_fixtures.py"
+        ],
+        "pass": true
+      }
+    },
+    "RUNTIME-SCIPY-FREE": {
+      "name": "Absence of SciPy in Production Runtime (semg_dsp/)",
+      "status": "PASS",
+      "details": {
+        "scanned_files": [
+          "semg_dsp/__init__.py",
+          "semg_dsp/pipeline.py",
+          "semg_dsp/window.py",
+          "semg_dsp/filter.py",
+          "semg_dsp/source.py"
+        ],
+        "scipy_found": false
+      }
+    },
+    "TOLERANCE-CATALOG": {
+      "name": "Formal Tolerance Catalog Audit",
+      "status": "PASS",
+      "details": {
+        "TOL-ANALYTICAL-L0": {
+          "runtime_dtype": "float32",
+          "comparison_target": "F\u00f3rmulas anal\u00edticas (degrau, DC, impulso, zeros, sen\u00f3ide, multi-tom)",
+          "rtol": 1e-06,
+          "atol": 1e-06,
+          "status": "ACCEPTED (Feature 002 Sign-off)",
+          "rationale": "Margem conservadora para opera\u00e7\u00f5es float32 do pipeline sint\u00e9tico IEEE 754 em precis\u00e3o simples.",
+          "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+        },
+        "TOL-SOS-FILTER-L1": {
+          "runtime_dtype": "float32",
+          "comparison_target": "Or\u00e1culo independente SciPy scipy.signal.sosfilt",
+          "rtol": 1e-05,
+          "atol": 1e-05,
+          "status": "ACCEPTED (Feature 002 Sign-off)",
+          "rationale": "Compensa pequenas diferen\u00e7as de acumula\u00e7\u00e3o de arredondamento entre o loop expl\u00edcito DF2T em float32 e a rotina C do SciPy.",
+          "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+        },
+        "TOL-CHUNK-INVARIANCE": {
+          "runtime_dtype": "float32",
+          "comparison_target": "Concatena\u00e7\u00e3o de sa\u00eddas streaming vs processamento em bloco",
+          "rtol": 1e-06,
+          "atol": 1e-06,
+          "status": "ACCEPTED (Feature 002 Sign-off)",
+          "rationale": "Garante que o estado interno do filtro ret\u00e9m continuidade exata sem deriva num\u00e9rica atrav\u00e9s de fronteiras de chunks.",
+          "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+        },
+        "TOL-WINDOW-ACCUMULATION": {
+          "runtime_dtype": "float32",
+          "comparison_target": "Janelamento cont\u00ednuo em bloco vs janelamento streaming com estado",
+          "rtol": 0.0,
+          "atol": 0.0,
+          "status": "ACCEPTED (Feature 002 Sign-off)",
+          "rationale": "Indexa\u00e7\u00e3o temporal e c\u00f3pias de buffers discretos devem ser estritamente bit a bit id\u00eanticos.",
+          "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+        }
+      }
+    },
+    "L0-ZERO-001": {
+      "name": "L0 Analytical: zeros",
+      "status": "PASS",
+      "details": {
+        "case": "zeros",
+        "shape": [
+          200,
+          2
+        ],
+        "dtype": "float32",
+        "exact": true,
+        "max_abs_error": 0.0,
+        "max_rel_error": 0.0,
+        "status": "PASS"
+      }
+    },
+    "L0-DC-001": {
+      "name": "L0 Analytical: dc",
+      "status": "PASS",
+      "details": {
+        "case": "dc",
+        "shape": [
+          200,
+          2
+        ],
+        "dtype": "float32",
+        "exact": true,
+        "max_abs_error": 0.0,
+        "max_rel_error": 0.0,
+        "status": "PASS"
+      }
+    },
+    "L0-IMPULSE-001": {
+      "name": "L0 Analytical: impulse",
+      "status": "PASS",
+      "details": {
+        "case": "impulse",
+        "shape": [
+          200,
+          2
+        ],
+        "dtype": "float32",
+        "exact": true,
+        "max_abs_error": 0.0,
+        "max_rel_error": 0.0,
+        "status": "PASS"
+      }
+    },
+    "L0-STEP-001": {
+      "name": "L0 Analytical: step",
+      "status": "PASS",
+      "details": {
+        "case": "step",
+        "shape": [
+          200,
+          2
+        ],
+        "dtype": "float32",
+        "exact": true,
+        "max_abs_error": 0.0,
+        "max_rel_error": 0.0,
+        "status": "PASS"
+      }
+    },
+    "L0-SINE-001": {
+      "name": "L0 Analytical: sine",
+      "status": "PASS",
+      "details": {
+        "case": "sine",
+        "shape": [
+          200,
+          2
+        ],
+        "dtype": "float32",
+        "exact": false,
+        "max_abs_error": 7.152557373046875e-07,
+        "max_rel_error": 1.636519118619617e-05,
+        "status": "PASS"
+      }
+    },
+    "L0-MULTITONE-001": {
+      "name": "L0 Analytical: multi_tone",
+      "status": "PASS",
+      "details": {
+        "case": "multi_tone",
+        "shape": [
+          200,
+          2
+        ],
+        "dtype": "float32",
+        "exact": false,
+        "max_abs_error": 6.556510925292969e-07,
+        "max_rel_error": 7.171146990003763e-06,
+        "status": "PASS"
+      }
+    },
+    "L0-SATURATION-001": {
+      "name": "L0 Analytical: saturation",
+      "status": "PASS",
+      "details": {
+        "case": "saturation",
+        "shape": [
+          200,
+          2
+        ],
+        "dtype": "float32",
+        "exact": false,
+        "max_abs_error": 1.430511474609375e-06,
+        "max_rel_error": 218556.953125,
+        "status": "PASS"
+      }
+    },
+    "FILTER-SCIPY-ZEROS": {
+      "name": "Filter SciPy Oracle: zeros",
+      "status": "PASS",
+      "details": {
+        "name": "zeros",
+        "num_samples": 200,
+        "num_channels": 2,
+        "num_sections": 2,
+        "runtime_dtype": "float32",
+        "oracle_dtype": "float32",
+        "max_abs_error_output": 0.0,
+        "max_rel_error_output": 0.0,
+        "max_abs_error_final_state": 0.0,
+        "max_rel_error_final_state": 0.0,
+        "status": "PASS"
+      }
+    },
+    "FILTER-SCIPY-IMPULSE": {
+      "name": "Filter SciPy Oracle: impulse",
+      "status": "PASS",
+      "details": {
+        "name": "impulse",
+        "num_samples": 200,
+        "num_channels": 2,
+        "num_sections": 2,
+        "runtime_dtype": "float32",
+        "oracle_dtype": "float32",
+        "max_abs_error_output": 0.0,
+        "max_rel_error_output": 0.0,
+        "max_abs_error_final_state": 0.0,
+        "max_rel_error_final_state": 0.0,
+        "status": "PASS"
+      }
+    },
+    "FILTER-SCIPY-DC": {
+      "name": "Filter SciPy Oracle: dc",
+      "status": "PASS",
+      "details": {
+        "name": "dc",
+        "num_samples": 200,
+        "num_channels": 2,
+        "num_sections": 2,
+        "runtime_dtype": "float32",
+        "oracle_dtype": "float32",
+        "max_abs_error_output": 0.0,
+        "max_rel_error_output": 0.0,
+        "max_abs_error_final_state": 0.0,
+        "max_rel_error_final_state": 0.0,
+        "status": "PASS"
+      }
+    },
+    "FILTER-SCIPY-SINE": {
+      "name": "Filter SciPy Oracle: sine",
+      "status": "PASS",
+      "details": {
+        "name": "sine",
+        "num_samples": 200,
+        "num_channels": 2,
+        "num_sections": 2,
+        "runtime_dtype": "float32",
+        "oracle_dtype": "float32",
+        "max_abs_error_output": 0.0,
+        "max_rel_error_output": 0.0,
+        "max_abs_error_final_state": 0.0,
+        "max_rel_error_final_state": 0.0,
+        "status": "PASS"
+      }
+    },
+    "FILTER-SCIPY-MULTI": {
+      "name": "Filter SciPy Oracle: multi",
+      "status": "PASS",
+      "details": {
+        "name": "multi",
+        "num_samples": 200,
+        "num_channels": 2,
+        "num_sections": 2,
+        "runtime_dtype": "float32",
+        "oracle_dtype": "float32",
+        "max_abs_error_output": 0.0,
+        "max_rel_error_output": 0.0,
+        "max_abs_error_final_state": 0.0,
+        "max_rel_error_final_state": 0.0,
+        "status": "PASS"
+      }
+    },
+    "FILTER-SCIPY-MULTITONE": {
+      "name": "Filter SciPy Oracle: multi_tone",
+      "status": "PASS",
+      "details": {
+        "name": "multi_tone",
+        "num_samples": 200,
+        "num_channels": 2,
+        "num_sections": 2,
+        "runtime_dtype": "float32",
+        "oracle_dtype": "float32",
+        "max_abs_error_output": 0.0,
+        "max_rel_error_output": 0.0,
+        "max_abs_error_final_state": 0.0,
+        "max_rel_error_final_state": 0.0,
+        "status": "PASS"
+      }
+    },
+    "FILTER-CHUNK-REGULAR-50": {
+      "name": "Filter Chunk Invariance: regular_50",
+      "status": "PASS",
+      "details": {
+        "strategy": "regular_50",
+        "partition_count": 20,
+        "bitwise_exact": true,
+        "state_bitwise_exact": true,
+        "max_abs_diff": 0.0,
+        "output_hash": "1af25c7cc610c009ba655007f10a637b9de3fe97952726220a24826d0d4edfee",
+        "expected_output_hash": "1af25c7cc610c009ba655007f10a637b9de3fe97952726220a24826d0d4edfee",
+        "final_state_hash": "30812da2fece132244dc4b04323a4ae878e22a434600fa73cf18cd64a488580c",
+        "expected_final_state_hash": "30812da2fece132244dc4b04323a4ae878e22a434600fa73cf18cd64a488580c",
+        "status": "PASS"
+      }
+    },
+    "FILTER-CHUNK-IRREGULAR": {
+      "name": "Filter Chunk Invariance: irregular",
+      "status": "PASS",
+      "details": {
+        "strategy": "irregular",
+        "partition_count": 8,
+        "bitwise_exact": true,
+        "state_bitwise_exact": true,
+        "max_abs_diff": 0.0,
+        "output_hash": "1af25c7cc610c009ba655007f10a637b9de3fe97952726220a24826d0d4edfee",
+        "expected_output_hash": "1af25c7cc610c009ba655007f10a637b9de3fe97952726220a24826d0d4edfee",
+        "final_state_hash": "30812da2fece132244dc4b04323a4ae878e22a434600fa73cf18cd64a488580c",
+        "expected_final_state_hash": "30812da2fece132244dc4b04323a4ae878e22a434600fa73cf18cd64a488580c",
+        "status": "PASS"
+      }
+    },
+    "FILTER-CHUNK-TINY": {
+      "name": "Filter Chunk Invariance: tiny_1_and_2",
+      "status": "PASS",
+      "details": {
+        "strategy": "tiny_1_and_2",
+        "partition_count": 550,
+        "bitwise_exact": true,
+        "state_bitwise_exact": true,
+        "max_abs_diff": 0.0,
+        "output_hash": "1af25c7cc610c009ba655007f10a637b9de3fe97952726220a24826d0d4edfee",
+        "expected_output_hash": "1af25c7cc610c009ba655007f10a637b9de3fe97952726220a24826d0d4edfee",
+        "final_state_hash": "30812da2fece132244dc4b04323a4ae878e22a434600fa73cf18cd64a488580c",
+        "expected_final_state_hash": "30812da2fece132244dc4b04323a4ae878e22a434600fa73cf18cd64a488580c",
+        "status": "PASS"
+      }
+    },
+    "FILTER-CHUNK-ADVERSARIAL": {
+      "name": "Filter Chunk Invariance: primes",
+      "status": "PASS",
+      "details": {
+        "strategy": "primes",
+        "partition_count": 21,
+        "bitwise_exact": true,
+        "state_bitwise_exact": true,
+        "max_abs_diff": 0.0,
+        "output_hash": "1af25c7cc610c009ba655007f10a637b9de3fe97952726220a24826d0d4edfee",
+        "expected_output_hash": "1af25c7cc610c009ba655007f10a637b9de3fe97952726220a24826d0d4edfee",
+        "final_state_hash": "30812da2fece132244dc4b04323a4ae878e22a434600fa73cf18cd64a488580c",
+        "expected_final_state_hash": "30812da2fece132244dc4b04323a4ae878e22a434600fa73cf18cd64a488580c",
+        "status": "PASS"
+      }
+    },
+    "CHAN-ISOLATION-001": {
+      "name": "Multichannel Isolation (Zero Crosstalk)",
+      "status": "PASS",
+      "details": {
+        "channel_count": 4,
+        "stimulated_channels": [
+          0
+        ],
+        "silent_channels": [
+          1,
+          2,
+          3
+        ],
+        "max_silent_channel_out": 0.0,
+        "max_silent_channel_state": 0.0,
+        "status": "PASS"
+      }
+    },
+    "WINDOW-SLICING-200-50": {
+      "name": "Windowing Correctness: W=200, S=50",
+      "status": "PASS",
+      "details": {
+        "window_length": 200,
+        "stride": 50,
+        "total_samples": 1000,
+        "expected_windows": 17,
+        "emitted_windows": 17,
+        "bitwise_exact": true,
+        "status": "PASS"
+      }
+    },
+    "WINDOW-SLICING-100-100": {
+      "name": "Windowing Correctness: W=100, S=100",
+      "status": "PASS",
+      "details": {
+        "window_length": 100,
+        "stride": 100,
+        "total_samples": 1000,
+        "expected_windows": 10,
+        "emitted_windows": 10,
+        "bitwise_exact": true,
+        "status": "PASS"
+      }
+    },
+    "WINDOW-SLICING-150-75": {
+      "name": "Windowing Correctness: W=150, S=75",
+      "status": "PASS",
+      "details": {
+        "window_length": 150,
+        "stride": 75,
+        "total_samples": 1000,
+        "expected_windows": 12,
+        "emitted_windows": 12,
+        "bitwise_exact": true,
+        "status": "PASS"
+      }
+    },
+    "WINDOW-SLICING-256-64": {
+      "name": "Windowing Correctness: W=256, S=64",
+      "status": "PASS",
+      "details": {
+        "window_length": 256,
+        "stride": 64,
+        "total_samples": 1024,
+        "expected_windows": 13,
+        "emitted_windows": 13,
+        "bitwise_exact": true,
+        "status": "PASS"
+      }
+    },
+    "WINDOW-FINALIZE-DROP": {
+      "name": "Window Buffer Finalize Policy: drop",
+      "status": "PASS",
+      "details": {
+        "residual_before": 20,
+        "emitted_on_finalize": 0,
+        "residual_after": 0,
+        "subsequent_finalize_emitted": 0,
+        "status": "PASS"
+      }
+    },
+    "WINDOW-FINALIZE-PAD": {
+      "name": "Window Buffer Finalize Policy: pad (zero-padded residual)",
+      "status": "PASS",
+      "details": {
+        "residual_before": 20,
+        "emitted_on_finalize": 1,
+        "padded_window_shape": [
+          100,
+          2
+        ],
+        "residual_after": 0,
+        "status": "PASS"
+      }
+    },
+    "PIPELINE-ORACLE-001": {
+      "name": "End-to-End StreamingPipeline vs Independent SciPy Reference",
+      "status": "PASS",
+      "details": {
+        "source_samples": 2000,
+        "emitted_windows": 37,
+        "window_shape": [
+          200,
+          2
+        ],
+        "overall_max_abs_error": 2.2649765014648438e-06,
+        "comparison_mode": "np.allclose(rtol=1e-5, atol=1e-5)",
+        "status": "PASS"
+      }
+    },
+    "PIPELINE-CHUNK-INV-001": {
+      "name": "End-to-End Pipeline Chunk Invariance Across Chunk Sizes",
+      "status": "PASS",
+      "details": {
+        "chunk_sizes_tested": [
+          10,
+          25,
+          33,
+          50,
+          100,
+          200
+        ],
+        "all_identical_window_hashes": true,
+        "status": "PASS"
+      }
+    },
+    "DTYPE-AUDIT-001": {
+      "name": "Strict float32 Contract Preservation",
+      "status": "PASS",
+      "details": {
+        "components": [
+          {
+            "component": "SyntheticSampleSource output chunk.data",
+            "expected_dtype": "<class 'numpy.float32'>",
+            "observed_dtype": "float32",
+            "status": "PASS"
+          },
+          {
+            "component": "ChunkData encapsulation",
+            "expected_dtype": "<class 'numpy.float32'>",
+            "observed_dtype": "float32",
+            "status": "PASS"
+          },
+          {
+            "component": "CausalSosFilter coefficients",
+            "expected_dtype": "<class 'numpy.float32'>",
+            "observed_dtype": "float32",
+            "status": "PASS"
+          },
+          {
+            "component": "CausalSosFilter internal delay state",
+            "expected_dtype": "<class 'numpy.float32'>",
+            "observed_dtype": "float32",
+            "status": "PASS"
+          },
+          {
+            "component": "CausalSosFilter output",
+            "expected_dtype": "<class 'numpy.float32'>",
+            "observed_dtype": "float32",
+            "status": "PASS"
+          },
+          {
+            "component": "StatefulWindowBuffer internal buffer",
+            "expected_dtype": "<class 'numpy.float32'>",
+            "observed_dtype": "float32",
+            "status": "PASS"
+          },
+          {
+            "component": "StatefulWindowBuffer emitted window",
+            "expected_dtype": "<class 'numpy.float32'>",
+            "observed_dtype": "float32",
+            "status": "PASS"
+          },
+          {
+            "component": "StreamingPipeline output window",
+            "expected_dtype": "<class 'numpy.float32'>",
+            "observed_dtype": "float32",
+            "status": "PASS"
+          }
+        ]
+      }
+    },
+    "BOUNDED-STATE-001": {
+      "name": "Bounded State & Memory Contention",
+      "status": "PASS",
+      "details": {
+        "runs": [
+          {
+            "stream_length": 1000,
+            "emitted_windows": 17,
+            "remaining_buffered_samples": 150,
+            "max_allowed_buffer": 200,
+            "filter_state_shape": [
+              2,
+              2,
+              2
+            ],
+            "status": "PASS"
+          },
+          {
+            "stream_length": 10000,
+            "emitted_windows": 197,
+            "remaining_buffered_samples": 150,
+            "max_allowed_buffer": 200,
+            "filter_state_shape": [
+              2,
+              2,
+              2
+            ],
+            "status": "PASS"
+          },
+          {
+            "stream_length": 50000,
+            "emitted_windows": 997,
+            "remaining_buffered_samples": 150,
+            "max_allowed_buffer": 200,
+            "filter_state_shape": [
+              2,
+              2,
+              2
+            ],
+            "status": "PASS"
+          },
+          {
+            "stream_length": 100000,
+            "emitted_windows": 1997,
+            "remaining_buffered_samples": 150,
+            "max_allowed_buffer": 200,
+            "filter_state_shape": [
+              2,
+              2,
+              2
+            ],
+            "status": "PASS"
+          }
+        ]
+      }
+    },
+    "REPRODUCIBILITY-001": {
+      "name": "Bitwise Deterministic Reproducibility Across Runs",
+      "status": "PASS",
+      "details": {
+        "runs": 5,
+        "hashes": [
+          "f844952ff54d5db71b8528ba19781730779ef5de312d809845566de1df6582b2",
+          "f844952ff54d5db71b8528ba19781730779ef5de312d809845566de1df6582b2",
+          "f844952ff54d5db71b8528ba19781730779ef5de312d809845566de1df6582b2",
+          "f844952ff54d5db71b8528ba19781730779ef5de312d809845566de1df6582b2",
+          "f844952ff54d5db71b8528ba19781730779ef5de312d809845566de1df6582b2"
+        ],
+        "identical": true
+      }
+    },
+    "QUALITY-GATES": {
+      "name": "Deterministic Quality Gates",
+      "status": "PASS",
+      "details": {
+        "gate_pytest": {
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "duration_seconds": 1.675953218000359,
+          "status": "PASS"
+        },
+        "gate_ruff": {
+          "command": "python -m ruff check tests semg_dsp scripts",
+          "exit_code": 0,
+          "duration_seconds": 0.06269610900199041,
+          "status": "PASS"
+        },
+        "gate_mypy": {
+          "command": "python -m mypy",
+          "exit_code": 0,
+          "duration_seconds": 0.2120830109997769,
+          "status": "PASS"
+        },
+        "gate_compileall": {
+          "command": "python -m compileall -q tests semg_dsp scripts",
+          "exit_code": 0,
+          "duration_seconds": 0.13859380500070984,
+          "status": "PASS"
+        },
+        "gate_orchestrator_verify": {
+          "command": "python -m orchestrator verify",
+          "exit_code": 0,
+          "duration_seconds": 6.100663885998074,
+          "status": "PASS"
+        }
+      }
+    }
+  },
+  "quality_gates": {
+    "gate_pytest": {
+      "command": "python -m pytest -q",
+      "exit_code": 0,
+      "duration_seconds": 1.675953218000359,
+      "status": "PASS"
+    },
+    "gate_ruff": {
+      "command": "python -m ruff check tests semg_dsp scripts",
+      "exit_code": 0,
+      "duration_seconds": 0.06269610900199041,
+      "status": "PASS"
+    },
+    "gate_mypy": {
+      "command": "python -m mypy",
+      "exit_code": 0,
+      "duration_seconds": 0.2120830109997769,
+      "status": "PASS"
+    },
+    "gate_compileall": {
+      "command": "python -m compileall -q tests semg_dsp scripts",
+      "exit_code": 0,
+      "duration_seconds": 0.13859380500070984,
+      "status": "PASS"
+    },
+    "gate_orchestrator_verify": {
+      "command": "python -m orchestrator verify",
+      "exit_code": 0,
+      "duration_seconds": 6.100663885998074,
+      "status": "PASS"
+    }
+  },
+  "findings": [],
+  "final_status": "PASS",
+  "raw_evidence_manifest": {
+    "execution_log": "reports/feature_002_acceptance/raw/execution.jsonl",
+    "numerical_measurements": "reports/feature_002_acceptance/raw/numerical_measurements.jsonl",
+    "commands_log": "reports/feature_002_acceptance/raw/commands.jsonl",
+    "environment_json": "reports/feature_002_acceptance/raw/environment.json",
+    "git_state_json": "reports/feature_002_acceptance/raw/git_state.json",
+    "fixture_hashes_json": "reports/feature_002_acceptance/raw/fixture_hashes.json",
+    "tolerance_registry_json": "reports/feature_002_acceptance/raw/tolerance_registry.json",
+    "artifact_manifest_json": "reports/feature_002_acceptance/raw/artifact_manifest.json",
+    "stdout_logs": "reports/feature_002_acceptance/raw/stdout/",
+    "stderr_logs": "reports/feature_002_acceptance/raw/stderr/"
+  }
+}
