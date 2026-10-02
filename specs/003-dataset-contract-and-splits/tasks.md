@@ -115,8 +115,9 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 ## Final Phase: Polish & Cross-Cutting Concerns
 
-- [ ] T009 Final audit of dataset contracts, PROVE-OR-QUARANTINE reports, split leakage, and Constitution compliance
+- [x] T009 Final audit of dataset contracts, PROVE-OR-QUARANTINE reports, split leakage, and Constitution compliance
   <!-- harness-task {"requirements":["FR-011","FR-012"],"acceptance_criteria":["SC-001","SC-002","SC-003","SC-004","SC-005","SC-006"],"plan_decisions":["D-001","D-002","D-003","D-004","D-005"],"dependencies":["T008"],"test_type":"NOT_AUTOMATABLE","justification":"Human and static review of git diff, verification of zero raw file modifications, zero leakage between partitions, and passage of all deterministic quality gates.","alternative_verification":"Verify git status in data/raw/ is untouched; verify all unit tests pass with pytest -q; run ruff, mypy, compileall, and orchestrator verify.","allowed_files":[],"tdd_phases":[],"numeric_sensitive":false} -->
+
 
 ---
 
