@@ -172,7 +172,7 @@ Auditoria exaustiva de todos os 120 arquivos de sinal sEMG:
 ## J. Temporal Shape Consistency & Discrepancies
 
 - **Compatibilidade Geral**: Na grande maioria dos arquivos, `emg`, `stimulus`, `restimulus`, `repetition` e `rerepetition` possuem comprimentos temporais **rigorosamente idênticos**.
-- **Discrepâncias Encontradas**: Foram identificadas **`18` pequenas assincronias** em sujeitos específicos nos vetores refinados (`restimulus` / `rerepetition`), onde o comprimento difere por uma quantidade ínfima de amostras (tipicamente 1 a 6 amostras em relação a ~1.8M a 2.5M amostras):
+- **Discrepâncias Encontradas**: Foram identificados **18 arquivos E3 com divergências de comprimento** entre `emg`/`stimulus`/`repetition` e os vetores refinados (`restimulus`/`rerepetition`). Na maioria dos casos a diferença observada é de apenas **1 a 5 amostras**, porém com um **outlier documentado de 272 amostras no `S12_E3_A1.mat`** (~136 ms a 2 kHz):
 - **`DB2_s1.zip:S1_E3_A1.mat`**: Temporal sample count discrepancy: emg=877073, stimulus=877073, restimulus=877072, repetition=877073, rerepetition=877072
 - **`DB2_s3.zip:S3_E3_A1.mat`**: Temporal sample count discrepancy: emg=876769, stimulus=876769, restimulus=876771, repetition=876769, rerepetition=876771
 - **`DB2_s4.zip:S4_E3_A1.mat`**: Temporal sample count discrepancy: emg=876893, stimulus=876893, restimulus=876892, repetition=876893, rerepetition=876892
@@ -181,11 +181,11 @@ Auditoria exaustiva de todos os 120 arquivos de sinal sEMG:
 - **`DB2_s8.zip:S8_E3_A1.mat`**: Temporal sample count discrepancy: emg=875390, stimulus=875390, restimulus=875391, repetition=875390, rerepetition=875391
 - **`DB2_s10.zip:S10_E3_A1.mat`**: Temporal sample count discrepancy: emg=875505, stimulus=875505, restimulus=875503, repetition=875505, rerepetition=875503
 - **`DB2_s11.zip:S11_E3_A1.mat`**: Temporal sample count discrepancy: emg=874265, stimulus=874265, restimulus=874263, repetition=874265, rerepetition=874263
-- **`DB2_s12.zip:S12_E3_A1.mat`**: Temporal sample count discrepancy: emg=875707, stimulus=875707, restimulus=875435, repetition=875707, rerepetition=875435
+- **`DB2_s12.zip:S12_E3_A1.mat`**: Temporal sample count discrepancy: emg=875707, stimulus=875707, restimulus=875435, repetition=875707, rerepetition=875435 (OUTLIER: 272 amostras / ~136 ms)
 - **`DB2_s13.zip:S13_E3_A1.mat`**: Temporal sample count discrepancy: emg=875517, stimulus=875517, restimulus=875516, repetition=875517, rerepetition=875516
 - *(e outros 8 arquivos catalogados em findings.json)*
 
-*Impacto para a Feature 003*: O loader da Feature 003 deve possuir política explícita de alinhamento temporal (ex: corte pelo menor comprimento mútuo `min_len`) ao combinar `emg` e rótulos refinados.
+*Impacto para a Feature 003*: O loader e a especificação da Feature 003 não podem assumir um `min(...)` ingênuo sem documentação nem permitir que o implementador decida a política silenciosamente durante a fase GREEN. Deve-se formalizar no `CLARIFY`/`SPECIFY` a política canônica e determinística de alinhamento temporal (ex: truncate-to-common-length, fallback para stimulus/repetition quando houver divergência, ou política dedicada para os refined labels).
 
 ---
 
@@ -230,9 +230,10 @@ Foram catalogados **`18` achados**:
 1. **Volume e Integridade**: Os 40 sujeitos do NinaPro DB2 estão íntegros, sem corrupção e descompactáveis em memória.
 2. **Contrato sEMG**: Formato regular `(N, 12)` em `float32`, sem NaN e sem Inf.
 3. **Escopo**: Nenhum processamento prévio, treinamento ou conversão foi realizado, mantendo os dados puros.
-4. **Recomendação para a Feature 003 (CLARIFY / SPECIFY)**:
-   - Adotar política canônica para resolução das pequenas assincronias temporais (1..6 amostras) em `restimulus`.
-   - Definir formalmente se o rótulo de treino será `stimulus` ou `restimulus`.
-   - Implementar particionamento canônico de sujeitos (ex: Train / Val / Test) respeitando o isolamento inter-sujeito.
+4. **Recomendações Obrigatórias para a Feature 003 (CLARIFY / SPECIFY)**:
+   - **Política de Alinhamento Temporal**: Formalizar a política determinística para resolução das assincronias em `restimulus`/`rerepetition` (1–5 amostras e o outlier de 272 amostras em S12).
+   - **Definição do Rótulo Canônico**: Decidir explicitamente via CLARIFY se o alvo de classificação supervisionada será `stimulus` ou `restimulus`.
+   - **Protocolo de Splits**: Definir formalmente a unidade de isolamento (ex: splits por repetição ou splits inter-sujeito) impedindo qualquer leakage entre treino, validação e teste.
+   - **Encerramento de Proveniência**: Completar os campos `license` e `official_url` (marcados como `TO_BE_DOCUMENTED`) antes da aprovação final da Feature 003.
 
 *Baseline de intake aprovada com sucesso.*
