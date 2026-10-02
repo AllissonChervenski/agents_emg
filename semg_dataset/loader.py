@@ -16,8 +16,9 @@ import numpy as np
 import scipy.io
 
 from semg_dataset.alignment import ProveOrQuarantineEngine
-from semg_dataset.contract import RecordingData
+from semg_dataset.contract import AlignmentStatus, RecordingData
 from semg_dataset.provenance import NinaProProvenance
+
 
 
 
@@ -136,6 +137,12 @@ class NinaProDB2Loader:
             subject_id=subject_id,
             exercise_id=exercise_id,
         )
+
+        if alignment.status == AlignmentStatus.QUARANTINE:
+            raise RuntimeError(
+                f"Recording {subject_id}_{exercise_id} cannot be loaded: QUARANTINED ({alignment.notes})"
+            )
+
 
         provenance: Dict[str, Any] = {
             "dataset": NinaProProvenance.get_metadata().dataset_name,

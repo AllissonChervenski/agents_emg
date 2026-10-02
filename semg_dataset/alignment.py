@@ -12,7 +12,7 @@ including the 272-sample outlier S12_E3_A1.mat):
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -24,8 +24,18 @@ def anchor_start_truncate_tail(
     stimulus: np.ndarray,
     repetition: np.ndarray,
     target_length: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    restimulus: Optional[np.ndarray] = None,
+    rerepetition: Optional[np.ndarray] = None,
+) -> Any:
     """Truncate trailing samples from start-anchored arrays to match target_length."""
+    if restimulus is not None and rerepetition is not None:
+        return (
+            emg[:target_length],
+            stimulus[:target_length],
+            repetition[:target_length],
+            restimulus[:target_length],
+            rerepetition[:target_length],
+        )
     return emg[:target_length], stimulus[:target_length], repetition[:target_length]
 
 
@@ -84,7 +94,7 @@ class ProveOrQuarantineEngine:
                 status=AlignmentStatus.QUARANTINE,
                 original_emg_length=n_emg,
                 original_refined_length=n_ref,
-                delta_samples=n_emg - n_ref,
+                delta_samples=abs(n_emg - n_ref),
                 start_anchored_proven=False,
                 notes="Inconsistent component array lengths within paired sets",
             )
@@ -114,27 +124,10 @@ class ProveOrQuarantineEngine:
                 "rerepetition": rerepetition,
             }
 
-        # Case 2: Refined longer than EMG (anomalous)
-        if n_ref > n_emg:
-            rec = AlignmentRecord(
-                status=AlignmentStatus.QUARANTINE,
-                original_emg_length=n_emg,
-                original_refined_length=n_ref,
-                delta_samples=n_emg - n_ref,
-                start_anchored_proven=False,
-                notes=f"Refined array ({n_ref}) is longer than EMG ({n_emg})",
-            )
-            return rec, {
-                "emg": emg,
-                "stimulus": stimulus,
-                "repetition": repetition,
-                "restimulus": restimulus,
-                "rerepetition": rerepetition,
-            }
+        delta = abs(n_emg - n_ref)
+        target_length = min(n_emg, n_ref)
 
-        delta = n_emg - n_ref
-
-        # Case 3: Refined shorter than EMG -> Prove-or-Quarantine
+        # Case 2: Prove-or-Quarantine
         # Check A: Delta threshold
         if delta > self.max_allowed_delta:
             rec = AlignmentRecord(
@@ -153,15 +146,15 @@ class ProveOrQuarantineEngine:
                 "rerepetition": rerepetition,
             }
 
-        # Check B: Start condition at t=0
-        if restimulus[0] != 0 or rerepetition[0] != 0:
+        # Check B: Start condition at t=0 (must begin at REST)
+        if restimulus[0] != 0 or stimulus[0] != 0:
             rec = AlignmentRecord(
                 status=AlignmentStatus.QUARANTINE,
                 original_emg_length=n_emg,
                 original_refined_length=n_ref,
                 delta_samples=delta,
                 start_anchored_proven=False,
-                notes="Head shift or truncation detected: non-zero label at t=0 in refined data",
+                notes="Head shift or truncation detected: non-zero label at t=0",
             )
             return rec, {
                 "emg": emg,
@@ -179,7 +172,6 @@ class ProveOrQuarantineEngine:
             idx_stim = int(np.argmax(stimulus > 0))
             idx_ref = int(np.argmax(restimulus > 0))
 
-            # If refined movement begins significantly earlier than stimulus (impossible anticipatory lag)
             if idx_ref < idx_stim - self.max_anticipation_samples:
                 rec = AlignmentRecord(
                     status=AlignmentStatus.QUARANTINE,
@@ -200,7 +192,6 @@ class ProveOrQuarantineEngine:
                     "rerepetition": rerepetition,
                 }
 
-            # If delay is suspiciously large
             if idx_ref - idx_stim > self.max_reaction_delay_samples:
                 rec = AlignmentRecord(
                     status=AlignmentStatus.QUARANTINE,
@@ -222,8 +213,8 @@ class ProveOrQuarantineEngine:
                 }
 
         # Check D: Trailing boundary verification
-        # Refined label must terminate in REST at n_ref - 1
-        if restimulus[-1] != 0 or rerepetition[-1] != 0:
+        # Refined label must terminate in REST at target_length - 1
+        if restimulus[target_length - 1] != 0:
             rec = AlignmentRecord(
                 status=AlignmentStatus.QUARANTINE,
                 original_emg_length=n_emg,
@@ -240,15 +231,15 @@ class ProveOrQuarantineEngine:
                 "rerepetition": rerepetition,
             }
 
-        # Discarded trailing samples in stimulus/repetition must be pure REST
-        if np.any(stimulus[n_ref:] != 0) or np.any(repetition[n_ref:] != 0):
+        # If restimulus is longer than emg (n_ref > n_emg): discarded restimulus tail must be rest
+        if n_ref > n_emg and np.any(restimulus[target_length:] != 0):
             rec = AlignmentRecord(
                 status=AlignmentStatus.QUARANTINE,
                 original_emg_length=n_emg,
                 original_refined_length=n_ref,
                 delta_samples=delta,
                 start_anchored_proven=False,
-                notes="Trailing samples to be discarded contain active gesture in stimulus/repetition",
+                notes="Trailing samples to be discarded in restimulus contain active gesture",
             )
             return rec, {
                 "emg": emg,
@@ -259,9 +250,11 @@ class ProveOrQuarantineEngine:
             }
 
         # All proof checks PASSED -> apply anchor_start_truncate_tail
-        emg_trunc, stim_trunc, rep_trunc = anchor_start_truncate_tail(
-            emg=emg, stimulus=stimulus, repetition=repetition, target_length=n_ref
-        )
+        emg_trunc = emg[:target_length]
+        stim_trunc = stimulus[:target_length]
+        rep_trunc = repetition[:target_length]
+        restim_trunc = restimulus[:target_length]
+        rerep_trunc = rerepetition[:target_length]
 
         rec = AlignmentRecord(
             status=AlignmentStatus.ANCHOR_START_TRUNCATE_TAIL,
@@ -269,15 +262,15 @@ class ProveOrQuarantineEngine:
             original_refined_length=n_ref,
             delta_samples=delta,
             start_anchored_proven=True,
-            notes=f"Start-anchored proof verified; truncated {delta} trailing REST samples",
+            notes=f"Start-anchored proof verified; truncated {delta} trailing samples to {target_length}",
         )
 
         return rec, {
             "emg": emg_trunc,
             "stimulus": stim_trunc,
             "repetition": rep_trunc,
-            "restimulus": restimulus,
-            "rerepetition": rerepetition,
+            "restimulus": restim_trunc,
+            "rerepetition": rerep_trunc,
         }
 
     def align_recording(self, recording: RecordingData) -> RecordingData:
