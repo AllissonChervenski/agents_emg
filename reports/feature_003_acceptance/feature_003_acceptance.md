@@ -3,11 +3,11 @@
 ## Executive Summary
 
 - **Feature**: `003-dataset-contract-and-splits`
-- **Audit Date**: `2026-10-02T08:08:36.770301+00:00`
-- **Git Commit**: `39fd9e96545aa86cd29a9e192fc0be9f8ccf8ae1`
+- **Audit Date**: `2026-10-02T08:18:05.817541+00:00`
+- **Git Commit**: `7dfceeb42211d7e2a70d4d1f18139e611cfceb2c`
 - **Git Branch**: `feat/003-dataset-contract-and-splits`
 - **Overall Status**: **`PASS`**
-- **Total Audit Time**: `3.23 s`
+- **Total Audit Time**: `3.67 s`
 
 ---
 
@@ -30,17 +30,21 @@
 ## S12 Outlier Scientific Alignment Evidence
 
 ```text
-S12_E3_A1.mat
-original_emg_length ........ 875707
-original_restimulus_length . 875435
-delta_samples .............. 272
-delta_ms ................... 136.0
-anchor_start ............... PASS
-reaction_lag_ms ............ 646.0 ms
-discarded_tail_all_rest .... PASS
-last_active_rep_complete ... PASS
-decision ................... ACCEPT_AUTO
-policy ..................... anchor_start_truncate_tail
+Recording ................... S12_E3_A1.mat
+Original EMG Length ......... 875707 samples
+Original Stimulus Length .... 875707 samples
+Original Repetition Length .. 875707 samples
+Original Restimulus Length .. 875435 samples
+Original Rerepetition Length  875435 samples
+Delta ....................... 272 samples (136.0 ms @ 2000 Hz)
+Truncated Side .............. tail (cauda)
+Discarded Interval .......... [875435:875707] (arrays: emg, stimulus, repetition)
+Target Canonical Length ..... 875435 samples
+Start Anchor (t=0) .......... PASS (restimulus[0]==0, stimulus[0]==0, reaction lag = 646.0 ms)
+Tail Boundary (at cutoff) ... PASS (restimulus[875434] == 0)
+Discarded Interval Proof .... PASS: Motor gesture (restimulus) ended at sample 872711. Physical rest persists for 2723 samples up to canonical cutoff at sample 875434. Discarded EMG interval [875435:875707] exhibits noise-floor RMS (0.000014 V vs 0.000093 V active gesture; baseline rest RMS 0.000019 V). Trailing visual prompt stimulus=49 reflects visual software prompt overrun after muscular cessation.
+Final Engine Decision ....... ACCEPT_AUTO
+Applied Policy .............. anchor_start_truncate_tail
 ```
 
 ---

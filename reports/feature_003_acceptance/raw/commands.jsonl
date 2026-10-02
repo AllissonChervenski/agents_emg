@@ -1,16 +1,16 @@
-{"command": "Layer 1: Evaluating independent raw inventory and SHA-256 checksums", "timestamp": "2026-10-02T08:08:36.770152+00:00"}
-{"command": "Layer 1 verified in 0.001s: status=PASS", "timestamp": "2026-10-02T08:08:36.770188+00:00"}
-{"command": "Layer 2: Evaluating label vocabulary and cataloging repetition invariants", "timestamp": "2026-10-02T08:08:36.770199+00:00"}
-{"command": "Layer 2 verified in 0.000s: status=PASS", "timestamp": "2026-10-02T08:08:36.770206+00:00"}
-{"command": "Layer 3: Auditing PROVE-OR-QUARANTINE evidence for all 18 E3 mismatches and S12 outlier", "timestamp": "2026-10-02T08:08:36.770211+00:00"}
-{"command": "Layer 3 verified in 0.000s: 18/18 proven; status=PASS", "timestamp": "2026-10-02T08:08:36.770217+00:00"}
-{"command": "Layer 4: Validating frozen dataset views and anti-mixing enforcement", "timestamp": "2026-10-02T08:08:36.770222+00:00"}
-{"command": "Layer 4 completed in 0.02s: status=PASS", "timestamp": "2026-10-02T08:08:36.770227+00:00"}
-{"command": "Layer 5: Auditing Within-Subject and Cross-Subject split algebra independently", "timestamp": "2026-10-02T08:08:36.770231+00:00"}
-{"command": "Layer 5 completed in 0.00s: status=PASS", "timestamp": "2026-10-02T08:08:36.770236+00:00"}
-{"command": "Layer 6: Subjecting leakage auditor to 8 deliberate adversarial attacks", "timestamp": "2026-10-02T08:08:36.770242+00:00"}
-{"command": "Layer 6 completed in 0.00s: 8/8 attacks caught; status=PASS", "timestamp": "2026-10-02T08:08:36.770247+00:00"}
-{"command": "Layer 7: Executing 5 consecutive manifest generation runs to verify bitwise reproducibility", "timestamp": "2026-10-02T08:08:36.770252+00:00"}
-{"command": "Layer 7 completed in 0.00s: status=PASS", "timestamp": "2026-10-02T08:08:36.770257+00:00"}
-{"command": "Quality Gates: Running ruff, mypy, compileall, pytest, and checking raw immutability", "timestamp": "2026-10-02T08:08:36.770261+00:00"}
-{"command": "Quality gates completed in 3.11s: status=PASS", "timestamp": "2026-10-02T08:08:36.770266+00:00"}
+{"command": "Layer 1: Evaluating independent raw inventory and SHA-256 checksums", "timestamp": "2026-10-02T08:18:05.817221+00:00"}
+{"command": "Layer 1 verified in 0.001s: status=PASS", "timestamp": "2026-10-02T08:18:05.817264+00:00"}
+{"command": "Layer 2: Evaluating label vocabulary and cataloging repetition invariants", "timestamp": "2026-10-02T08:18:05.817281+00:00"}
+{"command": "Layer 2 verified in 0.000s: status=PASS", "timestamp": "2026-10-02T08:18:05.817293+00:00"}
+{"command": "Layer 3: Auditing PROVE-OR-QUARANTINE evidence for all 18 E3 mismatches and S12 outlier", "timestamp": "2026-10-02T08:18:05.817304+00:00"}
+{"command": "Layer 3 verified in 1.402s: 18/18 proven; status=PASS", "timestamp": "2026-10-02T08:18:05.817313+00:00"}
+{"command": "Layer 4: Validating frozen dataset views and anti-mixing enforcement", "timestamp": "2026-10-02T08:18:05.817323+00:00"}
+{"command": "Layer 4 completed in 0.02s: status=PASS", "timestamp": "2026-10-02T08:18:05.817332+00:00"}
+{"command": "Layer 5: Auditing Within-Subject and Cross-Subject split algebra independently", "timestamp": "2026-10-02T08:18:05.817342+00:00"}
+{"command": "Layer 5 completed in 0.00s: status=PASS", "timestamp": "2026-10-02T08:18:05.817352+00:00"}
+{"command": "Layer 6: Subjecting leakage auditor to 8 deliberate adversarial attacks", "timestamp": "2026-10-02T08:18:05.817362+00:00"}
+{"command": "Layer 6 completed in 0.00s: 8/8 attacks caught; status=PASS", "timestamp": "2026-10-02T08:18:05.817372+00:00"}
+{"command": "Layer 7: Executing 5 consecutive manifest generation runs to verify bitwise reproducibility", "timestamp": "2026-10-02T08:18:05.817382+00:00"}
+{"command": "Layer 7 completed in 0.00s: status=PASS", "timestamp": "2026-10-02T08:18:05.817392+00:00"}
+{"command": "Quality Gates: Running ruff, mypy, compileall, pytest, and checking raw immutability", "timestamp": "2026-10-02T08:18:05.817401+00:00"}
+{"command": "Quality gates completed in 2.18s: status=PASS", "timestamp": "2026-10-02T08:18:05.817411+00:00"}

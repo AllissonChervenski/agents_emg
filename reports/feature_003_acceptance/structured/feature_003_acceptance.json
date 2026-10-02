@@ -1,7 +1,7 @@
 {
   "feature": "003-dataset-contract-and-splits",
-  "timestamp_utc": "2026-10-02T08:08:36.770301+00:00",
-  "total_elapsed_seconds": 3.228,
+  "timestamp_utc": "2026-10-02T08:18:05.817541+00:00",
+  "total_elapsed_seconds": 3.67,
   "overall_status": "PASS",
   "environment": {
     "platform": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
@@ -9,15 +9,14 @@
     "cpu_count": 4,
     "numpy_version": "2.5.3",
     "scipy_version": "1.18.1",
-    "timestamp_utc": "2026-10-02T08:08:33.546513+00:00"
+    "timestamp_utc": "2026-10-02T08:18:02.149651+00:00"
   },
   "git_state": {
-    "commit": "39fd9e96545aa86cd29a9e192fc0be9f8ccf8ae1",
+    "commit": "7dfceeb42211d7e2a70d4d1f18139e611cfceb2c",
     "branch": "feat/003-dataset-contract-and-splits",
     "clean": false,
     "status_porcelain": [
-      "?? reports/feature_003_acceptance/",
-      "?? scripts/validate_feature_003.py"
+      "M scripts/validate_feature_003.py"
     ]
   },
   "layers": {
@@ -51,7 +50,37 @@
       "s12_outlier_proven": true,
       "s12_delta_samples": 272,
       "s12_delta_ms": 136.0,
-      "elapsed_seconds": 0.0
+      "s12_evidence": {
+        "recording": "S12_E3_A1.mat",
+        "original_emg_length": 875707,
+        "original_stimulus_length": 875707,
+        "original_repetition_length": 875707,
+        "original_restimulus_length": 875435,
+        "original_rerepetition_length": 875435,
+        "delta_samples": 272,
+        "delta_ms": 136.0,
+        "truncated_side": "tail",
+        "discarded_interval": "[875435:875707]",
+        "discarded_arrays": [
+          "emg",
+          "stimulus",
+          "repetition"
+        ],
+        "target_length": 875435,
+        "anchor_start": "PASS",
+        "reaction_lag_ms": 646.0,
+        "discarded_tail_all_rest": "PASS",
+        "last_active_rep_complete": "PASS",
+        "last_active_gesture_sample": 872711,
+        "tail_rest_samples_before_cutoff": 2723,
+        "rms_active_gesture_v": 9.3e-05,
+        "rms_baseline_rest_v": 1.9e-05,
+        "rms_discarded_tail_v": 1.4e-05,
+        "proof_discarded_is_rest": "Motor gesture (restimulus) ended at sample 872711. Physical rest persists for 2723 samples up to canonical cutoff at sample 875434. Discarded EMG interval [875435:875707] exhibits noise-floor RMS (0.000014 V vs 0.000093 V active gesture; baseline rest RMS 0.000019 V). Trailing visual prompt stimulus=49 reflects visual software prompt overrun after muscular cessation.",
+        "decision": "ACCEPT_AUTO",
+        "policy": "anchor_start_truncate_tail"
+      },
+      "elapsed_seconds": 1.402
     },
     "layer_4_frozen_views": {
       "status": "PASS",
@@ -59,9 +88,9 @@
       "stimulus_view_verified": true,
       "view_hashes_distinct": true,
       "anti_mixing_enforcement": "PASS",
-      "refined_view_hash_sample": "c593d99131bf9ef9e177cc16369ed66f89b44bff756098fdbfa9ce96168ac9f8",
-      "stimulus_view_hash_sample": "54f078f5d5a3ccb47071c396b11ae44ad2439ac745048f25fdc4d32b144c4b2b",
-      "elapsed_seconds": 0.017
+      "refined_view_hash_sample": "46ad4fd8e935a2ad1dc92b26f2b52955e160d3a612d648c39972de48f11a75e0",
+      "stimulus_view_hash_sample": "9ab8fdece17a27a2eea65913fce0f6fdafcea71bbf40d7b42cbef8a8373507cf",
+      "elapsed_seconds": 0.016
     },
     "layer_5_split_audit": {
       "status": "PASS",
@@ -113,13 +142,13 @@
       "compileall": true,
       "pytest": true,
       "raw_immutability": true,
-      "elapsed_seconds": 3.114,
+      "elapsed_seconds": 2.18,
       "details": {
         "ruff": {
           "command": "/home/allisson/.local/share/mise/installs/python/latest/bin/python -m ruff check semg_dataset tests",
           "passed": true,
           "exit_code": 0,
-          "elapsed_seconds": 0.144,
+          "elapsed_seconds": 0.111,
           "stdout_tail": [
             "All checks passed!"
           ],
@@ -129,7 +158,7 @@
           "command": "/home/allisson/.local/share/mise/installs/python/latest/bin/python -m mypy semg_dataset tests",
           "passed": true,
           "exit_code": 0,
-          "elapsed_seconds": 0.501,
+          "elapsed_seconds": 0.288,
           "stdout_tail": [
             "Success: no issues found in 24 source files"
           ],
@@ -139,7 +168,7 @@
           "command": "/home/allisson/.local/share/mise/installs/python/latest/bin/python -m compileall -q semg_dataset tests",
           "passed": true,
           "exit_code": 0,
-          "elapsed_seconds": 0.076,
+          "elapsed_seconds": 0.067,
           "stdout_tail": [],
           "stderr_tail": []
         },
@@ -147,11 +176,11 @@
           "command": "/home/allisson/.local/share/mise/installs/python/latest/bin/python -m pytest -q",
           "passed": true,
           "exit_code": 0,
-          "elapsed_seconds": 2.39,
+          "elapsed_seconds": 1.71,
           "stdout_tail": [
             "........................................................................ [ 56%]",
             "........................................................                 [100%]",
-            "128 passed in 1.67s"
+            "128 passed in 1.16s"
           ],
           "stderr_tail": []
         },

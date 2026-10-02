@@ -4,7 +4,7 @@
   "stimulus_view_verified": true,
   "view_hashes_distinct": true,
   "anti_mixing_enforcement": "PASS",
-  "refined_view_hash_sample": "c593d99131bf9ef9e177cc16369ed66f89b44bff756098fdbfa9ce96168ac9f8",
-  "stimulus_view_hash_sample": "54f078f5d5a3ccb47071c396b11ae44ad2439ac745048f25fdc4d32b144c4b2b",
-  "elapsed_seconds": 0.017
+  "refined_view_hash_sample": "46ad4fd8e935a2ad1dc92b26f2b52955e160d3a612d648c39972de48f11a75e0",
+  "stimulus_view_hash_sample": "9ab8fdece17a27a2eea65913fce0f6fdafcea71bbf40d7b42cbef8a8373507cf",
+  "elapsed_seconds": 0.016
 }
