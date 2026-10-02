@@ -93,7 +93,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 **Independent Test**: Generate split partitions under both protocols; assert that partition intersections are strictly empty; assert that intentional leakage injections cause test failures; verify that Cross-Subject generates exactly 5 folds across all 40 subjects with frozen subject lists.
 
-- [ ] T007 [US4] Implement WithinSubjectSplitter and CrossSubjectSplitter with positive leakage controls in semg_dataset/splits.py
+- [x] T007 [US4] Implement WithinSubjectSplitter and CrossSubjectSplitter with positive leakage controls in semg_dataset/splits.py
   <!-- harness-task {"requirements":["FR-006"],"acceptance_criteria":["SC-004","SC-005"],"plan_decisions":["D-003"],"dependencies":["T003","T004"],"test_type":"UNIT","allowed_files":["semg_dataset/splits.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 **Checkpoint**: User Story 4 complete; both evaluation protocols are implemented with mathematical leakage-free guarantees.
