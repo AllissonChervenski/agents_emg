@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (5 critical clarification questions ready for CLARIFY)
+- [x] No [NEEDS CLARIFICATION] markers remain (all 5 questions Q1–Q5 formally resolved)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,4 +31,9 @@
 
 ## Notes
 
-- 5 targeted clarification questions (`Q1` to `Q5`) are prepared to be answered during the `CLARIFY` phase before proceeding to `PLAN`.
+- **Q1 (Ground Truth Views)**: Resolved as Frozen Dataset Views (default `refined` = restimulus/rerepetition; secondary `stimulus` = stimulus/repetition; no pair mixing).
+- **Q2 (Temporal Mismatch)**: Resolved as PROVE-OR-QUARANTINE (`anchor_start_truncate_tail` upon proof of start anchoring; otherwise `QUARANTINE`; zero padding/interpolation/silent min).
+- **Q3 (Splits)**: Resolved as Dual Protocol (Within-Subject with train=[1,3,4,6] / test=[2,5] and val deferred; Cross-Subject with 5 rotating folds 24/8/8).
+- **Q4 (REST)**: Resolved as REST=0 retained, audited separately, deterministic repetition unit association; 49 vs 50 classes deferred to Feature 004.
+- **Q5 (Movement Scope)**: Resolved as native global labels (1..49) preserved without offsets, with derived local label representation.
+- Specification is **100% complete and ready for planning (`$speckit-plan`)**.
