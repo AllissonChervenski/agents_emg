@@ -41,7 +41,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 - [x] T002 [US1] Implement NinaPro DB2 provenance, license terms, and SHA-256 baseline verification in semg_dataset/provenance.py
   <!-- harness-task {"requirements":["FR-002","FR-010"],"acceptance_criteria":["SC-001","SC-006"],"plan_decisions":["D-001"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_dataset/provenance.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
-- [ ] T003 [US2] Implement RecordingData, Exercise, Subject, and AlignmentStatus domain entities in semg_dataset/contract.py
+- [x] T003 [US2] Implement RecordingData, Exercise, Subject, and AlignmentStatus domain entities in semg_dataset/contract.py
   <!-- harness-task {"requirements":["FR-003","FR-008"],"acceptance_criteria":["SC-002"],"plan_decisions":["D-002","D-005"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_dataset/contract.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: Provenance replaces all `TO_BE_DOCUMENTED` placeholders; base data contracts enforce 12-channel `float32` and zero NaN/Inf.
