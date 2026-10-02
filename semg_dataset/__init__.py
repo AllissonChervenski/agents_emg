@@ -20,6 +20,11 @@ from semg_dataset.contract import (
 )
 
 from semg_dataset.loader import NinaProDB2Loader
+from semg_dataset.manifest import (
+    DatasetManifestGenerator,
+    SplitManifestGenerator,
+    associate_rest_to_repetition_units,
+)
 from semg_dataset.provenance import NinaProProvenance
 from semg_dataset.splits import (
     CrossSubjectSplitter,
@@ -37,6 +42,7 @@ __all__: list[str] = [
     "AlignmentStatus",
     "CrossSubjectSplitter",
     "DataLeakageError",
+    "DatasetManifestGenerator",
     "DatasetView",
     "FoldPartition",
     "FrozenViewManager",
@@ -45,12 +51,15 @@ __all__: list[str] = [
     "ProveOrQuarantineEngine",
     "RecordingData",
     "SplitManifest",
+    "SplitManifestGenerator",
     "Subject",
     "WithinSubjectSplitter",
     "anchor_start_truncate_tail",
+    "associate_rest_to_repetition_units",
     "validate_cross_subject_leakage",
     "validate_within_subject_leakage",
 ]
+
 
 
 

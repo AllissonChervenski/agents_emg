@@ -106,7 +106,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 **Independent Test**: Generate `dataset_catalog.json`, `splits_within_subject.json`, and `splits_cross_subject.json`; assert that REST duration and counts are segregated in summary; verify that re-running manifest generation yields identical SHA-256 hashes.
 
-- [ ] T008 [US5] Implement DatasetManifestGenerator and SplitManifestGenerator in semg_dataset/manifest.py
+- [x] T008 [US5] Implement DatasetManifestGenerator and SplitManifestGenerator in semg_dataset/manifest.py
   <!-- harness-task {"requirements":["FR-007","FR-008","FR-009"],"acceptance_criteria":["SC-004","SC-005"],"plan_decisions":["D-004","D-005"],"dependencies":["T005","T006","T007"],"test_type":"UNIT","allowed_files":["semg_dataset/manifest.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: User Story 5 complete; manifests are serialized and validated against JSON schemas.
