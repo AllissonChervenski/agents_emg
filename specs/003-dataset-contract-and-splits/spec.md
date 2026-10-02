@@ -115,11 +115,11 @@ As an ML pipeline designer, I need REST (label 0) to be preserved in the canonic
   - System MUST strictly prohibit and reject mixing pairs (`stimulus` with `rerepetition` or `restimulus` with `repetition`).
   - Each view MUST have an explicit identifier, version, and hash.
 - **FR-005**: System MUST implement the **PROVE-OR-QUARANTINE** temporal alignment policy:
-  - System MUST establish a single canonical timeline per recording.
-  - System MUST verify start-anchoring ($t=0$).
-  - If start anchoring is proven and mismatch is confined to trailing samples: system MUST apply `anchor_start_truncate_tail` and record the sample delta in the alignment audit trail.
-  - If start anchoring is unproven, ambiguous, or shift is non-tail: system MUST mark the recording as `QUARANTINE`.
-  - System MUST NOT perform padding, interpolation, silent `min()`, or silent fallback to stimulus.
+  - System MUST NOT assume in advance that all 18 E3 recordings pass; each recording MUST be evaluated independently, producing audit evidence that classifies it strictly as `ACCEPT_AUTO` or `QUARANTINE`.
+  - System MUST establish a single canonical timeline per recording and verify start-anchoring ($t=0$).
+  - If start anchoring is demonstrably proven and length mismatch is confined to trailing samples: system MUST apply `anchor_start_truncate_tail` and record the sample delta in the alignment audit trail.
+  - If start anchoring is unproven, ambiguous, head-shifted ($label[k] \leftrightarrow emg[k+\Delta]$), or non-tail: system MUST mark the recording as `QUARANTINE`.
+  - System MUST strictly prohibit padding, interpolation, silent `min()`, or silent fallback to stimulus.
 - **FR-006**: System MUST implement a **DUAL SPLIT PROTOCOL**:
   - **Protocol 1: Within-Subject (Repetition-Split)**:
     - `train`: repetitions `[1, 3, 4, 6]` across all subjects.
@@ -129,14 +129,16 @@ As an ML pipeline designer, I need REST (label 0) to be preserved in the canonic
     - 5 rotating folds across 40 subjects.
     - Exactly 24 train subjects, 8 validation subjects, and 8 test subjects per fold.
     - Explicit, deterministic, and frozen subject assignment lists.
+  - Test suites MUST include positive controls of leakage (intentionally inducing overlap of subjects, repetition units, or split boundaries) demonstrating that the split validator unequivocally detects and rejects leakage.
 - **FR-007**: System MUST preserve gesture class 0 (REST) in the canonical dataset contract, audit REST duration and sample counts separately from active movements, and define a deterministic association of REST intervals to repetition units.
 - **FR-008**: System MUST preserve native global gesture labels (E1 = 1..17, E2 = 18..40, E3 = 41..49) without applying artificial offsets to raw data, and provide an optional derived view for exercise-local indexing (E1: 1..17, E2: 1..23, E3: 1..9).
 - **FR-009**: System MUST generate deterministic JSON manifest artifacts documenting dataset inventory, recording catalog, and split partitions (`splits_within_subject.json` and `splits_cross_subject.json`).
-- **FR-010**: System MUST document complete NinaPro DB2 provenance:
-  - Origin: NinaPro Database 2 (DB2)
-  - Citation: Atzori, M. et al. (2014). Scientific Data, 1, 140053. DOI: 10.1038/sdata.2014.53
+- **FR-010**: System MUST document complete NinaPro DB2 provenance, licensing, and fixture constraints:
+  - Origin: NinaPro Database 2 (DB2) — Ninapro project
+  - Citation: Atzori, M. et al. (2014). "Electromyography data for non-invasive classification of hand, wrist and finger movements." Scientific Data, 1, 140053. DOI: 10.1038/sdata.2014.53
   - Official URL: https://ninapro.hevs.ch/instructions/DB2.html
-  - Terms: Open access for non-commercial scientific research with attribution.
+  - Terms & License: Open access for non-commercial scientific research with attribution; redistribution of raw signals is subject to dataset terms.
+  - Fixture Policy: System MUST NOT commit any fixture containing real NinaPro DB2 raw samples to the repository. All unit test fixtures MUST use minimal synthetic NinaPro-like data generated specifically for tests. Real DB2 data is evaluated strictly in separate integration passes against local uncommitted files.
 - **FR-011**: System MUST NOT include any model training, neural network definitions, hyperparameter tuning, quantization, C++, or ESP32 embedded deployment logic.
 - **FR-012**: System MUST preserve Feature 002 DSP contracts without silent modifications.
 

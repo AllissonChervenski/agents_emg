@@ -38,7 +38,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 **Purpose**: Establish cryptographic provenance verification and domain contracts.
 
-- [ ] T002 [US1] Implement NinaPro DB2 provenance metadata and SHA-256 baseline verification in semg_dataset/provenance.py
+- [ ] T002 [US1] Implement NinaPro DB2 provenance, license terms, and SHA-256 baseline verification in semg_dataset/provenance.py
   <!-- harness-task {"requirements":["FR-002","FR-010"],"acceptance_criteria":["SC-001","SC-006"],"plan_decisions":["D-001"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_dataset/provenance.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 - [ ] T003 [US2] Implement RecordingData, Exercise, Subject, and AlignmentStatus domain entities in semg_dataset/contract.py
@@ -63,11 +63,11 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 ## Phase 4: User Story 2 — PROVE-OR-QUARANTINE Temporal Alignment Engine (P1)
 
-**Goal**: Establish a single canonical timeline per recording, proving $t=0$ start anchoring before applying `anchor_start_truncate_tail` for tail discrepancies (including S12 272-sample outlier), and marking unproven discrepancies as `QUARANTINE`.
+**Goal**: Establish a single canonical timeline per recording. The engine MUST NOT assume in advance that all 18 E3 recordings pass: it must evaluate each recording independently, proving $t=0$ start anchoring before applying `anchor_start_truncate_tail`, and marking unproven, head-shifted, or ambiguous discrepancies as `QUARANTINE`. Synthetic unit tests must differentiate tail truncation ($label[k] \leftrightarrow emg[k]$) from head shift ($label[k] \leftrightarrow emg[k+\Delta]$).
 
-**Independent Test**: Execute alignment on all 120 recordings; assert that all 18 Exercise 3 recordings with tail differences are proven start-anchored and aligned with logged deltas; verify that any synthetic ambiguous/shifted signal is placed in quarantine; confirm zero padding and zero interpolation.
+**Independent Test**: Execute alignment on synthetic cases and real recording headers; verify `ACCEPT_AUTO` for proven start-anchored tail mismatches; verify `QUARANTINE` for head shifts and ambiguous cases; assert zero padding, zero interpolation, and zero silent fallback.
 
-- [ ] T005 [US2] Implement ProveOrQuarantineEngine with anchor_start_truncate_tail and quarantine logic in semg_dataset/alignment.py
+- [ ] T005 [US2] Implement ProveOrQuarantineEngine with per-recording evidence, anchor_start_truncate_tail, and quarantine logic in semg_dataset/alignment.py
   <!-- harness-task {"requirements":["FR-005"],"acceptance_criteria":["SC-003"],"plan_decisions":["D-002"],"dependencies":["T003","T004"],"test_type":"UNIT","allowed_files":["semg_dataset/alignment.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 **Checkpoint**: User Story 2 complete; all recordings possess synchronized 12-channel sEMG and labels under an audit-proven timeline.
@@ -87,14 +87,14 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 ---
 
-## Phase 6: User Story 4 — Dual Partitioning Protocols (P2)
+## Phase 6: User Story 4 — Dual Partitioning Protocols & Leakage Controls (P2)
 
-**Goal**: Implement both Within-Subject (repetition split: train `[1,3,4,6]`, test `[2,5]`, val deferred) and Cross-Subject (5 rotating folds: 24 train / 8 val / 8 test) with strict zero-leakage enforcement.
+**Goal**: Implement both Within-Subject (repetition split: train `[1,3,4,6]`, test `[2,5]`, val deferred) and Cross-Subject (5 rotating folds: 24 train / 8 val / 8 test) with strict zero-leakage enforcement. Test design MUST include positive controls of leakage (deliberate subject overlap, repetition overlap, duplicate units) to prove the leakage validator catches violations.
 
-**Independent Test**: Generate split partitions under both protocols; assert that partition intersections are strictly empty; verify that Cross-Subject generates exactly 5 folds across all 40 subjects with frozen subject lists.
+**Independent Test**: Generate split partitions under both protocols; assert that partition intersections are strictly empty; assert that intentional leakage injections cause test failures; verify that Cross-Subject generates exactly 5 folds across all 40 subjects with frozen subject lists.
 
-- [ ] T007 [US4] Implement WithinSubjectSplitter and CrossSubjectSplitter with 5 rotating folds in semg_dataset/splits.py
-  <!-- harness-task {"requirements":["FR-006"],"acceptance_criteria":["SC-004","SC-005"],"plan_decisions":["D-003"],"dependencies":["T003","T004"],"test_type":"UNIT","allowed_files":["semg_dataset/splits.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
+- [ ] T007 [US4] Implement WithinSubjectSplitter and CrossSubjectSplitter with positive leakage controls in semg_dataset/splits.py
+  <!-- harness-task {"requirements":["FR-006"],"acceptance_criteria":["SC-004","SC-005"],"plan_decisions":["D-003"],"dependencies":["T003","T004"],"test_type":"UNIT","allowed_files":["semg_dataset/splits.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 **Checkpoint**: User Story 4 complete; both evaluation protocols are implemented with mathematical leakage-free guarantees.
 
