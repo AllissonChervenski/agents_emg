@@ -9,6 +9,22 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
+from semg_dataset.contract import (
+    AlignmentRecord,
+    AlignmentStatus,
+    RecordingData,
+    Subject,
+)
+from semg_dataset.loader import NinaProDB2Loader
+from semg_dataset.provenance import NinaProProvenance
+
 __all__: list[str] = [
     "__version__",
+    "AlignmentRecord",
+    "AlignmentStatus",
+    "NinaProDB2Loader",
+    "NinaProProvenance",
+    "RecordingData",
+    "Subject",
 ]
+

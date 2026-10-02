@@ -54,7 +54,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 **Independent Test**: Instantiate `NinaProDB2Loader`, read recording files across subjects, verify that raw directory is unchanged, files are unextracted on disk, and archive hashes are validated.
 
-- [ ] T004 [US1] Implement NinaProDB2Loader for in-memory read-only archive streaming in semg_dataset/loader.py
+- [x] T004 [US1] Implement NinaProDB2Loader for in-memory read-only archive streaming in semg_dataset/loader.py
   <!-- harness-task {"requirements":["FR-001","FR-002","FR-003"],"acceptance_criteria":["SC-001","SC-002"],"plan_decisions":["D-001"],"dependencies":["T002","T003"],"test_type":"UNIT","allowed_files":["semg_dataset/loader.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: User Story 1 complete; raw recordings load seamlessly in memory while preserving raw directory immutability.
