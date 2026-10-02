@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SplitManifestContract",
+  "description": "Schema for deterministic dataset split manifests (Within-Subject and Cross-Subject)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "dataset_name",
+    "protocol",
+    "git_commit",
+    "created_at",
+    "manifest_hash",
+    "folds"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "dataset_name": {
+      "type": "string",
+      "const": "NinaPro DB2"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": ["within_subject", "cross_subject"]
+    },
+    "git_commit": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "manifest_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "within_subject_parameters": {
+      "type": "object",
+      "required": ["train_repetitions", "test_repetitions"],
+      "properties": {
+        "train_repetitions": {
+          "type": "array",
+          "items": { "type": "integer" }
+        },
+        "test_repetitions": {
+          "type": "array",
+          "items": { "type": "integer" }
+        }
+      }
+    },
+    "folds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["fold_id", "train_subjects", "val_subjects", "test_subjects"],
+        "properties": {
+          "fold_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "train_subjects": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "val_subjects": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "test_subjects": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
