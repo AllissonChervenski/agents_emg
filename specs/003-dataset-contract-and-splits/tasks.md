@@ -38,7 +38,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 **Purpose**: Establish cryptographic provenance verification and domain contracts.
 
-- [ ] T002 [US1] Implement NinaPro DB2 provenance, license terms, and SHA-256 baseline verification in semg_dataset/provenance.py
+- [x] T002 [US1] Implement NinaPro DB2 provenance, license terms, and SHA-256 baseline verification in semg_dataset/provenance.py
   <!-- harness-task {"requirements":["FR-002","FR-010"],"acceptance_criteria":["SC-001","SC-006"],"plan_decisions":["D-001"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_dataset/provenance.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 - [ ] T003 [US2] Implement RecordingData, Exercise, Subject, and AlignmentStatus domain entities in semg_dataset/contract.py
