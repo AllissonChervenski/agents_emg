@@ -1,0 +1,308 @@
+[
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S1-S1_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=877073, stimulus=877073, restimulus=877072, repetition=877073, rerepetition=877072",
+    "affected_entities": [
+      "DB2_s1.zip:S1_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 877073,
+      "stimulus": 877073,
+      "restimulus": 877072,
+      "repetition": 877073,
+      "rerepetition": 877072
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S3-S3_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=876769, stimulus=876769, restimulus=876771, repetition=876769, rerepetition=876771",
+    "affected_entities": [
+      "DB2_s3.zip:S3_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 876769,
+      "stimulus": 876769,
+      "restimulus": 876771,
+      "repetition": 876769,
+      "rerepetition": 876771
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S4-S4_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=876893, stimulus=876893, restimulus=876892, repetition=876893, rerepetition=876892",
+    "affected_entities": [
+      "DB2_s4.zip:S4_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 876893,
+      "stimulus": 876893,
+      "restimulus": 876892,
+      "repetition": 876893,
+      "rerepetition": 876892
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S5-S5_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=874452, stimulus=874452, restimulus=874449, repetition=874452, rerepetition=874449",
+    "affected_entities": [
+      "DB2_s5.zip:S5_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 874452,
+      "stimulus": 874452,
+      "restimulus": 874449,
+      "repetition": 874452,
+      "rerepetition": 874449
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S7-S7_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875957, stimulus=875957, restimulus=875952, repetition=875957, rerepetition=875952",
+    "affected_entities": [
+      "DB2_s7.zip:S7_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875957,
+      "stimulus": 875957,
+      "restimulus": 875952,
+      "repetition": 875957,
+      "rerepetition": 875952
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S8-S8_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875390, stimulus=875390, restimulus=875391, repetition=875390, rerepetition=875391",
+    "affected_entities": [
+      "DB2_s8.zip:S8_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875390,
+      "stimulus": 875390,
+      "restimulus": 875391,
+      "repetition": 875390,
+      "rerepetition": 875391
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S10-S10_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875505, stimulus=875505, restimulus=875503, repetition=875505, rerepetition=875503",
+    "affected_entities": [
+      "DB2_s10.zip:S10_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875505,
+      "stimulus": 875505,
+      "restimulus": 875503,
+      "repetition": 875505,
+      "rerepetition": 875503
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S11-S11_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=874265, stimulus=874265, restimulus=874263, repetition=874265, rerepetition=874263",
+    "affected_entities": [
+      "DB2_s11.zip:S11_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 874265,
+      "stimulus": 874265,
+      "restimulus": 874263,
+      "repetition": 874265,
+      "rerepetition": 874263
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S12-S12_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875707, stimulus=875707, restimulus=875435, repetition=875707, rerepetition=875435",
+    "affected_entities": [
+      "DB2_s12.zip:S12_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875707,
+      "stimulus": 875707,
+      "restimulus": 875435,
+      "repetition": 875707,
+      "rerepetition": 875435
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S13-S13_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875517, stimulus=875517, restimulus=875516, repetition=875517, rerepetition=875516",
+    "affected_entities": [
+      "DB2_s13.zip:S13_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875517,
+      "stimulus": 875517,
+      "restimulus": 875516,
+      "repetition": 875517,
+      "rerepetition": 875516
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S14-S14_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=874820, stimulus=874820, restimulus=874821, repetition=874820, rerepetition=874821",
+    "affected_entities": [
+      "DB2_s14.zip:S14_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 874820,
+      "stimulus": 874820,
+      "restimulus": 874821,
+      "repetition": 874820,
+      "rerepetition": 874821
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S17-S17_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875759, stimulus=875759, restimulus=875758, repetition=875759, rerepetition=875758",
+    "affected_entities": [
+      "DB2_s17.zip:S17_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875759,
+      "stimulus": 875759,
+      "restimulus": 875758,
+      "repetition": 875759,
+      "rerepetition": 875758
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S19-S19_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875396, stimulus=875396, restimulus=875399, repetition=875396, rerepetition=875399",
+    "affected_entities": [
+      "DB2_s19.zip:S19_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875396,
+      "stimulus": 875396,
+      "restimulus": 875399,
+      "repetition": 875396,
+      "rerepetition": 875399
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S20-S20_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875456, stimulus=875456, restimulus=875459, repetition=875456, rerepetition=875459",
+    "affected_entities": [
+      "DB2_s20.zip:S20_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875456,
+      "stimulus": 875456,
+      "restimulus": 875459,
+      "repetition": 875456,
+      "rerepetition": 875459
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S21-S21_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875750, stimulus=875750, restimulus=875749, repetition=875750, rerepetition=875749",
+    "affected_entities": [
+      "DB2_s21.zip:S21_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875750,
+      "stimulus": 875750,
+      "restimulus": 875749,
+      "repetition": 875750,
+      "rerepetition": 875749
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S23-S23_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=874442, stimulus=874442, restimulus=874439, repetition=874442, rerepetition=874439",
+    "affected_entities": [
+      "DB2_s23.zip:S23_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 874442,
+      "stimulus": 874442,
+      "restimulus": 874439,
+      "repetition": 874442,
+      "rerepetition": 874439
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S24-S24_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=874261, stimulus=874261, restimulus=874263, repetition=874261, rerepetition=874263",
+    "affected_entities": [
+      "DB2_s24.zip:S24_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 874261,
+      "stimulus": 874261,
+      "restimulus": 874263,
+      "repetition": 874261,
+      "rerepetition": 874263
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  },
+  {
+    "finding_id": "FINDING-TEMPORAL_MISMATCH-S25-S25_E3_A1.mat",
+    "category": "TEMPORAL_MISMATCH",
+    "severity": "WARNING",
+    "description": "Temporal sample count discrepancy: emg=875504, stimulus=875504, restimulus=875501, repetition=875504, rerepetition=875501",
+    "affected_entities": [
+      "DB2_s25.zip:S25_E3_A1.mat"
+    ],
+    "details": {
+      "emg": 875504,
+      "stimulus": 875504,
+      "restimulus": 875501,
+      "repetition": 875504,
+      "rerepetition": 875501
+    },
+    "remediation_recommendation": "Acknowledge in Feature 003 spec & loader to handle length differences during alignment"
+  }
+]
