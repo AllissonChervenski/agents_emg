@@ -9,6 +9,7 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
+from semg_dataset.alignment import ProveOrQuarantineEngine, anchor_start_truncate_tail
 from semg_dataset.contract import (
     AlignmentRecord,
     AlignmentStatus,
@@ -24,7 +25,10 @@ __all__: list[str] = [
     "AlignmentStatus",
     "NinaProDB2Loader",
     "NinaProProvenance",
+    "ProveOrQuarantineEngine",
     "RecordingData",
     "Subject",
+    "anchor_start_truncate_tail",
 ]
+
 

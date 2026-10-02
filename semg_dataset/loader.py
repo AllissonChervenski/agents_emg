@@ -15,8 +15,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import scipy.io
 
-from semg_dataset.contract import AlignmentRecord, AlignmentStatus, RecordingData
+from semg_dataset.alignment import ProveOrQuarantineEngine
+from semg_dataset.contract import RecordingData
 from semg_dataset.provenance import NinaProProvenance
+
+
 
 
 class NinaProDB2Loader:
@@ -122,45 +125,41 @@ class NinaProDB2Loader:
         if rerepetition.ndim == 0:
             rerepetition = np.atleast_1d(rerepetition)
 
-        len_emg = emg.shape[0]
-        len_refined = restimulus.shape[0]
-
-        if len_emg == len_refined:
-            alignment = AlignmentRecord(
-                status=AlignmentStatus.IDENTICAL,
-                original_emg_length=len_emg,
-                original_refined_length=len_refined,
-                delta_samples=0,
-                start_anchored_proven=True,
-                notes="Arrays have identical length on load",
-            )
-        else:
-            delta = len_emg - len_refined
-            alignment = AlignmentRecord(
-                status=AlignmentStatus.QUARANTINE,
-                original_emg_length=len_emg,
-                original_refined_length=len_refined,
-                delta_samples=delta,
-                start_anchored_proven=False,
-                notes="Length discrepancy requires ProveOrQuarantineEngine evaluation",
-            )
+        # Use ProveOrQuarantineEngine to establish canonical timeline
+        engine = ProveOrQuarantineEngine()
+        alignment, aligned_dict = engine.evaluate_and_align(
+            emg=emg,
+            stimulus=stimulus,
+            repetition=repetition,
+            restimulus=restimulus,
+            rerepetition=rerepetition,
+            subject_id=subject_id,
+            exercise_id=exercise_id,
+        )
 
         provenance: Dict[str, Any] = {
             "dataset": NinaProProvenance.get_metadata().dataset_name,
             "archive_filename": zip_path.name,
             "internal_path": target_name,
             "nominal_sampling_rate_hz": 2000.0,
+            "alignment": {
+                "status": alignment.status.value,
+                "delta_samples": alignment.delta_samples,
+                "start_anchored_proven": alignment.start_anchored_proven,
+                "notes": alignment.notes,
+            },
         }
 
         return RecordingData(
             subject_id=subject_id,
             exercise_id=exercise_id,
-            emg=emg,
-            stimulus=stimulus,
-            repetition=repetition,
-            restimulus=restimulus,
-            rerepetition=rerepetition,
+            emg=aligned_dict["emg"],
+            stimulus=aligned_dict["stimulus"],
+            repetition=aligned_dict["repetition"],
+            restimulus=aligned_dict["restimulus"],
+            rerepetition=aligned_dict["rerepetition"],
             alignment=alignment,
             sampling_rate_hz=2000.0,
             provenance=provenance,
         )
+

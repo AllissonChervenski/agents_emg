@@ -67,7 +67,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 **Independent Test**: Execute alignment on synthetic cases and real recording headers; verify `ACCEPT_AUTO` for proven start-anchored tail mismatches; verify `QUARANTINE` for head shifts and ambiguous cases; assert zero padding, zero interpolation, and zero silent fallback.
 
-- [ ] T005 [US2] Implement ProveOrQuarantineEngine with per-recording evidence, anchor_start_truncate_tail, and quarantine logic in semg_dataset/alignment.py
+- [x] T005 [US2] Implement ProveOrQuarantineEngine with per-recording evidence, anchor_start_truncate_tail, and quarantine logic in semg_dataset/alignment.py
   <!-- harness-task {"requirements":["FR-005"],"acceptance_criteria":["SC-003"],"plan_decisions":["D-002"],"dependencies":["T003","T004"],"test_type":"UNIT","allowed_files":["semg_dataset/alignment.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 **Checkpoint**: User Story 2 complete; all recordings possess synchronized 12-channel sEMG and labels under an audit-proven timeline.
