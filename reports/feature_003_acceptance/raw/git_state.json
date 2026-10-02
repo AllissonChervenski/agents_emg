@@ -1,0 +1,9 @@
+{
+  "commit": "39fd9e96545aa86cd29a9e192fc0be9f8ccf8ae1",
+  "branch": "feat/003-dataset-contract-and-splits",
+  "clean": false,
+  "status_porcelain": [
+    "?? reports/feature_003_acceptance/",
+    "?? scripts/validate_feature_003.py"
+  ]
+}

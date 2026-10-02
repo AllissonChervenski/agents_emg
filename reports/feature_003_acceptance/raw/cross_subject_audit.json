@@ -1,0 +1,8 @@
+{
+  "num_folds": 5,
+  "disjoint_across_all_folds": true,
+  "exact_counts_24_8_8": true,
+  "each_subject_tested_exactly_once": true,
+  "each_subject_val_exactly_once": true,
+  "each_subject_trained_exactly_thrice": true
+}
