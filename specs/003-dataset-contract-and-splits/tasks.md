@@ -80,7 +80,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 **Independent Test**: Request both views from `RecordingData`; verify that each exports paired labels and unique view hashes; assert that attempting to mix `stimulus` with `rerepetition` raises a `ValueError`.
 
-- [ ] T006 [US3] Implement FrozenViewManager and label pair isolation in semg_dataset/contract.py
+- [x] T006 [US3] Implement FrozenViewManager and label pair isolation in semg_dataset/contract.py
   <!-- harness-task {"requirements":["FR-004"],"acceptance_criteria":["SC-002"],"plan_decisions":["D-001"],"dependencies":["T003","T005"],"test_type":"UNIT","allowed_files":["semg_dataset/contract.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: User Story 3 complete; label duality is safely preserved with zero risk of cross-pair label noise.

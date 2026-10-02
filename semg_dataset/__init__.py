@@ -13,9 +13,12 @@ from semg_dataset.alignment import ProveOrQuarantineEngine, anchor_start_truncat
 from semg_dataset.contract import (
     AlignmentRecord,
     AlignmentStatus,
+    DatasetView,
+    FrozenViewManager,
     RecordingData,
     Subject,
 )
+
 from semg_dataset.loader import NinaProDB2Loader
 from semg_dataset.provenance import NinaProProvenance
 
@@ -23,6 +26,8 @@ __all__: list[str] = [
     "__version__",
     "AlignmentRecord",
     "AlignmentStatus",
+    "DatasetView",
+    "FrozenViewManager",
     "NinaProDB2Loader",
     "NinaProProvenance",
     "ProveOrQuarantineEngine",
@@ -30,5 +35,6 @@ __all__: list[str] = [
     "Subject",
     "anchor_start_truncate_tail",
 ]
+
 
 
