@@ -27,7 +27,7 @@ Each task includes adjacent `harness-task` metadata for orchestrator consumption
 
 **Purpose**: Initialize the core package structure for `semg_dataset` with clean exports.
 
-- [ ] T001 [P] Setup core package layout and exports in semg_dataset/__init__.py
+- [x] T001 [P] Setup core package layout and exports in semg_dataset/__init__.py
   <!-- harness-task {"requirements":["FR-001"],"acceptance_criteria":["SC-001"],"plan_decisions":["D-001"],"dependencies":[],"test_type":"UNIT","allowed_files":["semg_dataset/__init__.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: `semg_dataset` package is importable and exposes version and namespace.
