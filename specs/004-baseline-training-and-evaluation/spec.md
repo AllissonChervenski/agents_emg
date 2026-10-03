@@ -67,6 +67,29 @@
     5. *Auditoria Obrigatória de Confounding (`exercise_id_from_rest`)*: Avaliação diagnóstica independente treinando um classificador para prever `exercise_id \in {E1, E2, E3}` exclusivamente a partir de janelas REST (sob o mesmo split). Desempenho próximo ao acaso (~33.3%) evidencia ausência de assinatura de gravação/sessão; desempenho substancialmente acima do acaso evidencia confounding de sessão/exercício que deve acompanhar explicitamente a interpretação do resultado global. Nenhum sujeito/recording é excluído com base nessa auditoria.
     6. *Hierarquia Científica Estrita*: (1) `global_50_class` [PRIMÁRIO], (2) `E1/E2/E3 exercise-stratified` [SECUNDÁRIO], (3) `exercise_id_from_rest` [DIAGNÓSTICO / AUDITORIA].
 
+- **Q5: Contratos de Persistência do TrainingJob, Fixtures Sintéticos e Oráculos (FR-003, FR-011)**:
+  - **Decisão Aprovada**: **Opção A+ — Schemas formais JSON em `contracts/`, TrainingJobs append-only imutáveis com fingerprint determinístico, representação neutra manifestada e gerador procedural de fixtures sintéticos**.
+  - **Cláusulas Verificáveis Obrigatórias de Arquitetura & Testes**:
+    1. *Schemas Contratuais Formais*: Criar em `specs/004-baseline-training-and-evaluation/contracts/`:
+       - `training_job_schema.json`
+       - `evaluation_report_schema.json`
+       - `neutral_model_manifest_schema.json` (descreve arrays esperados: nome, dtype, shape, sha256 e papel semântico; binário `.npz` validado separadamente contra esse manifesto)
+       - `preprocessing_config_schema.json`
+       O JSON Schema valida metadados e manifests textuais.
+    2. *Layout dos TrainingJobs*: Persistidos em `artifacts/feature_004/jobs/<job_id>/` contendo: `job.json`, `config.json`, `model_manifest.json`, `model_params.npz`, `metrics.json`, `environment.json`, `stdout.log`, `stderr.log`, `manifest.sha256`. Matrizes de confusão armazenadas como `.npy/.npz` referenciados.
+    3. *Imutabilidade & Append-Only*: TrainingJobs concluídos são estritamente append-only e nunca sobrescritos. Qualquer alteração de configuração ou input científico gera novo job e novo fingerprint.
+    4. *Fingerprint Determinístico*: Derivado exclusivamente dos inputs científicos e computacionais: hashes de dataset/view/alignment/split da Feature 003, protocol/fold, preprocessing config, feature config, model config, seed, commit Git, lockfile de dependências. Campos voláteis (timestamp, path absoluto, PID) são estritamente excluídos do fingerprint.
+    5. *Política Git & Proteção de Dados*: `artifacts/feature_004/jobs/**` são artefatos locais não commitados ao Git. O Git versiona schemas, configurações canônicas, manifests de rastreabilidade e os relatórios consolidados em `reports/feature_004_baseline/`. Zero amostras reais do NinaPro DB2 no Git.
+    6. *Fixtures Sintéticas Procedurais*: Criar gerador determinístico procedural compartilhado (`tests/fixtures/synthetic_semg.py`) produzindo `RecordingData` NinaPro-like (12 canais, 2 kHz, REST, classes ativas sintéticas com padrões conhecidos de frequência/amplitude por canal, repetições, fronteiras de unidade e seed explícito).
+    7. *Casos Adversariais Obrigatórios*: A suíte de testes deve cobrir explicitamente: feature de variância zero, classe ausente no treino, desbalanceamento severo de REST, janela de transição mista, crossing de repetition unit, NaN/Inf, covariância singular, arrays neutros com shape/dtype/hash incorreto, adulteração de artefato e vazamento sintético de split.
+    8. *Três Camadas de Oráculos*:
+       - Camada A: Oráculos analíticos de features (sinais canônicos com MAV/RMS/WL/ZC/SSC analiticamente exatos).
+       - Camada B: Oráculo de treinamento sklearn (fit/predict permitido pelo ADR).
+       - Camada C: Oráculo de inferência neutra NumPy (executando exclusivamente sobre os arrays exportados).
+       Equivalência estrita: $\text{sklearn.predict}(X) == \text{neutral\_numpy\_predict}(X)$ e tolerância numérica controlada nos decision scores.
+    9. *Separação Unitário vs Real DB2*: `pytest -q` normal utiliza apenas fixtures sintéticas, não lê `data/raw/ninapro_db2/`, não depende dos 17 GiB e executa de forma rápida (< 5 s como meta operacional). O treinamento científico completo sobre os 40 sujeitos reais é executado via runner dedicado do orquestrador.
+    10. *Integração Científica Real & Política Fail-Closed*: O pipeline real consome estritamente os contratos congelados da Feature 003 sem alterar o raw, gerando relatórios auditáveis. Qualquer divergência entre manifest JSON, arrays NPZ, hashes, linhagem, schemas ou splits resulta em `FAIL` bloqueante.
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -210,7 +233,18 @@ As a scientific reviewer or clinician, I need evaluation metrics reported primar
   - Multi-class Confusion Matrix
   - Per-subject breakdown and statistical aggregates (mean, median, standard deviation).
   System MUST NOT claim that Balanced Accuracy or Macro-F1 were part of Atzori's original benchmark without specific bibliographic citation.
-- **FR-011**: System MUST define and persist a formal `TrainingJob` contract containing job metadata, configuration hashes, environment versions, timing, execution status, outputs, metrics, and artifact hashes.
+- **FR-011**: System MUST establish a formal, append-only, immutable `TrainingJob` contract with deterministic fingerprinting and JSON Schemas:
+  - **FR-011.1 (Contract Schemas in contracts/)**: System MUST provide authoritative JSON Schemas in `specs/004-baseline-training-and-evaluation/contracts/`:
+    - `training_job_schema.json`
+    - `evaluation_report_schema.json`
+    - `neutral_model_manifest_schema.json` (validating array metadata: name, dtype, shape, sha256, semantic role; binary arrays validated against manifest)
+    - `preprocessing_config_schema.json`
+    JSON Schemas validate manifests and metadata textually; binary array content is verified against the manifest.
+  - **FR-011.2 (Append-Only Job Storage Layout)**: System MUST persist completed jobs in `artifacts/feature_004/jobs/<job_id>/` containing: `job.json`, `config.json`, `model_manifest.json`, `model_params.npz`, `metrics.json`, `environment.json`, `stdout.log`, `stderr.log`, `manifest.sha256`. Completed jobs are strictly append-only and cannot be overwritten.
+  - **FR-011.3 (Deterministic Job Fingerprint)**: Every job MUST record a deterministic `job_fingerprint` computed from scientific/computational inputs: dataset/view/alignment/split hashes, protocol/fold, preprocessing config, feature config, model config, seed, git commit, dependency lock hash. Volatile fields (timestamps, absolute paths, PID) MUST NOT enter the fingerprint.
+  - **FR-011.4 (Git Policy & Report Storage)**: `artifacts/feature_004/jobs/**` are local outputs not committed to Git. The repository versions schemas, canonical configs, traceability manifests, and consolidated reports under `reports/feature_004_baseline/`. Zero real DB2 samples in Git.
+  - **FR-011.5 (Deterministic Synthetic Fixtures & Adversarial Test Coverage)**: System MUST provide a procedural synthetic `RecordingData` generator in `tests/fixtures/synthetic_semg.py` (12 channels, 2 kHz, REST, synthetic active classes with distinct channel/frequency/amplitude patterns, repetitions, unit boundaries, seed). Unit test suite MUST cover: zero-variance features, missing class in train, extreme REST imbalance, transition windows, repetition crossings, NaN/Inf, singular covariance, neutral array shape/dtype/hash mismatches, artifact tampering, and synthetic leakage.
+  - **FR-011.6 (Three-Tier Oracles & Fail-Closed Policy)**: System MUST maintain: (A) Analytical feature oracles, (B) sklearn training/reference oracle, (C) neutral NumPy inference oracle, validating `sklearn.predict(X) == neutral_numpy_predict(X)` and numeric score tolerances. Any discrepancy between manifests, NPZ arrays, hashes, schemas, splits, or lineage MUST produce a blocking `FAIL`.
 - **FR-012**: System MUST enforce the following DSP preprocessing, windowing, and boundary rules:
   - **FR-012.1 (Causal DSP Band-Pass)**: Preprocessing MUST apply a 4th-order causal Butterworth band-pass filter (20–450 Hz) via [`CausalSosFilter`](file:///home/allisson/Projects/agents_emg/semg_dsp/filter.py) with SOS coefficients, frequency response, and golden fixtures owned explicitly by Feature 004 contracts. The 50 Hz notch filter is OMITTED based on empirical spectral audit (mean 50 Hz power ratio 0.84 vs flanking bands).
   - **FR-012.2 (Windowing Invariants)**: Analysis windows MUST have length $W = 200\,\text{ms}$ (400 samples @ 2000.0 Hz) and stride $S = 50\,\text{ms}$ (100 samples, 75% overlap, 20 Hz decision rate). Windows MUST NOT cross `repetition_unit` or partition boundaries.
