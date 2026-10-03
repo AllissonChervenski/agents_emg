@@ -22,6 +22,25 @@
     7. *Fronteira Estrita de Exportação*: Proibição absoluta de `pickle`, `joblib.dump` ou objetos sklearn como formato de intercâmbio de modelo. O baseline treinado deve ser exportado em formato neutro, determinístico e puramente numérico, consumível pela Feature 005 sem dependência de `sklearn`.
     8. *Ciclo de Mutação do `pyproject.toml`*: Sequência imutável: `PROPOSED ADR` → revisão/aprovação humana → commit da aprovação → verificação do gate de governança → alteração autorizada de `pyproject.toml` → lock de dependências → re-execução dos gates. O agente não assume ADR aprovado por tê-lo criado.
 
+- **Q2: Parâmetros de DSP, Janelamento, Transições, Thresholds ZC/SSC e Normalização (FR-004, FR-012, FR-013)**:
+  - **Decisão Aprovada**: **CUSTOM D — Baseline conservador com janelas puras e parâmetros aprendidos exclusivamente no TRAIN**.
+  - **Resultado da Auditoria Espectral de 50 Hz (NinaPro DB2)**:
+    - Executada auditoria espectral Welch (resolução 0.5 Hz) sobre os 12 canais sEMG em amostra cobrindo todos os 5 folds (`S1`, `S5`, `S10`, `S15`, `S20`, `S25`, `S30`, `S35`, `S40`).
+    - Razão média de potência em 50 Hz vs bandas adjacentes (45–48 Hz e 52–55 Hz) = **0.84** (< 1.0, demonstrando que o sinal em 50 Hz é plano ou ligeiramente inferior à densidade espectral mioelétrica adjacente). Apenas 2 sujeitos apresentaram elevações pontuais em canais isolados (S5 ch9 = 2.54 / +4.05 dB, S15 ch7 = 2.04 / +3.09 dB), mas com médias globais de canais de 1.03 e 0.98.
+    - **Conclusão Científica**: O NinaPro DB2 (adquirido com sensores ativos diferenciais Delsys Trigno) **não apresenta interferência sistemática de linha de 50 Hz**. Um filtro notch em 50 Hz atenuaria desnecessariamente a potência fisiológica do sEMG na faixa de maior densidade de disparo motor (20–150 Hz). Portanto, o **filtro notch de 50 Hz fica formalmente OMITIDO do baseline canônico**.
+  - **Cláusulas Verificáveis Obrigatórias de Preprocessing & Janelamento**:
+    1. *DSP Causal*: Filtro Butterworth causal de 4ª ordem, passa-faixa 20–450 Hz, executado via [`CausalSosFilter`](file:///home/allisson/Projects/agents_emg/semg_dsp/filter.py). Coeficientes SOS, resposta em frequência, versão e fixtures goldens são ativos próprios da Feature 004 (sem herança silenciosa da Feature 002).
+    2. *Janelamento Temporal*: Sampling rate nominal = 2000.0 Hz, Janela $W = 200\,\text{ms}$ (400 amostras), Stride $S = 50\,\text{ms}$ (100 amostras), Overlap = 75%, Taxa de decisão = 20 Hz. Invariante estrito: nenhuma janela pode cruzar `repetition_unit` ou fronteira de partição de split.
+    3. *Política de Transição (Janelas Estritamente Puras)*: Proibido o uso de voto majoritário no baseline canônico. Uma janela só é elegível se todas as 400 amostras pertencerem ao mesmo estado canônico e mesma unidade de repetição:
+       - Janela 100% ACTIVE de classe $c \in \{1..49\}$ → incluída;
+       - Janela 100% REST (0) → incluída;
+       - Transição REST ↔ ACTIVE ou ACTIVE ↔ ACTIVE → descartada;
+       - Janela que cruze `repetition_unit` → descartada.
+       - Quantidade e duração de janelas descartadas registradas por sujeito/exercício para auditoria. A análise de transições é desacoplada do baseline steady-state.
+    4. *Thresholds ZC/SSC Derivados do Treino*: Não há threshold estático universal. $\epsilon[\text{channel}] = R \times \text{RMS\_rest\_train}[\text{channel}]$. Grade congelada de candidatos: $R \in \{0.5, 1.0, 1.5, 2.0, 3.0\}$. A seleção de $R$ ocorre exclusivamente por validação interna no training pool (Within-subject: REST das repetições de treino `[1, 3, 4, 6]`; Cross-subject: REST dos 24 sujeitos de treino do fold). Um único $R$ selecionado por configuração/fold. Thresholds persistidos no `TrainingJob`.
+    5. *Feature Scaling Z-Score Customizado*: $z_j = (x_j - \text{mean\_train}_j) / \text{std\_train}_j$. `mean` e `std` calculados unicamente no TRAIN. Validação e teste transformados sem estado. Se $\text{std}_j == 0$, fixar $\text{scale}_j = 1.0$ e registrar `zero_variance`. Proibido `sklearn.preprocessing.StandardScaler`. Persistir `mean[]` e `scale[]` como arrays numéricos neutros.
+    6. *Invariante Anti-Vazamento*: Zero dependência de validação ou teste para RMS de repouso, thresholds ZC/SSC, estatísticas de scaling, parâmetros de shrinkage ou qualquer métrica aprendida.
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -154,8 +173,16 @@ As a scientific reviewer or clinician, I need evaluation metrics reported primar
   - Per-subject breakdown and statistical aggregates (mean, median, standard deviation).
   System MUST NOT claim that Balanced Accuracy or Macro-F1 were part of Atzori's original benchmark without specific bibliographic citation.
 - **FR-011**: System MUST define and persist a formal `TrainingJob` contract containing job metadata, configuration hashes, environment versions, timing, execution status, outputs, metrics, and artifact hashes.
-- **FR-012**: System MUST resolve in CLARIFY all DSP preprocessing parameters, window size $W$, stride $S$, ZC/SSC deadzone thresholds, boundary window handling, and feature scaling policies prior to PLAN [NEEDS CLARIFICATION: window length W, stride S, and bandpass/notch filtering parameters].
-- **FR-013**: Normalization and feature scaling statistics (e.g. mean, std, min, max) MUST be computed strictly on the training partition and applied statelessly to validation and test partitions.
+- **FR-012**: System MUST enforce the following DSP preprocessing, windowing, and boundary rules:
+  - **FR-012.1 (Causal DSP Band-Pass)**: Preprocessing MUST apply a 4th-order causal Butterworth band-pass filter (20–450 Hz) via [`CausalSosFilter`](file:///home/allisson/Projects/agents_emg/semg_dsp/filter.py) with SOS coefficients, frequency response, and golden fixtures owned explicitly by Feature 004 contracts. The 50 Hz notch filter is OMITTED based on empirical spectral audit (mean 50 Hz power ratio 0.84 vs flanking bands).
+  - **FR-012.2 (Windowing Invariants)**: Analysis windows MUST have length $W = 200\,\text{ms}$ (400 samples @ 2000.0 Hz) and stride $S = 50\,\text{ms}$ (100 samples, 75% overlap, 20 Hz decision rate). Windows MUST NOT cross `repetition_unit` or partition boundaries.
+  - **FR-012.3 (Pure Window Transition Exclusion)**: Windows spanning transitions (REST ↔ ACTIVE, ACTIVE ↔ ACTIVE, or crossing repetition units) MUST be excluded from the steady-state baseline. Only pure windows (100% samples belonging to the same state and repetition) are admitted. Discarded window counts and durations MUST be logged per subject/exercise for audit.
+  - **FR-012.4 (Data-Driven ZC/SSC Thresholds)**: Deadzone thresholds MUST be computed as $\epsilon[\text{channel}] = R \times \text{RMS\_rest\_train}[\text{channel}]$, with candidate grid $R \in \{0.5, 1.0, 1.5, 2.0, 3.0\}$. Selection of $R$ MUST occur strictly via training-pool validation (Within-subject: train repetitions `[1, 3, 4, 6]`; Cross-subject: 24 train subjects). A single $R$ is selected per config/fold.
+- **FR-013**: System MUST apply custom Z-score feature scaling ($z_j = (x_j - \mu_j) / \sigma_j$) fitted strictly on the training partition:
+  - Validation and test partitions MUST be transformed statelessly using training $\mu$ and $\sigma$.
+  - If $\sigma_j == 0$, system MUST set scale factor to $1.0$ and flag the feature as `zero_variance`.
+  - `sklearn.preprocessing.StandardScaler` is strictly prohibited; scaling arrays (`mean[]`, `scale[]`) MUST be stored in neutral numerical formats.
+  - Zero leakage invariant: Validation and test partitions MUST NEVER contribute to rest RMS, ZC/SSC thresholds, scaling statistics, or covariance shrinkage parameters.
 - **FR-014**: System MUST NOT include INT8 quantization, embedded runtime deployment, C++, ESP32, FreeRTOS, Software-in-the-Loop (SIL), or broad deep learning architecture search in this feature.
 - **FR-015**: System MUST NOT modify raw NinaPro DB2 data files or alter Feature 003 artifacts.
 

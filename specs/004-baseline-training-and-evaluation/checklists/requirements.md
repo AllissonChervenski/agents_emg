@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 markers identified for immediate resolution in CLARIFY)
+- [x] No [NEEDS CLARIFICATION] markers remain (Q1 and Q2 fully resolved in Session 2026-10-03)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (verifiable outcomes)
@@ -31,7 +31,7 @@
 
 ## Notes
 
-- Markers:
-  1. `[RESOLVED in Session 2026-10-03]`: Governança e aprovação de `scikit-learn` formalizada via ADR persistente com gate automatizado e allowlists (FR-006).
-  2. `[NEEDS CLARIFICATION: window length W, stride S, filtering, thresholds ZC/SSC, and boundary window policies]` (FR-012)
-- Advancing immediately to CLARIFY Question 2 to resolve preprocessing parameters before PLAN.
+- Clarifications Resolved:
+  1. `[RESOLVED in Session 2026-10-03]`: Governança e aprovação de `scikit-learn` formalizada via ADR persistente em `docs/adr/ADR-004-001-scikit-learn-host-only.md` com gate automatizado e allowlists (FR-006).
+  2. `[RESOLVED in Session 2026-10-03]`: Parâmetros de DSP causal (band-pass 20–450 Hz, notch 50 Hz omitido após auditoria espectral), janelas de 200 ms / 50 ms stride, política de janelas puras, thresholds adaptativos de treino e z-score customizado (FR-004, FR-012, FR-013).
+- Checklist 100% aprovado (16/16 itens passing). Apto para prosseguir com a próxima pergunta de CLARIFY ou PLAN.
