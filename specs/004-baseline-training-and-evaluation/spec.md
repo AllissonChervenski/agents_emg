@@ -5,6 +5,23 @@
 **Status**: Draft (Ready for Clarify)  
 **Input**: User description: "A Feature 004 deve estabelecer um baseline offline, reproduzível e auditável de classificação de gestos sEMG sobre o NinaPro DB2 usando os contratos congelados da Feature 003. Baseline inicial: classical sEMG time-domain features (MAV, RMS, WL, ZC, SSC) + regularized LDA. Vocabulário primário: 50 classes (REST 0 + gestos 1..49) e secundário: 49 classes ativas. Avaliação within-subject com leave-one-training-repetition-out em [1,3,4,6] e teste único em [2,5]. Avaliação cross-subject nos 5 folds congelados. Contrato formal de TrainingJob com rastreabilidade total de linhagem e hashes científicos. Pré-processamento e thresholds detalhados no CLARIFY."
 
+## Clarifications
+
+### Session 2026-10-03
+
+- **Q1: Governança e inclusão de `scikit-learn` como dependência host-only (FR-006)**:
+  - **Contexto de Governança Ativa**: Verificado em [`.specify/memory/constitution.md`](file:///home/allisson/Projects/agents_emg/.specify/memory/constitution.md) (Versão ativa: `1.1.0`, ratificada em 2026-09-28, alterada em 2026-09-29, commit Git ativo: `ce75be0`). A Linha 51 estipula: *"Features MUST NOT introduce new third-party dependencies without prior governance approval."* Nenhuma cláusula da Constituição v1.1.0 define "prior governance approval" como restrita ou obrigatoriamente equivalente a uma emenda direta do arquivo constitucional.
+  - **Decisão Aprovada**: Opção C com **governança formal endurecida**. A aprovação de `scikit-learn` é materializada via Architecture Decision Record (ADR) persistente em [`docs/adr/ADR-004-001-scikit-learn-host-only.md`](file:///home/allisson/Projects/agents_emg/docs/adr/ADR-004-001-scikit-learn-host-only.md), sem criar Constitution v1.2.0.
+  - **Cláusulas Verificáveis Obrigatórias**:
+    1. *Aprovação Humana Formal*: O ADR inicia com status `PROPOSED`, recebe nome/ID do aprovador humano, data de aprovação e commit Git da aprovação; somente após isso atinge status `APPROVED`. O conteúdo aprovado é selado por hash/fingerprint criptográfico contra adulteração.
+    2. *Finalidade e Isolamento Host-Only*: `scikit-learn` destina-se exclusivamente ao baseline offline e avaliação da Feature 004. É terminantemente proibido qualquer vínculo com `semg_dsp` ou runtimes embarcados.
+    3. *Allowlist de Caminhos de Import*: Imports de `sklearn` permitidos exclusivamente sob `semg_baseline/**` e testes dedicados da Feature 004 (`tests/feature_004/**` ou pacote equivalente).
+    4. *Allowlist de Superfície de API*: Permitidos apenas submódulos de `sklearn.discriminant_analysis`, `sklearn.covariance` e `sklearn.metrics`. Ficam estritamente proibidos `sklearn.model_selection`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.StandardScaler` e quaisquer geradores de splits aleatórios. Splits vêm 100% dos manifests congelados da Feature 003.
+    5. *Portão Determinístico Automatizado*: Gate com bloqueio `FAIL` (nunca warning) que valida status `APPROVED` do ADR, assinatura humana, pinagem de versão, integridade do hash do ADR e respeito às allowlists de paths e símbolos.
+    6. *Reprodutibilidade & Locks*: Separação formal entre ADR (aprovação de faixa/escopo), Lockfile de ambiente (congelando `scikit-learn`, `numpy`, `scipy`, `joblib`, `threadpoolctl` e transitivas) e `TrainingJob` (registrando hashes e versões resolvidas).
+    7. *Fronteira Estrita de Exportação*: Proibição absoluta de `pickle`, `joblib.dump` ou objetos sklearn como formato de intercâmbio de modelo. O baseline treinado deve ser exportado em formato neutro, determinístico e puramente numérico, consumível pela Feature 005 sem dependência de `sklearn`.
+    8. *Ciclo de Mutação do `pyproject.toml`*: Sequência imutável: `PROPOSED ADR` → revisão/aprovação humana → commit da aprovação → verificação do gate de governança → alteração autorizada de `pyproject.toml` → lock de dependências → re-execução dos gates. O agente não assume ADR aprovado por tê-lo criado.
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -113,7 +130,13 @@ As a scientific reviewer or clinician, I need evaluation metrics reported primar
   - Slope Sign Change count (SSC)
   Yielding exactly $12 \times 5 = 60$ features per analysis window.
 - **FR-005**: System MUST implement regularized Linear Discriminant Analysis (LDA) as the baseline classifier, supporting covariance shrinkage to guarantee invertible covariance matrices.
-- **FR-006**: System MUST adopt `scikit-learn` as a host-only baseline/evaluation dependency [NEEDS CLARIFICATION: governance mechanism and approval protocol for introducing scikit-learn as a dev/host dependency in pyproject.toml].
+- **FR-006**: System MUST govern `scikit-learn` strictly as a host-only baseline and evaluation dependency via an explicit Architecture Decision Record at [`docs/adr/ADR-004-001-scikit-learn-host-only.md`](file:///home/allisson/Projects/agents_emg/docs/adr/ADR-004-001-scikit-learn-host-only.md) complying with Constitution v1.1.0 (commit `ce75be0`):
+  - **FR-006.1 (Human Approval Lifecycle)**: ADR MUST start as `PROPOSED`, receive human approval (name/ID, approval date, git commit), and transition to `APPROVED` sealed by a cryptographic SHA-256 fingerprint against silent mutation.
+  - **FR-006.2 (Host-Only Scope & Import Allowlist)**: `sklearn` imports are permitted strictly within `semg_baseline/**` and Feature 004 tests (`tests/feature_004/**` or dedicated test package). Any import in `semg_dsp/`, dataset ingestion, or embedded targets is strictly prohibited.
+  - **FR-006.3 (API Surface Allowlist)**: Usage is restricted to `sklearn.discriminant_analysis`, `sklearn.covariance`, and `sklearn.metrics`. Usage of `sklearn.model_selection`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.StandardScaler`, or any split generator is prohibited; splits MUST derive exclusively from Feature 003 manifests.
+  - **FR-006.4 (Automated Deterministic Gate)**: A verification gate MUST assert that: all dependencies in `pyproject.toml` have approved governance; ADR status is `APPROVED`; human signature is present; version is pinned; import paths and API surface comply with allowlists; and ADR hash fingerprint is intact. Any violation MUST trigger a hard `FAIL` (never warning).
+  - **FR-006.5 (Export Boundary & Zero-Pickle Guarantee)**: Trained baseline models MUST be exported to a neutral, deterministic, pure-numerical parameter representation with structured metadata. Serialized Python objects (`pickle`, `joblib.dump`, or sklearn instances) are strictly prohibited as interchange formats; Feature 005 runtime inference MUST NOT import `sklearn`.
+  - **FR-006.6 (pyproject.toml Mutation Sequence)**: Agents MUST NOT alter `pyproject.toml` without prior human commit of the approved ADR. The sequence is strictly: `PROPOSED ADR` → human review/approval commit → governance gate verification → authorized `pyproject.toml` edit → dependency lockfile generation → gate re-run.
 - **FR-007**: System MUST implement a primary 50-class vocabulary (`REST = 0`, gestures `1..49`) and an isolated secondary 49-class active-only vocabulary (`gestures 1..49`), never merging or confusing the two in reported metrics.
 - **FR-008**: System MUST implement the Within-Subject validation protocol using leave-one-training-repetition-out over repetitions `[1, 3, 4, 6]`:
   - Fold 1: Val = 1, Train = `[3, 4, 6]`

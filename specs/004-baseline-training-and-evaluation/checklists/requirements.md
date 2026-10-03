@@ -31,7 +31,7 @@
 
 ## Notes
 
-- Markers marked incomplete:
-  1. `[NEEDS CLARIFICATION: governance mechanism and approval protocol for introducing scikit-learn as a dev/host dependency in pyproject.toml]` (FR-006)
-  2. `[NEEDS CLARIFICATION: window length W, stride S, and bandpass/notch filtering parameters]` (FR-012)
-- Advancing immediately to CLARIFY phase to resolve these questions with the user before PLAN.
+- Markers:
+  1. `[RESOLVED in Session 2026-10-03]`: Governança e aprovação de `scikit-learn` formalizada via ADR persistente com gate automatizado e allowlists (FR-006).
+  2. `[NEEDS CLARIFICATION: window length W, stride S, filtering, thresholds ZC/SSC, and boundary window policies]` (FR-012)
+- Advancing immediately to CLARIFY Question 2 to resolve preprocessing parameters before PLAN.
