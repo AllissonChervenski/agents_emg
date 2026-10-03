@@ -53,6 +53,20 @@
     7. *Oráculo de Equivalência Determinística*: Teste unitário independente na Feature 004 validando $\text{sklearn.predict}(X) == \text{neutral\_numpy\_predict}(X)$ com igualdade exata de classes e tolerância numérica controlada nos scores de decisão sobre fixtures permitidos.
     8. *Imutabilidade dos Splits de Teste*: Nenhuma escolha de priors, shrinkage ou hiperparâmetro pode utilizar repetições `[2, 5]` ou folds de teste cross-subject.
 
+- **Q4: Taxonomia de Modelos (Global 50 Classes vs Modelos por Exercício) e Auditoria de Confounding (FR-007, FR-010)**:
+  - **Decisão Aprovada**: **Opção A+ — Modelo global de 50 classes como baseline primário, modelos por exercício como análises secundárias e auditoria de confounding de sessão/gravação**.
+  - **Cláusulas Verificáveis Obrigatórias de Taxonomia & Diagnóstico**:
+    1. *Baseline Primário Canônico (`global_50_class`)*: Vocabulário completo de 50 classes (REST 0 + ACTIVE 1..49) combinando dados de E1, E2 e E3 após validação dos contratos da Feature 003 (view, alinhamento, repetições, splits, janelas puras, zero leakage). Representa a avaliação do classificador global para o sistema protético.
+    2. *Baselines Secundários por Exercício*: Treinar e reportar automaticamente três modelos complementares usando os labels locais congelados na Feature 003 (`get_local_labels()`):
+       - `exercise_E1`: REST + 17 gestos (18 classes)
+       - `exercise_E2`: REST + 23 gestos (24 classes)
+       - `exercise_E3`: REST + 9 gestos (10 classes)
+       Utilizam exatamente o mesmo preprocessing, janelamento, pure windows, features, thresholds ZC/SSC do treino, z-score train-only, LDA/shrinkage e splits correspondentes.
+    3. *Status Científico dos Modelos por Exercício*: Descrever na documentação/relatórios como `exercise-stratified secondary baselines` ou `literature-aligned exercise-level analysis` (nunca "replicação exata de Atzori et al.", salvo se todas as condições de pré-processamento, janelamento e classificadores forem idênticas e versionadas).
+    4. *Proibição de Média de Acurácia como Substituto*: Reportar separadamente `global_50_class`, `exercise_E1`, `exercise_E2` e `exercise_E3`. Proibido calcular a média das acurácias de E1, E2 e E3 e apresentá-la como substituta do baseline global.
+    5. *Auditoria Obrigatória de Confounding (`exercise_id_from_rest`)*: Avaliação diagnóstica independente treinando um classificador para prever `exercise_id \in {E1, E2, E3}` exclusivamente a partir de janelas REST (sob o mesmo split). Desempenho próximo ao acaso (~33.3%) evidencia ausência de assinatura de gravação/sessão; desempenho substancialmente acima do acaso evidencia confounding de sessão/exercício que deve acompanhar explicitamente a interpretação do resultado global. Nenhum sujeito/recording é excluído com base nessa auditoria.
+    6. *Hierarquia Científica Estrita*: (1) `global_50_class` [PRIMÁRIO], (2) `E1/E2/E3 exercise-stratified` [SECUNDÁRIO], (3) `exercise_id_from_rest` [DIAGNÓSTICO / AUDITORIA].
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -175,7 +189,12 @@ As a scientific reviewer or clinician, I need evaluation metrics reported primar
   - **FR-006.4 (Automated Deterministic Gate)**: A verification gate MUST assert that: all dependencies in `pyproject.toml` have approved governance; ADR status is `APPROVED`; human signature is present; version is pinned; import paths and API surface comply with allowlists; and ADR hash fingerprint is intact. Any violation MUST trigger a hard `FAIL` (never warning).
   - **FR-006.5 (Export Boundary & Zero-Pickle Guarantee)**: Trained baseline models MUST be exported to a neutral, deterministic, pure-numerical parameter representation with structured metadata. Serialized Python objects (`pickle`, `joblib.dump`, or sklearn instances) are strictly prohibited as interchange formats; Feature 005 runtime inference MUST NOT import `sklearn`.
   - **FR-006.6 (pyproject.toml Mutation Sequence)**: Agents MUST NOT alter `pyproject.toml` without prior human commit of the approved ADR. The sequence is strictly: `PROPOSED ADR` → human review/approval commit → governance gate verification → authorized `pyproject.toml` edit → dependency lockfile generation → gate re-run.
-- **FR-007**: System MUST implement a primary 50-class vocabulary (`REST = 0`, gestures `1..49`) and an isolated secondary 49-class active-only vocabulary (`gestures 1..49`), never merging or confusing the two in reported metrics.
+- **FR-007**: System MUST establish a rigorous model taxonomy separating primary, secondary, and diagnostic baselines:
+  - **FR-007.1 (Primary Global 50-Class Baseline)**: Canonical baseline `global_50_class` (REST=0, ACTIVE=1..49) combining E1, E2, E3 windows only after applying frozen Feature 003 contracts (view, alignment, repetition units, split manifests, preprocessing, pure windows, zero leakage).
+  - **FR-007.2 (Secondary Exercise-Stratified Baselines)**: Automatically train and report three secondary baselines: `exercise_E1` (REST + 17 gestures = 18 classes), `exercise_E2` (REST + 23 gestures = 24 classes), `exercise_E3` (REST + 9 gestures = 10 classes) using derived local labels from Feature 003 (`get_local_labels()`). Described in reports strictly as `exercise-stratified secondary baselines` or `literature-aligned exercise-level analysis` (not "exact replication of Atzori et al." unless all historical conditions match).
+  - **FR-007.3 (Mandatory Confounding Audit exercise_id_from_rest)**: Independent diagnostic audit training an auxiliary classifier to predict `exercise_id \in {E1, E2, E3}` strictly from REST windows under the same split constraints. Performance near chance (33.3%) indicates low session/recording signature in REST; performance substantially above chance indicates exercise/recording confounding which MUST accompany the interpretation of the global 50-class results without excluding recordings.
+  - **FR-007.4 (Reporting and Non-Averaging Invariant)**: System MUST report global 50-class, E1 18-class, E2 24-class, and E3 10-class metrics separately. System MUST NOT compute an average accuracy across E1, E2, E3 and present it as substitute for the global 50-class baseline.
+  - **FR-007.5 (Scientific Hierarchy)**: (1) `global_50_class` [Primary], (2) `E1/E2/E3 exercise-stratified` [Secondary], (3) `exercise_id_from_rest` [Diagnostic / Confounding Audit]. Secondary and diagnostics do not block the primary baseline unless revealing an objective leakage/integrity violation.
 - **FR-008**: System MUST implement the Within-Subject validation protocol using leave-one-training-repetition-out over repetitions `[1, 3, 4, 6]`:
   - Fold 1: Val = 1, Train = `[3, 4, 6]`
   - Fold 2: Val = 3, Train = `[1, 4, 6]`
