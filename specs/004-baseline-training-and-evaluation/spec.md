@@ -41,6 +41,18 @@
     5. *Feature Scaling Z-Score Customizado*: $z_j = (x_j - \text{mean\_train}_j) / \text{std\_train}_j$. `mean` e `std` calculados unicamente no TRAIN. Validação e teste transformados sem estado. Se $\text{std}_j == 0$, fixar $\text{scale}_j = 1.0$ e registrar `zero_variance`. Proibido `sklearn.preprocessing.StandardScaler`. Persistir `mean[]` e `scale[]` como arrays numéricos neutros.
     6. *Invariante Anti-Vazamento*: Zero dependência de validação ou teste para RMS de repouso, thresholds ZC/SSC, estatísticas de scaling, parâmetros de shrinkage ou qualquer métrica aprendida.
 
+- **Q3: Configuração de Priors de Classe, Shrinkage e Fronteira de Exportação do LDA (FR-005, FR-010)**:
+  - **Decisão Aprovada**: **Opção A+ — Priors uniformes no baseline primário, Ledoit-Wolf analítico automático, semântica correta de métricas e oráculo de equivalência**.
+  - **Cláusulas Verificáveis Obrigatórias de Modelagem & Inferência**:
+    1. *Priors Uniformes Primários*: Baseline canônico de 50 classes configurado com $P(c) = 1/50$ para todo $c \in \{0..49\}$ (`uniform_prior_baseline`). O objetivo é avaliar a separabilidade intrínseca das 50 classes sem conceder vantagem bayesiana prévia à prevalência natural do REST. O efeito nas métricas é estritamente medido, sem alegação a priori de maximização de Balanced Accuracy/Macro-F1.
+    2. *Modelo Secundário com Priors Empíricos*: Treinado e reportado separadamente como `empirical_prior_reference`, com $P(c) = N_c / N_{\text{train}}$ medido estritamente no TRAIN, para avaliar a sensibilidade do baseline à prevalência contínua. Nunca escolher entre os dois modelos usando TEST.
+    3. *Fits Distintos Obrigatórios*: Os dois modelos devem ser ajustados como fits independentes, pois os priors afetam tanto a construção da covariância agrupada quanto o termo log-prior da função discriminante no scikit-learn.
+    4. *Shrinkage Analítico de Ledoit-Wolf*: `LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")` tratado como estimador analítico determinístico de Ledoit-Wolf, sem busca em grid ou seleção via validation/test.
+    5. *Evidências de Shrinkage & Metadados*: Não persistir um único `lambda_star` global (o sklearn estima covariâncias shrunk internamente por classe antes do agrupamento). Persistir obrigatoriamente no `TrainingJob`: `shrinkage_method = "ledoit_wolf_auto"`, versão exata do `scikit-learn`, solver, priors, `classes_`, `means_`, `covariance_`, `coef_`, `intercept_` e hashes SHA-256 dos arrays exportados.
+    6. *Fronteira Neutra de Exportação (Feature 005)*: Nenhum objeto `sklearn` (pickle, joblib dump) pode ser formato de intercâmbio. O modelo treinado é exportado em formato numérico puro (`classes`, `coef`, `intercept`, `mean`, `scale`, configurações e hashes), permitindo que a Feature 005 execute inferência via $\text{scores} = X_{\text{scaled}} @ \text{coef}^T + \text{intercept}$ e $\text{argmax}$ sem importar `scikit-learn`.
+    7. *Oráculo de Equivalência Determinística*: Teste unitário independente na Feature 004 validando $\text{sklearn.predict}(X) == \text{neutral\_numpy\_predict}(X)$ com igualdade exata de classes e tolerância numérica controlada nos scores de decisão sobre fixtures permitidos.
+    8. *Imutabilidade dos Splits de Teste*: Nenhuma escolha de priors, shrinkage ou hiperparâmetro pode utilizar repetições `[2, 5]` ou folds de teste cross-subject.
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -148,7 +160,14 @@ As a scientific reviewer or clinician, I need evaluation metrics reported primar
   - Zero Crossing count (ZC)
   - Slope Sign Change count (SSC)
   Yielding exactly $12 \times 5 = 60$ features per analysis window.
-- **FR-005**: System MUST implement regularized Linear Discriminant Analysis (LDA) as the baseline classifier, supporting covariance shrinkage to guarantee invertible covariance matrices.
+- **FR-005**: System MUST implement regularized Linear Discriminant Analysis (LDA) as the baseline classifier using Ledoit-Wolf covariance shrinkage, maintaining a strict neutral boundary:
+  - **FR-005.1 (Primary Baseline with Uniform Priors)**: Canonical 50-class baseline MUST configure uniform priors $P(c) = 1/50$ for all classes $c \in \{0..49\}$ (`uniform_prior_baseline`), removing empirical REST prevalence from the decision rule.
+  - **FR-005.2 (Secondary Reference with Empirical Priors)**: A distinct model MUST be trained with empirical priors $P(c) = N_c / N_{\text{train}}$ (`empirical_prior_reference`), evaluated and reported separately to demonstrate sensitivity to continuous class prevalence. Both models MUST be trained as distinct fits.
+  - **FR-005.3 (Ledoit-Wolf Analytic Shrinkage)**: System MUST use `LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")` treated as Ledoit-Wolf analytic shrinkage without grid search or selection on validation/test.
+  - **FR-005.4 (Model Parameters & Evidence Persistence)**: System MUST persist in `TrainingJob` artifacts: `shrinkage_method = "ledoit_wolf_auto"`, scikit-learn version, solver `"lsqr"`, priors used, `classes_`, `means_`, `covariance_`, `coef_`, `intercept_`, and SHA-256 hashes of neutral exported arrays.
+  - **FR-005.5 (Neutral Parameter Export Boundary)**: Model artifacts MUST be exported in a neutral, deterministic, pure-numerical parameter format (`classes`, `coef`, `intercept`, `mean`, `scale`, metadata) without pickle or sklearn objects. Feature 005 runtime inference MUST execute via $\text{scores} = X_{\text{scaled}} @ \text{coef}^T + \text{intercept}$ and $\text{argmax}$ without importing `sklearn`.
+  - **FR-005.6 (Equivalence Oracle Test)**: System MUST include an independent unit test asserting `sklearn.predict(X) == neutral_numpy_predict(X)` with exact predicted class match and numerical tolerance on decision scores for allowed validation/test fixtures.
+  - **FR-005.7 (Test Split Immutability)**: No hyperparameter, prior, solver, or shrinkage choice can be made using Within-Subject test repetitions `[2, 5]` or Cross-Subject test folds.
 - **FR-006**: System MUST govern `scikit-learn` strictly as a host-only baseline and evaluation dependency via an explicit Architecture Decision Record at [`docs/adr/ADR-004-001-scikit-learn-host-only.md`](file:///home/allisson/Projects/agents_emg/docs/adr/ADR-004-001-scikit-learn-host-only.md) complying with Constitution v1.1.0 (commit `ce75be0`):
   - **FR-006.1 (Human Approval Lifecycle)**: ADR MUST start as `PROPOSED`, receive human approval (name/ID, approval date, git commit), and transition to `APPROVED` sealed by a cryptographic SHA-256 fingerprint against silent mutation.
   - **FR-006.2 (Host-Only Scope & Import Allowlist)**: `sklearn` imports are permitted strictly within `semg_baseline/**` and Feature 004 tests (`tests/feature_004/**` or dedicated test package). Any import in `semg_dsp/`, dataset ingestion, or embedded targets is strictly prohibited.
