@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NeutralModelManifestSchema",
+  "description": "JSON Schema validating exported neutral numerical model manifests for Feature 005 inference boundary",
+  "type": "object",
+  "required": [
+    "model_format_version",
+    "job_id",
+    "job_fingerprint",
+    "model_family",
+    "priors_type",
+    "arrays",
+    "manifest_hash"
+  ],
+  "properties": {
+    "model_format_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "job_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "model_family": {
+      "type": "string",
+      "const": "regularized_lda"
+    },
+    "priors_type": {
+      "type": "string",
+      "enum": ["uniform", "empirical"]
+    },
+    "arrays": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["name", "dtype", "shape", "sha256", "semantic_role"],
+        "properties": {
+          "name": { "type": "string" },
+          "dtype": { "type": "string" },
+          "shape": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "semantic_role": {
+            "type": "string",
+            "enum": [
+              "class_labels",
+              "discriminant_coefficients",
+              "discriminant_intercepts",
+              "scaler_mean",
+              "scaler_scale"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "manifest_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "additionalProperties": false
+}

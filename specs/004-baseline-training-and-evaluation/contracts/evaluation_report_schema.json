@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvaluationReportSchema",
+  "description": "JSON Schema validating standardized Evaluation Reports for Feature 004",
+  "type": "object",
+  "required": [
+    "report_id",
+    "protocol_id",
+    "model_taxonomy",
+    "top1_accuracy",
+    "balanced_accuracy",
+    "macro_f1",
+    "per_class_metrics",
+    "rest_metrics",
+    "active_only_metrics",
+    "confusion_matrix_shape",
+    "confusion_matrix_hash"
+  ],
+  "properties": {
+    "report_id": {
+      "type": "string"
+    },
+    "protocol_id": {
+      "type": "string",
+      "enum": ["within_subject", "cross_subject"]
+    },
+    "model_taxonomy": {
+      "type": "string",
+      "enum": ["global_50_class", "exercise_E1", "exercise_E2", "exercise_E3"]
+    },
+    "top1_accuracy": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "balanced_accuracy": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "macro_f1": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "per_class_metrics": {
+      "type": "object"
+    },
+    "rest_metrics": {
+      "type": "object",
+      "required": ["precision", "recall", "false_alarm_rate"],
+      "properties": {
+        "precision": { "type": "number" },
+        "recall": { "type": "number" },
+        "false_alarm_rate": { "type": "number" }
+      }
+    },
+    "active_only_metrics": {
+      "type": "object",
+      "required": ["top1_accuracy", "macro_f1"],
+      "properties": {
+        "top1_accuracy": { "type": "number" },
+        "macro_f1": { "type": "number" }
+      }
+    },
+    "confusion_matrix_shape": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "confusion_matrix_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "confounding_diagnostic": {
+      "type": "object",
+      "properties": {
+        "rest_exercise_accuracy": { "type": "number" },
+        "chance_level": { "type": "number", "const": 0.3333333333333333 },
+        "confounding_indicated": { "type": "boolean" },
+        "interpretation": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}

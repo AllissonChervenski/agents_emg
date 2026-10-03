@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TrainingJobSchema",
+  "description": "JSON Schema validating TrainingJob metadata and scientific lineage for Feature 004",
+  "type": "object",
+  "required": [
+    "job_id",
+    "job_fingerprint",
+    "status",
+    "git_commit",
+    "lineage",
+    "protocol_id",
+    "partition_id",
+    "preprocessing_config",
+    "feature_config",
+    "model_config",
+    "threshold_calibration",
+    "environment_versions",
+    "seed",
+    "timing_seconds",
+    "metrics",
+    "artifact_hashes"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[a-z0-9_\\-]+$"
+    },
+    "job_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PLANNED", "RUNNING", "SUCCEEDED", "FAILED"]
+    },
+    "git_commit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{7,40}$"
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "raw_dataset_manifest_hash",
+        "dataset_view_hash",
+        "alignment_hash",
+        "split_manifest_hash",
+        "acceptance_package_hash"
+      ],
+      "properties": {
+        "raw_dataset_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "dataset_view_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "alignment_hash": { "type": "string" },
+        "split_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "acceptance_package_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "protocol_id": {
+      "type": "string",
+      "enum": ["within_subject", "cross_subject"]
+    },
+    "partition_id": {
+      "type": "string"
+    },
+    "preprocessing_config": {
+      "type": "object"
+    },
+    "feature_config": {
+      "type": "object"
+    },
+    "model_config": {
+      "type": "object"
+    },
+    "threshold_calibration": {
+      "type": "object",
+      "required": ["r_multiplier", "selection_method"],
+      "properties": {
+        "r_multiplier": { "type": "number", "enum": [0.5, 1.0, 1.5, 2.0, 3.0] },
+        "selection_method": { "type": "string" }
+      }
+    },
+    "environment_versions": {
+      "type": "object",
+      "required": ["python", "numpy", "scipy", "scikit_learn"],
+      "properties": {
+        "python": { "type": "string" },
+        "numpy": { "type": "string" },
+        "scipy": { "type": "string" },
+        "scikit_learn": { "type": "string" }
+      }
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "timing_seconds": {
+      "type": "object"
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["top1_accuracy", "balanced_accuracy", "macro_f1"],
+      "properties": {
+        "top1_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "balanced_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "macro_f1": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      }
+    },
+    "artifact_hashes": {
+      "type": "object"
+    },
+    "stdout_summary": {
+      "type": "string"
+    },
+    "stderr_summary": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
