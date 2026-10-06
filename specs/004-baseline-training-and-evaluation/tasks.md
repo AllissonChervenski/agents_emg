@@ -19,7 +19,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - In GREEN, the implementer edits strictly the paths listed in `allowed_files`. Test files are protected against `TEST_TAMPERING`.
 - Mathematical, DSP, feature extraction, and ML tasks are marked `"numeric_sensitive": true`. Structural, governance, and manifest tasks are marked `"numeric_sensitive": false`.
 - Raw data directory `data/raw/ninapro_db2/` and Feature 003 artifacts are strictly READ-ONLY. No task may modify or reinterpret raw archives.
-- **Dependency Governance Constraint**: ADR-004-001 (`scikit-learn`), ADR-004-002 (`jsonschema`), and ADR-004-003 (`tomli`) are `APPROVED / LOCKED` (aggregate dependency governance status `APPROVED`, `all_required_dependencies_approved = true`). T013b is COMPLETE / FORMALLY ACCEPTED, T013d is COMPLETE / ACCEPTED. T014 is UNBLOCKED FOR RED.
+- **Dependency Governance Constraint**: ADR-004-001 (`scikit-learn`), ADR-004-002 (`jsonschema`), and ADR-004-003 (`tomli`) are `APPROVED / LOCKED` (aggregate dependency governance status `APPROVED`, `all_required_dependencies_approved = true`). T013b is COMPLETE / FORMALLY ACCEPTED, T013d is COMPLETE / ACCEPTED, T014 is COMPLETE.
 - T020 is a non-implementation review task marked `NOT_AUTOMATABLE`.
 
 ---
@@ -119,7 +119,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T013d [GOV] Post-lock consistency and approval-commit provenance verification in docs/adr/ADR-004-002-*, docs/adr/ADR-004-003-*, semg_baseline/governance.py, tests/test_baseline_governance_gate.py, specs/004-baseline-training-and-evaluation/tasks.md
   <!-- harness-task {"requirements":["FR-006.1","FR-006.4","FR-006.6","FR-011.1","FR-011.6"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1"],"dependencies":["T013b"],"test_type":"UNIT","allowed_files":["docs/adr/ADR-004-002-jsonschema-host-contract-validation.md","docs/adr/ADR-004-003-tomli-python310-compatibility.md","semg_baseline/governance.py","tests/test_baseline_governance_gate.py","specs/004-baseline-training-and-evaluation/tasks.md"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
-- [ ] T014 [US3] Implement CanonicalLdaTrainer with uniform/empirical priors and Ledoit-Wolf analytic shrinkage in semg_baseline/lda.py
+- [x] T014 [US3] Implement CanonicalLdaTrainer with uniform/empirical priors and Ledoit-Wolf analytic shrinkage in semg_baseline/lda.py
   <!-- harness-task {"requirements":["FR-005.1","FR-005.2","FR-005.3","FR-005.4","FR-006.2","FR-006.3"],"acceptance_criteria":["SC-005"],"plan_decisions":["Decision-3"],"dependencies":["T010","T013b","T013d"],"test_type":"UNIT","allowed_files":["semg_baseline/lda.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 - [ ] T015 [US3] Implement WithinSubjectRunner executing LOTO validation and single test evaluation in semg_baseline/within_subject.py
