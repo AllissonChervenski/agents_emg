@@ -3,10 +3,10 @@
 ## ADR-004-002: Aprovação de Governança para Dependência Host-Only `jsonschema` (Validação de Contratos da Feature 004)
 
 - **ID**: `ADR-004-002`
-- **Status**: `PROPOSED`
+- **Status**: `APPROVED`
 - **Data de Proposição**: 2026-10-06
-- **Aprovador Humano**: `[PENDING HUMAN APPROVAL]`
-- **Data de Aprovação Humana**: `[PENDING HUMAN APPROVAL]`
+- **Aprovador Humano**: `Allisson Chervenski <allissonchervenski5@gmail.com>`
+- **Data de Aprovação Humana**: `2026-10-06`
 - **Commit Git de Aprovação**: `[PENDING HUMAN COMMIT]`
 - **Fingerprint Criptográfico (SHA-256 pós-aprovação)**: `[PENDING LOCK]`
 

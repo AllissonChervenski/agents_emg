@@ -3,10 +3,10 @@
 ## ADR-004-003: Aprovação de Governança para Dependência Host-Only Condicional `tomli` (Compatibilidade com Python 3.10)
 
 - **ID**: `ADR-004-003`
-- **Status**: `PROPOSED`
+- **Status**: `APPROVED`
 - **Data de Proposição**: 2026-10-06
-- **Aprovador Humano**: `[PENDING HUMAN APPROVAL]`
-- **Data de Aprovação Humana**: `[PENDING HUMAN APPROVAL]`
+- **Aprovador Humano**: `Allisson Chervenski <allissonchervenski5@gmail.com>`
+- **Data de Aprovação Humana**: `2026-10-06`
 - **Commit Git de Aprovação**: `[PENDING HUMAN COMMIT]`
 - **Fingerprint Criptográfico (SHA-256 pós-aprovação)**: `[PENDING LOCK]`
 
