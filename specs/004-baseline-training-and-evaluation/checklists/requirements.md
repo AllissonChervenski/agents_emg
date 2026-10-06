@@ -32,9 +32,9 @@
 ## Notes
 
 - Clarifications Resolved (Session 2026-10-03):
-  1. `[RESOLVED]`: Governança e aprovação de `scikit-learn` formalizada via ADR persistente em `docs/adr/ADR-004-001-scikit-learn-host-only.md` com gate automatizado e allowlists (FR-006).
+  1. `[RESOLVED]`: Governança e aprovação de `scikit-learn` formalizada via ADR persistente em `docs/adr/ADR-004-001-scikit-learn-host-only.md` (atualmente `PROPOSED`, estado de governança `CONDITIONAL_PASS`, implementação sklearn-dependent bloqueada até assinatura humana e gate de governança) com gate automatizado e allowlists (FR-006).
   2. `[RESOLVED]`: Parâmetros de DSP causal (band-pass 20–450 Hz, notch 50 Hz omitido após auditoria espectral de $R_{50}=0.84$), janelas de 200 ms / 50 ms stride, política de janelas puras, thresholds adaptativos de treino e z-score customizado (FR-004, FR-012, FR-013).
   3. `[RESOLVED]`: Modelagem LDA com priors uniformes primários ($P=1/50$) e empíricos secundários em fits distintos, shrinkage de Ledoit-Wolf analítico, fronteira neutra de exportação numérica e oráculo de equivalência determinística (FR-005).
-  4. `[RESOLVED]`: Taxonomia hierárquica de modelos: `global_50_class` (Primário), `E1/E2/E3 exercise-stratified` (Secundário) e `exercise_id_from_rest` (Auditoria diagnóstica de confounding) (FR-007).
-  5. `[RESOLVED]`: Contratos contratuais em `contracts/`, persistência append-only em `artifacts/feature_004/jobs/<job_id>/` com fingerprint determinístico, fixtures sintéticas procedurais e três camadas de oráculos (FR-003, FR-011).
-- Checklist 100% aprovado (16/16 itens passing). Ciclo CLARIFY encerrado. Pronto para iniciar `$speckit-plan`.
+  4. `[RESOLVED]`: Taxonomia hierárquica de modelos: `global_50_class` (Primário), `E1/E2/E3 exercise-stratified` [Secundário] e `exercise_id_from_rest` (Auditoria diagnóstica de confounding) (FR-007).
+  5. `[RESOLVED]`: Contratos formais em `contracts/` com validação state-aware de TrainingJob, persistência append-only em `artifacts/feature_004/jobs/<job_id>/` com fingerprint determinístico (incluindo `dependency_lock_hash`), fixtures sintéticas procedurais e três camadas de oráculos (FR-003, FR-011).
+- Checklist 100% aprovado (16/16 itens passing). Reconciliação contratual concluída. Pronto para avançar.

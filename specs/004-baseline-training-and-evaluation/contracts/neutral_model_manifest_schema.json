@@ -1,16 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "NeutralModelManifestSchema",
-  "description": "JSON Schema validating exported neutral numerical model manifests for Feature 005 inference boundary",
+  "description": "JSON Schema validating exported neutral numerical model parameter manifests for Feature 005 inference boundary (integrity protected via sidecar model_manifest.sha256)",
   "type": "object",
   "required": [
     "model_format_version",
     "job_id",
     "job_fingerprint",
-    "model_family",
+    "model_taxonomy",
     "priors_type",
-    "arrays",
-    "manifest_hash"
+    "arrays"
   ],
   "properties": {
     "model_format_version": {
@@ -18,15 +17,16 @@
       "const": "1.0.0"
     },
     "job_id": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^job_[a-zA-Z0-9_\\-]+$"
     },
     "job_fingerprint": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
-    "model_family": {
+    "model_taxonomy": {
       "type": "string",
-      "const": "regularized_lda"
+      "enum": ["global_50_class", "exercise_E1", "exercise_E2", "exercise_E3"]
     },
     "priors_type": {
       "type": "string",
@@ -35,15 +35,22 @@
     "arrays": {
       "type": "array",
       "minItems": 5,
+      "maxItems": 5,
       "items": {
         "type": "object",
         "required": ["name", "dtype", "shape", "sha256", "semantic_role"],
         "properties": {
-          "name": { "type": "string" },
-          "dtype": { "type": "string" },
+          "name": {
+            "type": "string",
+            "enum": ["classes", "coef", "intercept", "mean", "scale"]
+          },
+          "dtype": {
+            "type": "string",
+            "enum": ["int32", "float64"]
+          },
           "shape": {
             "type": "array",
-            "items": { "type": "integer" }
+            "items": { "type": "integer", "minimum": 1 }
           },
           "sha256": {
             "type": "string",
@@ -62,10 +69,6 @@
         },
         "additionalProperties": false
       }
-    },
-    "manifest_hash": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
     }
   },
   "additionalProperties": false

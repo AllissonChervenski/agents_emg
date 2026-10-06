@@ -1,12 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "EvaluationReportSchema",
-  "description": "JSON Schema validating standardized Evaluation Reports for Feature 004",
+  "description": "JSON Schema validating standardized Evaluation Reports with full TrainingJob traceability for Feature 004",
   "type": "object",
   "required": [
     "report_id",
+    "job_id",
+    "job_fingerprint",
     "protocol_id",
+    "partition_id",
     "model_taxonomy",
+    "priors_type",
     "top1_accuracy",
     "balanced_accuracy",
     "macro_f1",
@@ -14,19 +18,36 @@
     "rest_metrics",
     "active_only_metrics",
     "confusion_matrix_shape",
-    "confusion_matrix_hash"
+    "confusion_matrix_hash",
+    "subject_or_fold_breakdown"
   ],
   "properties": {
     "report_id": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^report_[a-zA-Z0-9_\\-]+$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[a-zA-Z0-9_\\-]+$"
+    },
+    "job_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
     },
     "protocol_id": {
       "type": "string",
       "enum": ["within_subject", "cross_subject"]
     },
+    "partition_id": {
+      "type": "string"
+    },
     "model_taxonomy": {
       "type": "string",
       "enum": ["global_50_class", "exercise_E1", "exercise_E2", "exercise_E3"]
+    },
+    "priors_type": {
+      "type": "string",
+      "enum": ["uniform", "empirical"]
     },
     "top1_accuracy": {
       "type": "number",
@@ -44,41 +65,79 @@
       "maximum": 1.0
     },
     "per_class_metrics": {
-      "type": "object"
+      "type": "object",
+      "patternProperties": {
+        "^[0-9]+$": {
+          "type": "object",
+          "required": ["precision", "recall", "f1", "support"],
+          "properties": {
+            "precision": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "recall": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "f1": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "support": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "rest_metrics": {
       "type": "object",
       "required": ["precision", "recall", "false_alarm_rate"],
       "properties": {
-        "precision": { "type": "number" },
-        "recall": { "type": "number" },
-        "false_alarm_rate": { "type": "number" }
-      }
+        "precision": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "recall": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "false_alarm_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      },
+      "additionalProperties": false
     },
     "active_only_metrics": {
       "type": "object",
       "required": ["top1_accuracy", "macro_f1"],
       "properties": {
-        "top1_accuracy": { "type": "number" },
-        "macro_f1": { "type": "number" }
-      }
+        "top1_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "macro_f1": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      },
+      "additionalProperties": false
     },
     "confusion_matrix_shape": {
       "type": "array",
-      "items": { "type": "integer" }
+      "items": { "type": "integer", "minimum": 1 }
     },
     "confusion_matrix_hash": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
+    "subject_or_fold_breakdown": {
+      "type": "object",
+      "description": "Per-subject or per-fold metrics mapping partition ID to performance metrics",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["top1_accuracy", "balanced_accuracy", "macro_f1"],
+        "properties": {
+          "top1_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "balanced_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "macro_f1": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        },
+        "additionalProperties": false
+      }
+    },
     "confounding_diagnostic": {
       "type": "object",
+      "required": [
+        "rest_exercise_accuracy",
+        "chance_level",
+        "confounding_indicated",
+        "interpretation"
+      ],
       "properties": {
-        "rest_exercise_accuracy": { "type": "number" },
-        "chance_level": { "type": "number", "const": 0.3333333333333333 },
+        "rest_exercise_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "chance_level": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "confounding_delta": { "type": "number" },
         "confounding_indicated": { "type": "boolean" },
         "interpretation": { "type": "string" }
-      }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

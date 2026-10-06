@@ -10,7 +10,8 @@
     "high_cutoff_hz",
     "sampling_rate_hz",
     "notch_50hz_enabled",
-    "sos_coefficients_hash"
+    "sos_coefficients_hash",
+    "config_hash"
   ],
   "properties": {
     "filter_type": {
@@ -38,6 +39,10 @@
       "const": false
     },
     "sos_coefficients_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "config_hash": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     }

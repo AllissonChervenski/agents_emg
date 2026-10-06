@@ -97,10 +97,13 @@ exporter = NeutralModelExporter(output_dir="artifacts/feature_004/jobs/job_demo"
 manifest = exporter.export(
     model=lda_model,
     scaler=scaler,
-    job_id="job_demo"
+    job_id="job_demo",
+    model_taxonomy="global_50_class",
+    priors_type="uniform"
 )
 
-print(f"Exported neutral manifest: {manifest.manifest_hash}")
+# Integrity verified via sidecar model_manifest.sha256
+print(f"Exported neutral manifest with 5 arrays sealed by sidecar SHA-256")
 ```
 
 ---
@@ -118,9 +121,9 @@ scores_sklearn = lda_model.decision_function(X_test)
 predictor = NeutralNumpyPredictor.load("artifacts/feature_004/jobs/job_demo")
 y_pred_numpy, scores_numpy = predictor.predict(X_test)
 
-# 3. Assert exact mathematical equivalence
+# 3. Assert exact mathematical equivalence per TOL-LDA-NEUTRAL-SCORES
 np.testing.assert_array_equal(y_pred_sklearn, y_pred_numpy)
-np.testing.assert_allclose(scores_sklearn, scores_numpy, atol=1e-7)
+np.testing.assert_allclose(scores_sklearn, scores_numpy, rtol=1e-9, atol=1e-7)
 print("Equivalence oracle PASS: 100% bit-exact class prediction!")
 ```
 
@@ -135,8 +138,12 @@ reporter = EvaluationReportGenerator()
 report = reporter.generate(
     y_true=test_labels,
     y_pred=y_pred_numpy,
-    model_type="global_50_class",
-    protocol_id="within_subject"
+    model_taxonomy="global_50_class",
+    priors_type="uniform",
+    protocol_id="within_subject",
+    partition_id="S1",
+    job_id="job_demo",
+    job_fingerprint="0"*64
 )
 
 print(f"Top-1 Accuracy: {report.top1_accuracy:.4f}")
@@ -159,8 +166,10 @@ confounding_report = auditor.audit(
     split_manifest=split_manifest
 )
 
-print(f"Rest-Exercise Classification Accuracy: {confounding_report.accuracy:.4f}")
+print(f"Rest-Exercise Classification Accuracy: {confounding_report.rest_exercise_accuracy:.4f}")
 print(f"Chance Level: {confounding_report.chance_level:.4f} (33.3%)")
 print(f"Confounding Indicated: {confounding_report.confounding_indicated}")
 print(f"Interpretation: {confounding_report.scientific_interpretation}")
+# Expected output when chance-level: "nenhuma evidência de confounding detectável por este diagnóstico"
+assert confounding_report.scientific_interpretation == "nenhuma evidência de confounding detectável por este diagnóstico"
 ```
