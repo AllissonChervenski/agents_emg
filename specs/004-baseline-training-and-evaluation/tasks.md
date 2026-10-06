@@ -92,7 +92,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T012 [P] [US2] Implement NeutralNumpyPredictor for runtime inference simulation without sklearn in semg_baseline/predictor.py
   <!-- harness-task {"requirements":["FR-005.5","FR-005.6"],"acceptance_criteria":["SC-006"],"plan_decisions":["Decision-3"],"dependencies":["T001","T011"],"test_type":"UNIT","allowed_files":["semg_baseline/predictor.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
-- [ ] T013 [US2] Implement append-only TrainingJobExecutor with state-aware schema validation and deterministic fingerprinting in semg_baseline/runner.py
+- [x] T013 [US2] Implement append-only TrainingJobExecutor with state-aware schema validation and deterministic fingerprinting in semg_baseline/runner.py
   <!-- harness-task {"requirements":["FR-003","FR-011.1","FR-011.2","FR-011.3","FR-011.4"],"acceptance_criteria":["SC-001","SC-006"],"plan_decisions":["Decision-5"],"dependencies":["T004","T011"],"test_type":"UNIT","allowed_files":["semg_baseline/runner.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: User Story 2 complete; training runs are append-only, cryptographic lineage is sealed, and neutral inference boundary is established.
