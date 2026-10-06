@@ -30,6 +30,11 @@ include = ["tests/**/*.py", "semg_*/**/*.py"]
 select = ["E4", "E9", "F"]
 
 [tool.mypy]
-python_version = "3.12"
-files = ["semg_dsp"]
+python_version = "3.10"
+files = [
+    "semg_dsp",
+    "semg_dataset",
+    "semg_baseline",
+]
 ignore_missing_imports = true
+no_site_packages = true

@@ -21,7 +21,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-import jsonschema
+from jsonschema import Draft202012Validator
 import numpy as np
 
 from semg_baseline.export import NeutralModelExporter
@@ -191,7 +191,7 @@ def validate_training_job_dict(
 ) -> tuple[bool, list[str]]:
     """Validate a serialized TrainingJob dictionary against training_job_schema.json."""
     loaded_schema = schema or load_training_job_schema()
-    validator = jsonschema.Draft202012Validator(loaded_schema)
+    validator = Draft202012Validator(loaded_schema)
     errors: list[str] = []
 
     for err in sorted(validator.iter_errors(job_dict), key=lambda e: e.path):

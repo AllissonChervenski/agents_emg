@@ -25,7 +25,7 @@ The pipeline comprises:
    - Secondary: `exercise_E1` (18 classes), `exercise_E2` (24 classes), `exercise_E3` (10 classes) using derived local labels from Feature 003.
    - Diagnostic: `exercise_id_from_rest` confounding audit.
 8. **Neutral Export Boundary & Three-Tier Oracles**:
-   - Model parameters exported exclusively as neutral arrays (`classes`, `coef`, `intercept`, `mean`, `scale` in `model_params.npz`) and JSON manifests; zero pickle or sklearn objects. Integrity sealed by sidecar `model_manifest.sha256`.
+   - Model parameters exported exclusively as neutral arrays (`classes`, `coef`, `intercept`, `mean`, `scale` in `model_params.npz`) and JSON manifests (including `zero_variance_indices` metadata); zero pickle or sklearn objects. Integrity sealed by sidecar `model_manifest.sha256`.
    - Feature 005 runtime inference executes $\text{scores} = X_{\text{scaled}} @ \text{coef}^T + \text{intercept}$ and $\text{argmax}$ without importing `scikit-learn`.
    - Independent equivalence oracle test: $\text{sklearn.predict}(X) == \text{neutral\_numpy\_predict}(X)$ with decision score tolerances governed by `TOL-LDA-NEUTRAL-SCORES`.
 9. **Append-Only TrainingJobs & Formal Contracts**:

@@ -106,6 +106,7 @@ classDiagram
         +str job_fingerprint
         +str model_taxonomy
         +str priors_type
+        +list~int~ zero_variance_indices
         +list~NeutralArrayDescriptor~ arrays
     }
 
@@ -302,6 +303,7 @@ classDiagram
   - `job_fingerprint`: Associated deterministic job fingerprint.
   - `model_taxonomy`: `"global_50_class"`, `"exercise_E1"`, `"exercise_E2"`, `"exercise_E3"`.
   - `priors_type`: `"uniform"` or `"empirical"`.
+  - `zero_variance_indices`: List of non-negative integer indices (within `[0, feature_dimension)`) where feature standard deviation on TRAIN was $\le 10^{-12}$, forced to $0.0$ in inference.
   - `arrays`: Exactly 5 mandatory array descriptors with unique names and roles:
     1. `classes`: shape `(K,)`, dtype `int32`, role `"class_labels"`.
     2. `coef`: shape `(K, 60)`, dtype `float64`, role `"discriminant_coefficients"`.

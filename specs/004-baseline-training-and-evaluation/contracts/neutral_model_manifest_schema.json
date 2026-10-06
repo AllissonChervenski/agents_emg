@@ -9,6 +9,7 @@
     "job_fingerprint",
     "model_taxonomy",
     "priors_type",
+    "zero_variance_indices",
     "arrays"
   ],
   "properties": {
@@ -31,6 +32,14 @@
     "priors_type": {
       "type": "string",
       "enum": ["uniform", "empirical"]
+    },
+    "zero_variance_indices": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "uniqueItems": true
     },
     "arrays": {
       "type": "array",

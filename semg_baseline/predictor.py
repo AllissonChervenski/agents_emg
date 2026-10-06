@@ -10,6 +10,7 @@ Implements FR-005.5, FR-005.6, SC-006, Decision-3:
 from __future__ import annotations
 
 from collections.abc import Sequence
+import json
 from pathlib import Path
 
 import numpy as np
@@ -76,9 +77,10 @@ class NeutralNumpyPredictor:
         intercept = data["intercept"]
         mean = data["mean"]
         scale = data["scale"]
-
-        # Infer any zero-variance indices from scale array
-        zero_var = list(np.where(scale <= 1e-12)[0])
+        # Read zero_variance_indices explicitly from model_manifest.json
+        manifest_file = path / "model_manifest.json"
+        manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+        zero_var = [int(i) for i in manifest_data.get("zero_variance_indices", [])]
 
         return cls(
             classes=classes,

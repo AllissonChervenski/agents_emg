@@ -22,12 +22,16 @@ from semg_baseline.governance import (
     GovernanceViolation,
     check_dependency_governance,
     compute_adr_fingerprint,
+    is_path_allowlisted_for_jsonschema,
     is_path_allowlisted_for_sklearn,
+    is_path_allowlisted_for_tomli,
     is_sklearn_allowed,
     assert_sklearn_allowed,
     parse_adr,
     validate_adr,
+    validate_jsonschema_version_spec,
     validate_sklearn_version_spec,
+    validate_tomli_version_spec,
     verify_imports_in_source,
     verify_pyproject_dependencies,
 )
@@ -35,6 +39,8 @@ from semg_baseline.governance import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ADR_PATH = REPO_ROOT / "docs" / "adr" / "ADR-004-001-scikit-learn-host-only.md"
+ADR_004_002_PATH = REPO_ROOT / "docs" / "adr" / "ADR-004-002-jsonschema-host-contract-validation.md"
+ADR_004_003_PATH = REPO_ROOT / "docs" / "adr" / "ADR-004-003-tomli-python310-compatibility.md"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 
 
@@ -229,6 +235,200 @@ def test_import_scanner_detects_scope_violations_outside_allowlist() -> None:
     assert any("SCOPE_VIOLATION" in err for err in errors)
 
 
+def test_import_scanner_detects_jsonschema_scope_violations() -> None:
+    """Importing jsonschema outside authorized host-only paths triggers SCOPE_VIOLATION."""
+    code = "from jsonschema import Draft202012Validator"
+
+    # Permitted in semg_baseline/runner.py
+    valid, errors = verify_imports_in_source(code, "semg_baseline/runner.py")
+    assert valid is True
+    assert errors == []
+
+    # Permitted in tests
+    valid, errors = verify_imports_in_source(code, "tests/test_baseline_training_job.py")
+    assert valid is True
+    assert errors == []
+
+    # Permitted in specific validation scripts
+    valid, errors = verify_imports_in_source(code, "scripts/validate_feature_004_contracts.py")
+    assert valid is True
+    assert errors == []
+
+    # Prohibited in generic scripts
+    valid, errors = verify_imports_in_source(code, "scripts/eval.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+    # Prohibited in semg_baseline outside runner.py
+    valid, errors = verify_imports_in_source(code, "semg_baseline/pipeline.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+    # Prohibited in semg_dsp
+    valid, errors = verify_imports_in_source(code, "semg_dsp/filter.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+    # Prohibited in semg_dataset
+    valid, errors = verify_imports_in_source(code, "semg_dataset/view.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+    # Prohibited in orchestrator
+    valid, errors = verify_imports_in_source(code, "orchestrator/pipeline.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+
+def test_import_scanner_jsonschema_api_allowlist() -> None:
+    """Validate positive and negative symbol-level API allowlist for jsonschema (ADR-004-002)."""
+    # Positive symbols in authorized path
+    for sym_code in [
+        "from jsonschema import Draft202012Validator",
+        "from jsonschema import validate",
+        "from jsonschema.exceptions import ValidationError",
+        "from jsonschema.exceptions import SchemaError",
+    ]:
+        valid, errors = verify_imports_in_source(sym_code, "semg_baseline/runner.py")
+        assert valid is True, f"Expected valid for '{sym_code}', got errors: {errors}"
+        assert errors == []
+
+    # Negative: unauthorized symbols, wildcards, submodules, and bare imports in runner.py
+    negatives = [
+        "from jsonschema import RefResolver",
+        "from jsonschema import validators",
+        "from jsonschema import *",
+        "from jsonschema.exceptions import *",
+        "from jsonschema.exceptions import FormatError",
+        "import jsonschema",
+        "import jsonschema.validators",
+        "import jsonschema.exceptions",
+    ]
+    for neg_code in negatives:
+        valid, errors = verify_imports_in_source(neg_code, "semg_baseline/runner.py")
+        assert valid is False, f"Expected API_VIOLATION for '{neg_code}'"
+        assert any("API_VIOLATION" in err for err in errors), f"Missing API_VIOLATION in {errors}"
+
+
+def test_jsonschema_version_spec_and_path_allowlist() -> None:
+    """Validate jsonschema version spec parser and positive path allowlist."""
+    valid, err = validate_jsonschema_version_spec("jsonschema>=4.19.0,<5.0.0")
+    assert valid is True and err == ""
+
+    valid, err = validate_jsonschema_version_spec("jsonschema<5.0.0,>=4.19.0")
+    assert valid is True and err == ""
+
+    # Negative: loose
+    valid, err = validate_jsonschema_version_spec("jsonschema>=4.19.0")
+    assert valid is False and "bounded clauses" in err
+
+    # Negative: unauthorized lower
+    valid, err = validate_jsonschema_version_spec("jsonschema>=4.18.0,<5.0.0")
+    assert valid is False and "Unauthorized lower bound" in err
+
+    # Path allowlist checks (least privilege: runner.py, tests/**, scripts/validate_feature_004*.py)
+    assert is_path_allowlisted_for_jsonschema("semg_baseline/runner.py") is True
+    assert is_path_allowlisted_for_jsonschema("tests/test_foo.py") is True
+    assert is_path_allowlisted_for_jsonschema("scripts/validate_feature_004_contracts.py") is True
+    assert is_path_allowlisted_for_jsonschema("scripts/eval.py") is False
+    assert is_path_allowlisted_for_jsonschema("semg_baseline/lda.py") is False
+    assert is_path_allowlisted_for_jsonschema("semg_dsp/filter.py") is False
+
+
+def test_import_scanner_detects_tomli_scope_violations() -> None:
+    """Importing tomli outside authorized governance / test paths triggers SCOPE_VIOLATION."""
+    code = "from tomli import load"
+
+    # Permitted in semg_baseline/governance.py
+    valid, errors = verify_imports_in_source(code, "semg_baseline/governance.py")
+    assert valid is True
+    assert errors == []
+
+    # Permitted in tests
+    valid, errors = verify_imports_in_source(code, "tests/test_baseline_governance_gate.py")
+    assert valid is True
+    assert errors == []
+
+    # Prohibited in semg_baseline outside governance.py
+    valid, errors = verify_imports_in_source(code, "semg_baseline/runner.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+    # Prohibited in semg_dsp
+    valid, errors = verify_imports_in_source(code, "semg_dsp/filter.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+    # Prohibited in semg_dataset
+    valid, errors = verify_imports_in_source(code, "semg_dataset/view.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+    # Prohibited in orchestrator
+    valid, errors = verify_imports_in_source(code, "orchestrator/pipeline.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+    # Prohibited in scripts
+    valid, errors = verify_imports_in_source(code, "scripts/run.py")
+    assert valid is False
+    assert any("SCOPE_VIOLATION" in err for err in errors)
+
+
+def test_import_scanner_tomli_api_allowlist() -> None:
+    """Validate positive and negative symbol-level API allowlist for tomli (ADR-004-003)."""
+    # Positive symbols in authorized paths
+    for sym_code in [
+        "from tomli import load",
+        "from tomli import loads",
+        "from tomli import TOMLDecodeError",
+    ]:
+        valid, errors = verify_imports_in_source(sym_code, "semg_baseline/governance.py")
+        assert valid is True, f"Expected valid for '{sym_code}', got errors: {errors}"
+        assert errors == []
+
+    # Positive fallback alias in governance.py
+    valid, errors = verify_imports_in_source("import tomli as tomllib", "semg_baseline/governance.py")
+    assert valid is True
+    assert errors == []
+
+    # Negative: unauthorized symbols, wildcards, submodules, and bare imports
+    negatives = [
+        "from tomli import qualquer_outro_simbolo",
+        "from tomli import *",
+        "import tomli._parser",
+        "import tomli",
+    ]
+    for neg_code in negatives:
+        valid, errors = verify_imports_in_source(neg_code, "semg_baseline/governance.py")
+        assert valid is False, f"Expected API_VIOLATION for '{neg_code}'"
+        assert any("API_VIOLATION" in err for err in errors), f"Missing API_VIOLATION in {errors}"
+
+
+def test_tomli_version_spec_and_path_allowlist() -> None:
+    """Validate tomli version spec parser and positive path allowlist."""
+    valid, err = validate_tomli_version_spec('tomli>=2.0.0,<3.0.0; python_version < "3.11"')
+    assert valid is True and err == ""
+
+    valid, err = validate_tomli_version_spec("tomli>=2.0.0,<3.0.0; python_version < '3.11'")
+    assert valid is True and err == ""
+
+    # Negative: missing environment marker
+    valid, err = validate_tomli_version_spec("tomli>=2.0.0,<3.0.0")
+    assert valid is False and "environment marker" in err
+
+    # Negative: wrong bounds
+    valid, err = validate_tomli_version_spec('tomli>=1.0.0,<3.0.0; python_version < "3.11"')
+    assert valid is False and "enforce both" in err
+
+    # Path allowlist checks (semg_baseline/governance.py and tests/**)
+    assert is_path_allowlisted_for_tomli("semg_baseline/governance.py") is True
+    assert is_path_allowlisted_for_tomli("tests/test_foo.py") is True
+    assert is_path_allowlisted_for_tomli("semg_baseline/runner.py") is False
+    assert is_path_allowlisted_for_tomli("scripts/validate.py") is False
+    assert is_path_allowlisted_for_tomli("semg_dsp/filter.py") is False
+
+
 # =========================================================================
 # 3. Strict Symbol Allowlist Tests
 # =========================================================================
@@ -306,28 +506,62 @@ def test_version_range_specifier_validation() -> None:
     valid, err = validate_sklearn_version_spec("scikit-learn >= 1.5.0, < 2.0.0")
     assert valid is True and err == ""
 
-    valid, err = validate_sklearn_version_spec("scikit-learn>=1.5,<2.0")
+    valid, err = validate_sklearn_version_spec("scikit-learn<2.0.0,>=1.5.0")
     assert valid is True and err == ""
 
     # Negative cases: missing upper bound
     valid, err = validate_sklearn_version_spec("scikit-learn>=1.5.0")
-    assert valid is False and "upper bound <2.0.0" in err
+    assert valid is False and "bounded clauses" in err
 
     # Negative cases: missing lower bound
     valid, err = validate_sklearn_version_spec("scikit-learn<2.0.0")
-    assert valid is False and "lower bound >=1.5.0" in err
+    assert valid is False and "bounded clauses" in err
 
     # Negative cases: bare package
     valid, err = validate_sklearn_version_spec("scikit-learn")
     assert valid is False and "lacks version constraints" in err
 
-    # Negative cases: incompatible lower bound
+    # Negative cases: unauthorized lower bounds
     valid, err = validate_sklearn_version_spec("scikit-learn>=1.4.0,<2.0.0")
-    assert valid is False
+    assert valid is False and "Unauthorized lower bound" in err
 
-    # Negative cases: incompatible upper bound
+    valid, err = validate_sklearn_version_spec("scikit-learn>=2.0.0")
+    assert valid is False and "bounded clauses" in err
+
+    # Negative cases: unauthorized upper bounds
+    valid, err = validate_sklearn_version_spec("scikit-learn>=1.5.0,<2.1.0")
+    assert valid is False and "Unauthorized upper bound" in err
+
     valid, err = validate_sklearn_version_spec("scikit-learn>=1.5.0,<3.0.0")
-    assert valid is False
+    assert valid is False and "Unauthorized upper bound" in err
+
+    # Negative cases: invalid operators
+    valid, err = validate_sklearn_version_spec("scikit-learn<=1.5.0,<2.0.0")
+    assert valid is False and "Invalid operator" in err
+
+
+def test_governance_operates_without_packaging() -> None:
+    """Governance gate must function purely on stdlib without packaging module."""
+    import subprocess
+    import sys
+
+    cmd = [
+        sys.executable,
+        "-c",
+        (
+            "import sys; "
+            "sys.modules['packaging'] = None; "
+            "sys.modules['packaging.specifiers'] = None; "
+            "sys.modules['packaging.version'] = None; "
+            "import semg_baseline.governance as g; "
+            "valid, err = g.validate_sklearn_version_spec('scikit-learn>=1.5.0,<2.0.0'); "
+            "assert valid is True, err; "
+            "rep = g.check_dependency_governance(); "
+            "assert rep.status != g.GovernanceStatus.FAIL"
+        ),
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert res.returncode == 0
 
 
 # =========================================================================
@@ -369,11 +603,12 @@ dependencies = [
     )
     is_valid, errors = verify_pyproject_dependencies(pyproj, record)
     assert is_valid is False
-    assert any("without approved governance ADR" in err for err in errors)
+    assert any("Premature dependency mutation" in err for err in errors)
+    assert any("CONDITIONAL_PASS" in err for err in errors)
 
 
-def test_pyproject_with_approved_sklearn_valid_spec_passes(tmp_path: Path) -> None:
-    """pyproject.toml with scikit-learn matching >=1.5.0,<2.0.0 passes under APPROVED ADR."""
+def test_pyproject_with_approved_pending_lock_fails(tmp_path: Path) -> None:
+    """pyproject.toml declaring scikit-learn under Stage A (APPROVED_PENDING_LOCK) fails gate."""
     pyproj = tmp_path / "pyproject.toml"
     pyproj.write_text(
         """[project]
@@ -391,9 +626,41 @@ dependencies = [
         proposed_date="2026-10-03",
         approver="Human Evaluator",
         approval_date="2026-10-06",
-        git_commit="1a2b3c4d5e",
-        fingerprint="valid",
+        git_commit="[PENDING COMMIT]",
+        fingerprint="[PENDING LOCK]",
         raw_content="",
+        file_path=tmp_path / "dummy.md",
+    )
+    is_valid, errors = verify_pyproject_dependencies(pyproj, record)
+    assert is_valid is False
+    assert any("Premature dependency mutation" in err for err in errors)
+    assert any("APPROVED_PENDING_LOCK" in err for err in errors)
+
+
+def test_pyproject_with_approved_sklearn_valid_spec_passes(tmp_path: Path) -> None:
+    """pyproject.toml with scikit-learn matching >=1.5.0,<2.0.0 passes under APPROVED ADR."""
+    pyproj = tmp_path / "pyproject.toml"
+    pyproj.write_text(
+        """[project]
+name = "test"
+dependencies = [
+    "numpy>=1.26.0",
+    "scikit-learn>=1.5.0,<2.0.0"
+]
+""",
+        encoding="utf-8",
+    )
+    raw = "Valid ADR content"
+    fp = compute_adr_fingerprint(raw)
+    record = ADRRecord(
+        adr_id="ADR-004-001",
+        status="APPROVED",
+        proposed_date="2026-10-03",
+        approver="Human Evaluator",
+        approval_date="2026-10-06",
+        git_commit="1a2b3c4d5e",
+        fingerprint=fp,
+        raw_content=raw,
         file_path=tmp_path / "dummy.md",
     )
     is_valid, errors = verify_pyproject_dependencies(pyproj, record)
@@ -414,6 +681,8 @@ dependencies = [
 """,
         encoding="utf-8",
     )
+    raw = "Valid ADR content"
+    fp = compute_adr_fingerprint(raw)
     record = ADRRecord(
         adr_id="ADR-004-001",
         status="APPROVED",
@@ -421,13 +690,328 @@ dependencies = [
         approver="Human Evaluator",
         approval_date="2026-10-06",
         git_commit="1a2b3c4d5e",
-        fingerprint="valid",
-        raw_content="",
+        fingerprint=fp,
+        raw_content=raw,
         file_path=tmp_path / "dummy.md",
     )
     is_valid, errors = verify_pyproject_dependencies(pyproj, record)
     assert is_valid is False
-    assert any("upper bound <2.0.0" in err for err in errors)
+    assert any("bounded clauses" in err for err in errors)
+
+
+def test_pyproject_with_unapproved_jsonschema_fails(tmp_path: Path) -> None:
+    """pyproject.toml declaring jsonschema under PROPOSED ADR-004-002 fails gate."""
+    pyproj = tmp_path / "pyproject.toml"
+    pyproj.write_text(
+        """[project]
+name = "test"
+dependencies = [
+    "numpy>=1.26.0",
+    "jsonschema>=4.19.0,<5.0.0"
+]
+""",
+        encoding="utf-8",
+    )
+    adr1 = ADRRecord(
+        adr_id="ADR-004-001",
+        status="PROPOSED",
+        proposed_date="2026-10-03",
+        approver="[PENDING]",
+        approval_date="[PENDING]",
+        git_commit="[PENDING]",
+        fingerprint="[PENDING]",
+        raw_content="",
+        file_path=tmp_path / "dummy1.md",
+    )
+    adr2 = ADRRecord(
+        adr_id="ADR-004-002",
+        status="PROPOSED",
+        proposed_date="2026-10-06",
+        approver="[PENDING]",
+        approval_date="[PENDING]",
+        git_commit="[PENDING]",
+        fingerprint="[PENDING]",
+        raw_content="",
+        file_path=tmp_path / "dummy2.md",
+    )
+    is_valid, errors = verify_pyproject_dependencies(pyproj, adr1, jsonschema_adr_record=adr2)
+    assert is_valid is False
+    assert any("Premature dependency mutation" in err for err in errors)
+    assert any("ADR-004-002" in err for err in errors)
+
+
+def test_pyproject_with_approved_jsonschema_valid_spec_passes(tmp_path: Path) -> None:
+    """pyproject.toml declaring jsonschema matching >=4.19.0,<5.0.0 passes under fully locked ADR-004-002."""
+    pyproj = tmp_path / "pyproject.toml"
+    pyproj.write_text(
+        """[project]
+name = "test"
+dependencies = [
+    "numpy>=1.26.0",
+    "jsonschema>=4.19.0,<5.0.0"
+]
+""",
+        encoding="utf-8",
+    )
+    raw = "Valid JSONSchema ADR"
+    fp = compute_adr_fingerprint(raw)
+    adr1 = ADRRecord(
+        adr_id="ADR-004-001",
+        status="PROPOSED",
+        proposed_date="2026-10-03",
+        approver="[PENDING]",
+        approval_date="[PENDING]",
+        git_commit="[PENDING]",
+        fingerprint="[PENDING]",
+        raw_content="",
+        file_path=tmp_path / "dummy1.md",
+    )
+    adr2 = ADRRecord(
+        adr_id="ADR-004-002",
+        status="APPROVED",
+        proposed_date="2026-10-06",
+        approver="Human Evaluator",
+        approval_date="2026-10-06",
+        git_commit="1a2b3c4d5e",
+        fingerprint=fp,
+        raw_content=raw,
+        file_path=tmp_path / "dummy2.md",
+    )
+    is_valid, errors = verify_pyproject_dependencies(pyproj, adr1, jsonschema_adr_record=adr2)
+    assert is_valid is True
+    assert errors == []
+
+
+def test_pyproject_with_unapproved_tomli_fails(tmp_path: Path) -> None:
+    """pyproject.toml declaring tomli under PROPOSED ADR-004-003 fails gate."""
+    pyproj = tmp_path / "pyproject.toml"
+    pyproj.write_text(
+        """[project]
+name = "test"
+dependencies = [
+    "numpy>=1.26.0",
+    "tomli>=2.0.0,<3.0.0; python_version < '3.11'"
+]
+""",
+        encoding="utf-8",
+    )
+    adr1 = ADRRecord(
+        adr_id="ADR-004-001",
+        status="PROPOSED",
+        proposed_date="2026-10-03",
+        approver="[PENDING]",
+        approval_date="[PENDING]",
+        git_commit="[PENDING]",
+        fingerprint="[PENDING]",
+        raw_content="",
+        file_path=tmp_path / "dummy1.md",
+    )
+    adr3 = ADRRecord(
+        adr_id="ADR-004-003",
+        status="PROPOSED",
+        proposed_date="2026-10-06",
+        approver="[PENDING]",
+        approval_date="[PENDING]",
+        git_commit="[PENDING]",
+        fingerprint="[PENDING]",
+        raw_content="",
+        file_path=tmp_path / "dummy3.md",
+    )
+    is_valid, errors = verify_pyproject_dependencies(pyproj, adr1, tomli_adr_record=adr3)
+    assert is_valid is False
+    assert any("Premature dependency mutation" in err for err in errors)
+    assert any("ADR-004-003" in err for err in errors)
+
+
+def test_pyproject_with_approved_tomli_valid_spec_passes(tmp_path: Path) -> None:
+    """pyproject.toml declaring tomli with marker passes under fully locked ADR-004-003."""
+    pyproj = tmp_path / "pyproject.toml"
+    pyproj.write_text(
+        """[project]
+name = "test"
+dependencies = [
+    "numpy>=1.26.0",
+    "tomli>=2.0.0,<3.0.0; python_version < '3.11'"
+]
+""",
+        encoding="utf-8",
+    )
+    raw = "Valid tomli ADR"
+    fp = compute_adr_fingerprint(raw)
+    adr1 = ADRRecord(
+        adr_id="ADR-004-001",
+        status="PROPOSED",
+        proposed_date="2026-10-03",
+        approver="[PENDING]",
+        approval_date="[PENDING]",
+        git_commit="[PENDING]",
+        fingerprint="[PENDING]",
+        raw_content="",
+        file_path=tmp_path / "dummy1.md",
+    )
+    adr3 = ADRRecord(
+        adr_id="ADR-004-003",
+        status="APPROVED",
+        proposed_date="2026-10-06",
+        approver="Human Evaluator",
+        approval_date="2026-10-06",
+        git_commit="1a2b3c4d5e",
+        fingerprint=fp,
+        raw_content=raw,
+        file_path=tmp_path / "dummy3.md",
+    )
+    is_valid, errors = verify_pyproject_dependencies(pyproj, adr1, tomli_adr_record=adr3)
+    assert is_valid is True
+    assert errors == []
+
+
+# =========================================================================
+# 5b. Aggregate Multi-ADR Governance State Scenarios (Section 5)
+# =========================================================================
+
+def _setup_mock_repo(
+    tmp_path: Path,
+    adr1_status: str = "PROPOSED",
+    adr2_status: str = "PROPOSED",
+    adr3_status: str = "PROPOSED",
+    adr1_stage: str = "PROPOSED",
+    adr2_stage: str = "PROPOSED",
+    adr3_stage: str = "PROPOSED",
+) -> Path:
+    """Helper creating isolated directory with 3 ADRs and clean pyproject.toml."""
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True, exist_ok=True)
+
+    def _write_adr(filename: str, adr_id: str, status: str, stage: str) -> None:
+        if stage == "PROPOSED":
+            approver = "[PENDING HUMAN APPROVAL]"
+            app_date = "[PENDING HUMAN APPROVAL]"
+            commit = "[PENDING HUMAN COMMIT]"
+            fp = "[PENDING LOCK]"
+        elif stage == "STAGE_A":
+            approver = "Human Approver <eval@example.com>"
+            app_date = "2026-10-06"
+            commit = "[PENDING HUMAN COMMIT]"
+            fp = "[PENDING LOCK]"
+        elif stage == "STAGE_B":
+            approver = "Human Approver <eval@example.com>"
+            app_date = "2026-10-06"
+            commit = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
+            draft = ADR_TEMPLATE.format(
+                status=status,
+                approver=approver,
+                approval_date=app_date,
+                git_commit=commit,
+                fingerprint="[PENDING LOCK]",
+            )
+            fp = compute_adr_fingerprint(draft)
+        elif stage == "TAMPERED":
+            approver = "Human Approver <eval@example.com>"
+            app_date = "2026-10-06"
+            commit = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
+            fp = "badfingerprint0000000000000000000000000000000000000000000000000000"
+        else:
+            raise ValueError(f"Unknown stage: {stage}")
+
+        content = ADR_TEMPLATE.format(
+            status=status,
+            approver=approver,
+            approval_date=app_date,
+            git_commit=commit,
+            fingerprint=fp,
+        )
+        (adr_dir / filename).write_text(content, encoding="utf-8")
+
+    _write_adr("ADR-004-001-scikit-learn-host-only.md", "ADR-004-001", adr1_status, adr1_stage)
+    _write_adr("ADR-004-002-jsonschema-host-contract-validation.md", "ADR-004-002", adr2_status, adr2_stage)
+    _write_adr("ADR-004-003-tomli-python310-compatibility.md", "ADR-004-003", adr3_status, adr3_stage)
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mock"\ndependencies = []\n', encoding="utf-8")
+    return tmp_path
+
+
+def test_aggregate_governance_all_proposed(tmp_path: Path) -> None:
+    """When all 3 ADRs are PROPOSED, aggregate is CONDITIONAL_PASS and dependencies unapproved."""
+    repo = _setup_mock_repo(tmp_path, "PROPOSED", "PROPOSED", "PROPOSED", "PROPOSED", "PROPOSED", "PROPOSED")
+    report = check_dependency_governance(repo)
+
+    assert report.status == GovernanceStatus.CONDITIONAL_PASS
+    assert report.all_required_dependencies_approved is False
+    assert report.sklearn_permitted is False
+    assert report.dependency_statuses["scikit-learn"] == GovernanceStatus.CONDITIONAL_PASS
+    assert report.dependency_statuses["jsonschema"] == GovernanceStatus.CONDITIONAL_PASS
+    assert report.dependency_statuses["tomli"] == GovernanceStatus.CONDITIONAL_PASS
+
+
+def test_aggregate_governance_only_sklearn_approved(tmp_path: Path) -> None:
+    """When only ADR-004-001 is APPROVED, aggregate is not APPROVED and T013b remains blocked."""
+    repo = _setup_mock_repo(tmp_path, "APPROVED", "PROPOSED", "PROPOSED", "STAGE_B", "PROPOSED", "PROPOSED")
+    report = check_dependency_governance(repo)
+
+    assert report.status != GovernanceStatus.APPROVED
+    assert report.status == GovernanceStatus.CONDITIONAL_PASS
+    assert report.all_required_dependencies_approved is False
+    assert report.sklearn_permitted is False
+    assert report.dependency_statuses["scikit-learn"] == GovernanceStatus.APPROVED
+    assert report.dependency_statuses["jsonschema"] == GovernanceStatus.CONDITIONAL_PASS
+    assert report.dependency_statuses["tomli"] == GovernanceStatus.CONDITIONAL_PASS
+    with pytest.raises(GovernanceViolation, match="BLOCKED"):
+        assert_sklearn_allowed(repo)
+
+
+def test_aggregate_governance_sklearn_and_jsonschema_approved_tomli_pending(tmp_path: Path) -> None:
+    """When 001 and 002 are APPROVED but 003 is PROPOSED, aggregate is not APPROVED."""
+    repo = _setup_mock_repo(tmp_path, "APPROVED", "APPROVED", "PROPOSED", "STAGE_B", "STAGE_B", "PROPOSED")
+    report = check_dependency_governance(repo)
+
+    assert report.status != GovernanceStatus.APPROVED
+    assert report.status == GovernanceStatus.CONDITIONAL_PASS
+    assert report.all_required_dependencies_approved is False
+    assert report.dependency_statuses["scikit-learn"] == GovernanceStatus.APPROVED
+    assert report.dependency_statuses["jsonschema"] == GovernanceStatus.APPROVED
+    assert report.dependency_statuses["tomli"] == GovernanceStatus.CONDITIONAL_PASS
+    with pytest.raises(GovernanceViolation, match="BLOCKED"):
+        assert_sklearn_allowed(repo)
+
+
+def test_aggregate_governance_one_in_stage_a(tmp_path: Path) -> None:
+    """When any ADR is in Stage A (APPROVED_PENDING_LOCK), aggregate is APPROVED_PENDING_LOCK."""
+    repo = _setup_mock_repo(tmp_path, "APPROVED", "APPROVED", "APPROVED", "STAGE_B", "STAGE_A", "STAGE_B")
+    report = check_dependency_governance(repo)
+
+    assert report.status == GovernanceStatus.APPROVED_PENDING_LOCK
+    assert report.all_required_dependencies_approved is False
+    assert report.sklearn_permitted is False
+    assert report.dependency_statuses["scikit-learn"] == GovernanceStatus.APPROVED
+    assert report.dependency_statuses["jsonschema"] == GovernanceStatus.APPROVED_PENDING_LOCK
+    assert report.dependency_statuses["tomli"] == GovernanceStatus.APPROVED
+    with pytest.raises(GovernanceViolation, match="BLOCKED"):
+        assert_sklearn_allowed(repo)
+
+
+def test_aggregate_governance_all_locked(tmp_path: Path) -> None:
+    """When all 3 ADRs are APPROVED and locked (Stage B), aggregate is APPROVED and permitted."""
+    repo = _setup_mock_repo(tmp_path, "APPROVED", "APPROVED", "APPROVED", "STAGE_B", "STAGE_B", "STAGE_B")
+    report = check_dependency_governance(repo)
+
+    assert report.status == GovernanceStatus.APPROVED
+    assert report.all_required_dependencies_approved is True
+    assert report.sklearn_permitted is True
+    assert report.dependency_statuses["scikit-learn"] == GovernanceStatus.APPROVED
+    assert report.dependency_statuses["jsonschema"] == GovernanceStatus.APPROVED
+    assert report.dependency_statuses["tomli"] == GovernanceStatus.APPROVED
+    assert_sklearn_allowed(repo)  # Must not raise
+
+
+def test_aggregate_governance_any_tampered_fails(tmp_path: Path) -> None:
+    """When any ADR has a fingerprint mismatch, aggregate status is FAIL."""
+    repo = _setup_mock_repo(tmp_path, "APPROVED", "APPROVED", "APPROVED", "STAGE_B", "STAGE_B", "TAMPERED")
+    report = check_dependency_governance(repo)
+
+    assert report.status == GovernanceStatus.FAIL
+    assert report.all_required_dependencies_approved is False
+    assert report.sklearn_permitted is False
+    assert any("mismatch" in e for e in report.errors)
 
 
 # =========================================================================
@@ -435,13 +1019,24 @@ dependencies = [
 # =========================================================================
 
 def test_active_repo_adr_is_valid() -> None:
-    """ADR-004-001 in repository must be structurally valid and consistent."""
+    """ADR-004-001, ADR-004-002, and ADR-004-003 in repository must be structurally valid and consistent."""
     assert ADR_PATH.is_file(), f"ADR file missing at {ADR_PATH}"
-    record = parse_adr(ADR_PATH)
+    record1 = parse_adr(ADR_PATH)
+    assert record1.adr_id == "ADR-004-001"
+    assert record1.proposed_date == "2026-10-03"
+    assert record1.status in {"PROPOSED", "APPROVED"}
 
-    assert record.adr_id == "ADR-004-001"
-    assert record.proposed_date == "2026-10-03"
-    assert record.status in {"PROPOSED", "APPROVED"}
+    assert ADR_004_002_PATH.is_file(), f"ADR file missing at {ADR_004_002_PATH}"
+    record2 = parse_adr(ADR_004_002_PATH)
+    assert record2.adr_id == "ADR-004-002"
+    assert record2.proposed_date == "2026-10-06"
+    assert record2.status in {"PROPOSED", "APPROVED"}
+
+    assert ADR_004_003_PATH.is_file(), f"ADR file missing at {ADR_004_003_PATH}"
+    record3 = parse_adr(ADR_004_003_PATH)
+    assert record3.adr_id == "ADR-004-003"
+    assert record3.proposed_date == "2026-10-06"
+    assert record3.status in {"PROPOSED", "APPROVED"}
 
 
 def test_active_repo_dependency_governance_gate() -> None:
@@ -456,6 +1051,10 @@ def test_active_repo_dependency_governance_gate() -> None:
         # Currently proposed
         assert report.adr_status == "PROPOSED"
         assert report.sklearn_permitted is False
+        assert report.all_required_dependencies_approved is False
+        assert report.dependency_statuses["scikit-learn"] == GovernanceStatus.CONDITIONAL_PASS
+        assert report.dependency_statuses["jsonschema"] == GovernanceStatus.CONDITIONAL_PASS
+        assert report.dependency_statuses["tomli"] == GovernanceStatus.CONDITIONAL_PASS
         assert is_sklearn_allowed(REPO_ROOT) is False
         with pytest.raises(GovernanceViolation, match="BLOCKED"):
             assert_sklearn_allowed(REPO_ROOT)
@@ -463,6 +1062,7 @@ def test_active_repo_dependency_governance_gate() -> None:
         # Human approved (Commit A) but pending lock (Commit B)
         assert report.adr_status == "APPROVED"
         assert report.sklearn_permitted is False
+        assert report.all_required_dependencies_approved is False
         assert is_sklearn_allowed(REPO_ROOT) is False
         with pytest.raises(GovernanceViolation, match="BLOCKED"):
             assert_sklearn_allowed(REPO_ROOT)
@@ -470,5 +1070,6 @@ def test_active_repo_dependency_governance_gate() -> None:
         # Fully locked (Commit B)
         assert report.adr_status == "APPROVED"
         assert report.sklearn_permitted is True
+        assert report.all_required_dependencies_approved is True
         assert is_sklearn_allowed(REPO_ROOT) is True
         assert_sklearn_allowed(REPO_ROOT)  # Should not raise

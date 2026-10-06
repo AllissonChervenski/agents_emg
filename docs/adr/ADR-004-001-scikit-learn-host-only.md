@@ -70,12 +70,15 @@ O uso de `scikit-learn` no baseline canônico é restrito a símbolos específic
 
 Nenhum objeto serializado em Python (`pickle`, `joblib.dump`, instâncias de classes do sklearn) pode constituir formato de intercâmbio de modelo.
 - O modelo treinado deve ser exportado exclusivamente como uma representação neutra puramente numérica:
-  - `classes`: array `int32` de formato `(K,)`;
-  - `coef`: array `float64` de formato `(K, 60)`;
-  - `intercept`: array `float64` de formato `(K,)`;
-  - `mean`: array `float64` de formato `(60,)`;
-  - `scale`: array `float64` de formato `(60,)`;
-  - Metadados estruturados e hashes SHA-256 em `model_manifest.json`.
+  - Os arrays numéricos binários persistidos em `model_params.npz` são **estritamente cinco**:
+    - `classes`: array `int32` de formato `(K,)` (`semantic_role: class_labels`);
+    - `coef`: array `float64` de formato `(K, 60)` (`semantic_role: discriminant_coefficients`);
+    - `intercept`: array `float64` de formato `(K,)` (`semantic_role: discriminant_intercepts`);
+    - `mean`: array `float64` de formato `(60,)` (`semantic_role: scaler_mean`);
+    - `scale`: array `float64` de formato `(60,)` (`semantic_role: scaler_scale`).
+    Nenhum sexto array é permitido no arquivo binário.
+  - Metadados estruturados e hashes SHA-256 em `model_manifest.json` com integridade selada por sidecar `model_manifest.sha256`.
+  - `zero_variance_indices`: metadata estruturada obrigatória em `model_manifest.json` (lista ordenada de inteiros não-negativos únicos), registrando features com variância de treino nula ($\sigma_j \le 10^{-12}$) para garantir que a transformação de teste zere estritamente essas colunas sem adulterar os arrays ou necessitar de heurísticas no preditor.
 - A Feature 005 implementará inferência via cálculo matricial direto:
   $$\text{scores} = X_{\text{scaled}} @ \text{coef}^T + \text{intercept}$$
   $$\hat{y} = \text{argmax}(\text{scores})$$

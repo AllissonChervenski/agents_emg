@@ -14,18 +14,15 @@ Enforces FR-006, SC-001, Decision-1, and Constitution v1.1.0 (commit ce75be0):
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
 from pathlib import Path
 import re
 from typing import Any
 
-from packaging.specifiers import SpecifierSet
-from packaging.version import Version
-
 try:
-    import tomllib  # Python 3.11+
+    import tomllib  # Python 3.11+ stdlib
 except ImportError:  # pragma: no cover
     import tomli as tomllib  # type: ignore[no-redef]
 
@@ -67,6 +64,8 @@ class GovernanceReport:
     adr_status: str
     sklearn_permitted: bool
     errors: list[str]
+    dependency_statuses: dict[str, GovernanceStatus] = field(default_factory=dict)
+    all_required_dependencies_approved: bool = False
 
 
 # Allowlisted base dependencies (constitutional / pre-approved)
@@ -79,7 +78,6 @@ ALLOWED_BASE_PACKAGES = {
     "mypy",
     "setuptools",
     "anyio",
-    "packaging",
 }
 
 # Allowlisted sklearn submodules
@@ -117,6 +115,25 @@ ALLOWED_SKLEARN_SYMBOLS: dict[str, set[str]] = {
     },
 }
 
+# Allowlisted jsonschema module-level symbols (ADR-004-002)
+ALLOWED_JSONSCHEMA_MODULE_SYMBOLS: set[str] = {
+    "Draft202012Validator",
+    "validate",
+}
+
+# Allowlisted jsonschema.exceptions symbols (ADR-004-002)
+ALLOWED_JSONSCHEMA_EXCEPTIONS_SYMBOLS: set[str] = {
+    "ValidationError",
+    "SchemaError",
+}
+
+# Allowlisted tomli symbols (ADR-004-003)
+ALLOWED_TOMLI_SYMBOLS: set[str] = {
+    "load",
+    "loads",
+    "TOMLDecodeError",
+}
+
 
 def is_path_allowlisted_for_sklearn(file_path: Path | str) -> bool:
     """Return True only if file_path falls strictly within positive allowlist for sklearn imports.
@@ -141,35 +158,164 @@ def is_path_allowlisted_for_sklearn(file_path: Path | str) -> bool:
 
 
 def validate_sklearn_version_spec(dep_spec: str) -> tuple[bool, str]:
-    """Validate that scikit-learn dependency specifier strictly satisfies both >=1.5.0 and <2.0.0."""
+    """Validate that scikit-learn dependency specifier strictly satisfies both >=1.5.0 and <2.0.0 using stdlib only.
+
+    Enforces governed contract: scikit-learn>=1.5.0,<2.0.0 (or with whitespace / reversed clause order).
+    """
     match = re.match(r"^[a-zA-Z0-9_\-\.]+\s*(.*)$", dep_spec.strip())
     if not match or not match.group(1).strip():
         return False, f"scikit-learn specifier '{dep_spec}' lacks version constraints."
 
     spec_str = match.group(1).strip()
-    try:
-        spec_set = SpecifierSet(spec_str)
-        has_ge_1_5 = False
-        has_lt_2_0 = False
+    clauses = [c.strip().replace(" ", "") for c in spec_str.split(",") if c.strip()]
+    if len(clauses) != 2:
+        return False, (
+            f"scikit-learn specifier '{dep_spec}' must contain exactly two bounded clauses: "
+            f"'>=1.5.0' and '<2.0.0' (found {len(clauses)} clauses: {clauses})."
+        )
 
-        for spec in spec_set:
-            op = spec.operator
-            ver = Version(spec.version)
-            if op in (">=", "==") and Version("1.5.0") <= ver < Version("2.0.0"):
-                has_ge_1_5 = True
-            elif op == "<" and Version("1.5.0") < ver <= Version("2.0.0"):
-                has_lt_2_0 = True
-            elif op == "<=" and Version("1.5.0") < ver < Version("2.0.0"):
-                has_lt_2_0 = True
+    clause_set = set(clauses)
+    has_lower = ">=1.5.0" in clause_set
+    has_upper = "<2.0.0" in clause_set
 
-        if not (has_ge_1_5 and has_lt_2_0):
-            return False, (
-                f"scikit-learn specifier '{dep_spec}' must enforce both lower bound >=1.5.0 "
-                f"and upper bound <2.0.0 (parsed: '{spec_str}')."
-            )
-        return True, ""
-    except Exception as e:
-        return False, f"Failed to parse scikit-learn version specifier '{spec_str}': {e}"
+    for c in clauses:
+        if c.startswith(">=") and c != ">=1.5.0":
+            return False, f"Unauthorized lower bound '{c}' in '{dep_spec}'. Contract strictly requires '>=1.5.0'."
+        if c.startswith("<") and not c.startswith("<=") and c != "<2.0.0":
+            return False, f"Unauthorized upper bound '{c}' in '{dep_spec}'. Contract strictly requires '<2.0.0'."
+        if c.startswith(">") and not c.startswith(">="):
+            return False, f"Invalid operator in clause '{c}' in '{dep_spec}'."
+        if c.startswith("<="):
+            return False, f"Invalid operator '<=' in clause '{c}' in '{dep_spec}'. Contract strictly requires '<2.0.0'."
+        if c.startswith("==") or c.startswith("!="):
+            return False, f"Invalid operator in clause '{c}' in '{dep_spec}'."
+
+    if not (has_lower and has_upper):
+        return False, (
+            f"scikit-learn specifier '{dep_spec}' must enforce both lower bound '>=1.5.0' "
+            f"and upper bound '<2.0.0' (parsed: {clauses})."
+        )
+
+    return True, ""
+
+
+def is_path_allowlisted_for_jsonschema(file_path: Path | str) -> bool:
+    """Return True only if file_path falls strictly within positive allowlist for jsonschema imports.
+
+    Allowed paths (ADR-004-002 least privilege):
+    1. semg_baseline/runner.py
+    2. tests/**
+    3. scripts/validate_feature_004*.py
+    """
+    path_str = str(file_path).replace("\\", "/").strip()
+    if path_str.startswith("./"):
+        path_str = path_str[2:]
+
+    if path_str == "semg_baseline/runner.py":
+        return True
+    if path_str.startswith("tests/"):
+        return True
+    if re.match(r"^scripts/validate_feature_004[^/]*\.py$", path_str):
+        return True
+
+    return False
+
+
+def validate_jsonschema_version_spec(dep_spec: str) -> tuple[bool, str]:
+    """Validate that jsonschema dependency specifier strictly satisfies both >=4.19.0 and <5.0.0 using stdlib only.
+
+    Enforces governed contract: jsonschema>=4.19.0,<5.0.0 (or with whitespace / reversed clause order).
+    """
+    match = re.match(r"^[a-zA-Z0-9_\-\.]+\s*(.*)$", dep_spec.strip())
+    if not match or not match.group(1).strip():
+        return False, f"jsonschema specifier '{dep_spec}' lacks version constraints."
+
+    spec_str = match.group(1).strip()
+    clauses = [c.strip().replace(" ", "") for c in spec_str.split(",") if c.strip()]
+    if len(clauses) != 2:
+        return False, (
+            f"jsonschema specifier '{dep_spec}' must contain exactly two bounded clauses: "
+            f"'>=4.19.0' and '<5.0.0' (found {len(clauses)} clauses: {clauses})."
+        )
+
+    clause_set = set(clauses)
+    has_lower = ">=4.19.0" in clause_set
+    has_upper = "<5.0.0" in clause_set
+
+    for c in clauses:
+        if c.startswith(">=") and c != ">=4.19.0":
+            return False, f"Unauthorized lower bound '{c}' in '{dep_spec}'. Contract strictly requires '>=4.19.0'."
+        if c.startswith("<") and not c.startswith("<=") and c != "<5.0.0":
+            return False, f"Unauthorized upper bound '{c}' in '{dep_spec}'. Contract strictly requires '<5.0.0'."
+        if c.startswith(">") and not c.startswith(">="):
+            return False, f"Invalid operator in clause '{c}' in '{dep_spec}'."
+        if c.startswith("<="):
+            return False, f"Invalid operator '<=' in clause '{c}' in '{dep_spec}'. Contract strictly requires '<5.0.0'."
+        if c.startswith("==") or c.startswith("!="):
+            return False, f"Invalid operator in clause '{c}' in '{dep_spec}'."
+
+    if not (has_lower and has_upper):
+        return False, (
+            f"jsonschema specifier '{dep_spec}' must enforce both lower bound '>=4.19.0' "
+            f"and upper bound '<5.0.0' (parsed: {clauses})."
+        )
+
+    return True, ""
+
+
+def is_path_allowlisted_for_tomli(file_path: Path | str) -> bool:
+    """Return True only if file_path falls strictly within positive allowlist for tomli imports.
+
+    Allowed paths (ADR-004-003):
+    1. semg_baseline/governance.py
+    2. tests/**
+    """
+    path_str = str(file_path).replace("\\", "/").strip()
+    if path_str.startswith("./"):
+        path_str = path_str[2:]
+
+    if path_str == "semg_baseline/governance.py":
+        return True
+    if path_str.startswith("tests/"):
+        return True
+
+    return False
+
+
+def validate_tomli_version_spec(dep_spec: str) -> tuple[bool, str]:
+    """Validate that tomli dependency specifier strictly satisfies >=2.0.0,<3.0.0 with python_version marker.
+
+    Enforces governed contract: tomli>=2.0.0,<3.0.0; python_version < "3.11".
+    """
+    spec_clean = dep_spec.strip()
+    if ";" not in spec_clean:
+        return False, f"tomli specifier '{dep_spec}' must include environment marker '; python_version < \"3.11\"'."
+
+    base_part, marker_part = [p.strip() for p in spec_clean.split(";", 1)]
+    marker_clean = marker_part.replace(" ", "").replace('"', "'")
+    if marker_clean not in {"python_version<'3.11'", "python_version<='3.10'"}:
+        return False, (
+            f"tomli environment marker '{marker_part}' must restrict execution to Python < 3.11 "
+            f"(e.g. 'python_version < \"3.11\"')."
+        )
+
+    match = re.match(r"^[a-zA-Z0-9_\-\.]+\s*(.*)$", base_part)
+    if not match or not match.group(1).strip():
+        return False, f"tomli specifier '{dep_spec}' lacks version constraints."
+
+    spec_str = match.group(1).strip()
+    clauses = [c.strip().replace(" ", "") for c in spec_str.split(",") if c.strip()]
+    if len(clauses) != 2:
+        return False, (
+            f"tomli specifier '{dep_spec}' must contain exactly two bounded clauses: "
+            f"'>=2.0.0' and '<3.0.0' (found {len(clauses)} clauses: {clauses})."
+        )
+
+    clause_set = set(clauses)
+    if ">=2.0.0" not in clause_set or "<3.0.0" not in clause_set:
+        return False, f"tomli specifier '{dep_spec}' must enforce both '>=2.0.0' and '<3.0.0'."
+
+    return True, ""
 
 
 def canonicalize_adr_content(content: str) -> str:
@@ -301,7 +447,10 @@ def _extract_package_name(dep_spec: str) -> str:
 
 
 def verify_pyproject_dependencies(
-    pyproject_path: Path | str, adr_record: ADRRecord
+    pyproject_path: Path | str,
+    adr_record: ADRRecord,
+    jsonschema_adr_record: ADRRecord | None = None,
+    tomli_adr_record: ADRRecord | None = None,
 ) -> tuple[bool, list[str]]:
     """Verify that all dependencies declared in pyproject.toml have approved governance."""
     path = Path(pyproject_path).resolve()
@@ -325,15 +474,48 @@ def verify_pyproject_dependencies(
         pkg_name = _extract_package_name(dep)
 
         if pkg_name in {"scikit-learn", "sklearn"}:
-            if adr_record.status != "APPROVED":
+            _, _, adr_gov_status = validate_adr(adr_record)
+            if adr_gov_status is not GovernanceStatus.APPROVED:
                 errors.append(
-                    f"Dependency '{dep}' declared in pyproject.toml without approved governance ADR "
-                    f"(ADR status is '{adr_record.status}')."
+                    f"Premature dependency mutation: '{dep}' declared in pyproject.toml before ADR-004-001 is fully locked. "
+                    f"Governance status is '{adr_gov_status.value}' (requires 'APPROVED' with valid git_commit and SHA-256 fingerprint)."
                 )
             else:
                 is_valid_spec, spec_err = validate_sklearn_version_spec(dep)
                 if not is_valid_spec:
                     errors.append(spec_err)
+        elif pkg_name == "jsonschema":
+            if jsonschema_adr_record is None:
+                errors.append(
+                    f"Dependency '{dep}' declared in pyproject.toml without approved governance ADR (ADR-004-002 missing)."
+                )
+            else:
+                _, _, json_gov_status = validate_adr(jsonschema_adr_record)
+                if json_gov_status is not GovernanceStatus.APPROVED:
+                    errors.append(
+                        f"Premature dependency mutation: '{dep}' declared in pyproject.toml before ADR-004-002 is fully locked. "
+                        f"Governance status is '{json_gov_status.value}' (requires 'APPROVED' with valid git_commit and SHA-256 fingerprint)."
+                    )
+                else:
+                    is_valid_spec, spec_err = validate_jsonschema_version_spec(dep)
+                    if not is_valid_spec:
+                        errors.append(spec_err)
+        elif pkg_name == "tomli":
+            if tomli_adr_record is None:
+                errors.append(
+                    f"Dependency '{dep}' declared in pyproject.toml without approved governance ADR (ADR-004-003 missing)."
+                )
+            else:
+                _, _, tomli_gov_status = validate_adr(tomli_adr_record)
+                if tomli_gov_status is not GovernanceStatus.APPROVED:
+                    errors.append(
+                        f"Premature dependency mutation: '{dep}' declared in pyproject.toml before ADR-004-003 is fully locked. "
+                        f"Governance status is '{tomli_gov_status.value}' (requires 'APPROVED' with valid git_commit and SHA-256 fingerprint)."
+                    )
+                else:
+                    is_valid_spec, spec_err = validate_tomli_version_spec(dep)
+                    if not is_valid_spec:
+                        errors.append(spec_err)
         elif pkg_name in ALLOWED_BASE_PACKAGES:
             continue
         else:
@@ -356,14 +538,63 @@ def verify_imports_in_source(
     except SyntaxError as e:
         return False, [f"SyntaxError parsing '{path_str}': {e}"]
 
-    is_allowlisted = is_path_allowlisted_for_sklearn(file_path)
+    is_sklearn_allowlisted = is_path_allowlisted_for_sklearn(file_path)
+    is_jsonschema_allowlisted = is_path_allowlisted_for_jsonschema(file_path)
+    is_tomli_allowlisted = is_path_allowlisted_for_tomli(file_path)
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 name = alias.name
-                if name == "sklearn" or name.startswith("sklearn."):
-                    if not is_allowlisted:
+                if name == "jsonschema":
+                    if not is_jsonschema_allowlisted:
+                        violations.append(
+                            f"SCOPE_VIOLATION: jsonschema import prohibited outside allowlisted paths in '{path_str}'"
+                        )
+                    if not path_str.startswith("tests/"):
+                        violations.append(
+                            f"API_VIOLATION: Bare 'import jsonschema' prohibited in '{path_str}'. "
+                            f"Must import specific allowlisted symbols (e.g. 'from jsonschema import Draft202012Validator')."
+                        )
+                elif name == "jsonschema.exceptions":
+                    if not is_jsonschema_allowlisted:
+                        violations.append(
+                            f"SCOPE_VIOLATION: jsonschema import prohibited outside allowlisted paths in '{path_str}'"
+                        )
+                    violations.append(
+                        f"API_VIOLATION: Bare 'import jsonschema.exceptions' prohibited in '{path_str}'. "
+                        f"Must import specific exception symbols (e.g. 'from jsonschema.exceptions import ValidationError')."
+                    )
+                elif name.startswith("jsonschema."):
+                    if not is_jsonschema_allowlisted:
+                        violations.append(
+                            f"SCOPE_VIOLATION: jsonschema import prohibited outside allowlisted paths in '{path_str}'"
+                        )
+                    violations.append(
+                        f"API_VIOLATION: Submodule '{name}' not in allowlist in '{path_str}'"
+                    )
+                elif name == "tomli":
+                    if not is_tomli_allowlisted:
+                        violations.append(
+                            f"SCOPE_VIOLATION: tomli import prohibited outside allowlisted paths in '{path_str}'"
+                        )
+                    if path_str == "semg_baseline/governance.py" and alias.asname == "tomllib":
+                        pass  # Approved stdlib-fallback alias
+                    else:
+                        violations.append(
+                            f"API_VIOLATION: Bare 'import tomli' prohibited in '{path_str}'. "
+                            f"Must import specific allowlisted symbols or use 'import tomli as tomllib' fallback in governance.py."
+                        )
+                elif name.startswith("tomli."):
+                    if not is_tomli_allowlisted:
+                        violations.append(
+                            f"SCOPE_VIOLATION: tomli import prohibited outside allowlisted paths in '{path_str}'"
+                        )
+                    violations.append(
+                        f"API_VIOLATION: Submodule '{name}' not in allowlist in '{path_str}'"
+                    )
+                elif name == "sklearn" or name.startswith("sklearn."):
+                    if not is_sklearn_allowlisted:
                         violations.append(
                             f"SCOPE_VIOLATION: scikit-learn import prohibited outside allowlisted paths in '{path_str}'"
                         )
@@ -389,8 +620,69 @@ def verify_imports_in_source(
 
         elif isinstance(node, ast.ImportFrom):
             mod = node.module or ""
-            if mod == "sklearn" or mod.startswith("sklearn."):
-                if not is_allowlisted:
+            if mod == "jsonschema":
+                if not is_jsonschema_allowlisted:
+                    violations.append(
+                        f"SCOPE_VIOLATION: jsonschema import prohibited outside allowlisted paths in '{path_str}'"
+                    )
+                for alias in node.names:
+                    sym = alias.name
+                    if sym == "*":
+                        violations.append(
+                            f"API_VIOLATION: Wildcard import '*' prohibited for 'jsonschema' in '{path_str}'"
+                        )
+                    elif sym not in ALLOWED_JSONSCHEMA_MODULE_SYMBOLS:
+                        violations.append(
+                            f"API_VIOLATION: Symbol '{sym}' from 'jsonschema' not in API allowlist in '{path_str}'"
+                        )
+            elif mod == "jsonschema.exceptions":
+                if not is_jsonschema_allowlisted:
+                    violations.append(
+                        f"SCOPE_VIOLATION: jsonschema import prohibited outside allowlisted paths in '{path_str}'"
+                    )
+                for alias in node.names:
+                    sym = alias.name
+                    if sym == "*":
+                        violations.append(
+                            f"API_VIOLATION: Wildcard import '*' prohibited for 'jsonschema.exceptions' in '{path_str}'"
+                        )
+                    elif sym not in ALLOWED_JSONSCHEMA_EXCEPTIONS_SYMBOLS:
+                        violations.append(
+                            f"API_VIOLATION: Symbol '{sym}' from 'jsonschema.exceptions' not in API allowlist in '{path_str}'"
+                        )
+            elif mod.startswith("jsonschema."):
+                if not is_jsonschema_allowlisted:
+                    violations.append(
+                        f"SCOPE_VIOLATION: jsonschema import prohibited outside allowlisted paths in '{path_str}'"
+                    )
+                violations.append(
+                    f"API_VIOLATION: Submodule '{mod}' not in allowlist in '{path_str}'"
+                )
+            elif mod == "tomli":
+                if not is_tomli_allowlisted:
+                    violations.append(
+                        f"SCOPE_VIOLATION: tomli import prohibited outside allowlisted paths in '{path_str}'"
+                    )
+                for alias in node.names:
+                    sym = alias.name
+                    if sym == "*":
+                        violations.append(
+                            f"API_VIOLATION: Wildcard import '*' prohibited for 'tomli' in '{path_str}'"
+                        )
+                    elif sym not in ALLOWED_TOMLI_SYMBOLS:
+                        violations.append(
+                            f"API_VIOLATION: Symbol '{sym}' from 'tomli' not in API allowlist in '{path_str}'"
+                        )
+            elif mod.startswith("tomli."):
+                if not is_tomli_allowlisted:
+                    violations.append(
+                        f"SCOPE_VIOLATION: tomli import prohibited outside allowlisted paths in '{path_str}'"
+                    )
+                violations.append(
+                    f"API_VIOLATION: Submodule '{mod}' not in allowlist in '{path_str}'"
+                )
+            elif mod == "sklearn" or mod.startswith("sklearn."):
+                if not is_sklearn_allowlisted:
                     violations.append(
                         f"SCOPE_VIOLATION: scikit-learn import prohibited outside allowlisted paths in '{path_str}'"
                     )
@@ -437,6 +729,23 @@ def verify_imports_in_source(
                                 violations.append(
                                     f"API_VIOLATION: Symbol '{sym_name}' from 'sklearn.{submodule}' not in API allowlist in '{path_str}'"
                                 )
+
+        elif isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name) and node.value.id == "jsonschema":
+                if node.attr not in ALLOWED_JSONSCHEMA_MODULE_SYMBOLS and node.attr != "exceptions":
+                    violations.append(
+                        f"API_VIOLATION: Attribute '{node.attr}' accessed from 'jsonschema' not in allowlist in '{path_str}'"
+                    )
+            elif (
+                isinstance(node.value, ast.Attribute)
+                and isinstance(node.value.value, ast.Name)
+                and node.value.value.id == "jsonschema"
+                and node.value.attr == "exceptions"
+            ):
+                if node.attr not in ALLOWED_JSONSCHEMA_EXCEPTIONS_SYMBOLS:
+                    violations.append(
+                        f"API_VIOLATION: Attribute '{node.attr}' accessed from 'jsonschema.exceptions' not in allowlist in '{path_str}'"
+                    )
 
     return len(violations) == 0, violations
 
@@ -487,30 +796,66 @@ def check_dependency_governance(
         repo_path = Path(repo_root).resolve()
 
     adr_path = repo_path / "docs" / "adr" / "ADR-004-001-scikit-learn-host-only.md"
+    jsonschema_adr_path = (
+        repo_path / "docs" / "adr" / "ADR-004-002-jsonschema-host-contract-validation.md"
+    )
+    tomli_adr_path = (
+        repo_path / "docs" / "adr" / "ADR-004-003-tomli-python310-compatibility.md"
+    )
     pyproject_path = repo_path / "pyproject.toml"
 
     errors: list[str] = []
 
-    # 1. Parse and validate ADR
+    # 1. Parse and validate ADR-004-001
+    adr_record: ADRRecord | None = None
     if not adr_path.is_file():
         errors.append(f"ADR-004-001 not found at {adr_path}")
-        return GovernanceReport(
-            status=GovernanceStatus.FAIL,
-            adr_status="MISSING",
-            sklearn_permitted=False,
-            errors=errors,
-        )
+        sklearn_status = GovernanceStatus.FAIL
+        adr_status_str = "MISSING"
+    else:
+        adr_record = parse_adr(adr_path)
+        _, adr_errors, sklearn_status = validate_adr(adr_record)
+        errors.extend(adr_errors)
+        adr_status_str = adr_record.status
 
-    adr_record = parse_adr(adr_path)
-    adr_valid, adr_errors, adr_status = validate_adr(adr_record)
-    errors.extend(adr_errors)
+    # 1b. Parse and validate ADR-004-002
+    jsonschema_record: ADRRecord | None = None
+    if not jsonschema_adr_path.is_file():
+        errors.append(f"ADR-004-002 not found at {jsonschema_adr_path}")
+        jsonschema_status = GovernanceStatus.FAIL
+    else:
+        jsonschema_record = parse_adr(jsonschema_adr_path)
+        _, json_errors, jsonschema_status = validate_adr(jsonschema_record)
+        errors.extend(json_errors)
+
+    # 1c. Parse and validate ADR-004-003
+    tomli_record: ADRRecord | None = None
+    if not tomli_adr_path.is_file():
+        errors.append(f"ADR-004-003 not found at {tomli_adr_path}")
+        tomli_status = GovernanceStatus.FAIL
+    else:
+        tomli_record = parse_adr(tomli_adr_path)
+        _, tomli_errors, tomli_status = validate_adr(tomli_record)
+        errors.extend(tomli_errors)
+
+    dep_statuses: dict[str, GovernanceStatus] = {
+        "scikit-learn": sklearn_status,
+        "jsonschema": jsonschema_status,
+        "tomli": tomli_status,
+    }
 
     # 2. Verify pyproject.toml
     if pyproject_path.is_file():
-        pyproject_valid, pyproject_errors = verify_pyproject_dependencies(
-            pyproject_path, adr_record
-        )
-        errors.extend(pyproject_errors)
+        if adr_record is not None:
+            pyproject_valid, pyproject_errors = verify_pyproject_dependencies(
+                pyproject_path,
+                adr_record,
+                jsonschema_adr_record=jsonschema_record,
+                tomli_adr_record=tomli_record,
+            )
+            errors.extend(pyproject_errors)
+        else:
+            errors.append("Cannot verify pyproject.toml because ADR-004-001 is missing.")
     else:
         errors.append(f"pyproject.toml not found at {pyproject_path}")
 
@@ -518,44 +863,27 @@ def check_dependency_governance(
     imports_valid, import_errors = scan_repository_imports(repo_path)
     errors.extend(import_errors)
 
-    # 4. Synthesize final status
-    if errors:
-        return GovernanceReport(
-            status=GovernanceStatus.FAIL,
-            adr_status=adr_record.status,
-            sklearn_permitted=False,
-            errors=errors,
-        )
+    # 4. Synthesize aggregate status
+    statuses = [sklearn_status, jsonschema_status, tomli_status]
+    if errors or any(s == GovernanceStatus.FAIL for s in statuses):
+        aggregate_status = GovernanceStatus.FAIL
+    elif all(s == GovernanceStatus.APPROVED for s in statuses):
+        aggregate_status = GovernanceStatus.APPROVED
+    elif any(s == GovernanceStatus.APPROVED_PENDING_LOCK for s in statuses):
+        aggregate_status = GovernanceStatus.APPROVED_PENDING_LOCK
+    else:
+        aggregate_status = GovernanceStatus.CONDITIONAL_PASS
 
-    if adr_status == GovernanceStatus.APPROVED:
-        return GovernanceReport(
-            status=GovernanceStatus.APPROVED,
-            adr_status="APPROVED",
-            sklearn_permitted=True,
-            errors=[],
-        )
-
-    if adr_status == GovernanceStatus.APPROVED_PENDING_LOCK:
-        return GovernanceReport(
-            status=GovernanceStatus.APPROVED_PENDING_LOCK,
-            adr_status="APPROVED",
-            sklearn_permitted=False,
-            errors=[],
-        )
-
-    if adr_status == GovernanceStatus.CONDITIONAL_PASS:
-        return GovernanceReport(
-            status=GovernanceStatus.CONDITIONAL_PASS,
-            adr_status="PROPOSED",
-            sklearn_permitted=False,
-            errors=[],
-        )
+    all_approved = (aggregate_status == GovernanceStatus.APPROVED and len(errors) == 0)
+    sklearn_ok = (all_approved and sklearn_status == GovernanceStatus.APPROVED)
 
     return GovernanceReport(
-        status=GovernanceStatus.FAIL,
-        adr_status=adr_record.status,
-        sklearn_permitted=False,
-        errors=["Governance gate reached unexpected terminal state."],
+        status=aggregate_status,
+        adr_status=adr_status_str,
+        sklearn_permitted=sklearn_ok,
+        errors=errors,
+        dependency_statuses=dep_statuses,
+        all_required_dependencies_approved=all_approved,
     )
 
 
@@ -568,9 +896,9 @@ def is_sklearn_allowed(repo_root: Path | str | None = None) -> bool:
 def assert_sklearn_allowed(repo_root: Path | str | None = None) -> None:
     """Raise GovernanceViolation if scikit-learn execution is blocked by governance."""
     report = check_dependency_governance(repo_root)
-    if not report.sklearn_permitted:
+    if not (report.sklearn_permitted and report.all_required_dependencies_approved):
         raise GovernanceViolation(
             f"scikit-learn execution is BLOCKED under current governance "
             f"(Status: {report.status.value}, ADR: {report.adr_status}). "
-            f"Violations: {report.errors if report.errors else 'ADR remains PROPOSED or PENDING LOCK (requires human approval and lock)'}."
+            f"Violations: {report.errors if report.errors else 'ADR remains PROPOSED or PENDING LOCK (requires human approval and lock across all required dependencies)'}."
         )
