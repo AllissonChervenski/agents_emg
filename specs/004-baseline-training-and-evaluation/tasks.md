@@ -48,7 +48,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T004 [US2] Implement ScientificLineage tracking and Feature 003 cryptographic hash verification in semg_baseline/lineage.py
   <!-- harness-task {"requirements":["FR-001","FR-002","FR-003"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-5"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_baseline/lineage.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
-- [ ] T005 [P] [US1] Implement 4th-order causal Butterworth bandpass filter (20-450 Hz SOS, notch omitted) in semg_baseline/filter.py
+- [x] T005 [P] [US1] Implement 4th-order causal Butterworth bandpass filter (20-450 Hz SOS, notch omitted) in semg_baseline/filter.py
   <!-- harness-task {"requirements":["FR-012.1"],"acceptance_criteria":["SC-002"],"plan_decisions":["Decision-2"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_baseline/filter.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 - [ ] T006 [P] [US1] Implement steady-state pure window segmenter with boundary exclusion and transition audit in semg_baseline/window.py
