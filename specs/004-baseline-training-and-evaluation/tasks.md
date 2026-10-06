@@ -45,7 +45,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 **Purpose**: Establish cryptographic lineage verification, causal DSP filtering, steady-state pure windowing, time-domain features, and train-only calibration.
 
-- [ ] T004 [US2] Implement ScientificLineage tracking and Feature 003 cryptographic hash verification in semg_baseline/lineage.py
+- [x] T004 [US2] Implement ScientificLineage tracking and Feature 003 cryptographic hash verification in semg_baseline/lineage.py
   <!-- harness-task {"requirements":["FR-001","FR-002","FR-003"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-5"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_baseline/lineage.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 - [ ] T005 [P] [US1] Implement 4th-order causal Butterworth bandpass filter (20-450 Hz SOS, notch omitted) in semg_baseline/filter.py
