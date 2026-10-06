@@ -51,7 +51,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T005 [P] [US1] Implement 4th-order causal Butterworth bandpass filter (20-450 Hz SOS, notch omitted) in semg_baseline/filter.py
   <!-- harness-task {"requirements":["FR-012.1"],"acceptance_criteria":["SC-002"],"plan_decisions":["Decision-2"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_baseline/filter.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
-- [ ] T006 [P] [US1] Implement steady-state pure window segmenter with boundary exclusion and transition audit in semg_baseline/window.py
+- [x] T006 [P] [US1] Implement steady-state pure window segmenter with boundary exclusion and transition audit in semg_baseline/window.py
   <!-- harness-task {"requirements":["FR-012.2","FR-012.3"],"acceptance_criteria":["SC-002"],"plan_decisions":["Decision-2"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_baseline/window.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 - [ ] T007 [P] [US1] Implement analytical time-domain feature extractor (MAV, RMS, WL, ZC, SSC for 12 channels) in semg_baseline/features.py
