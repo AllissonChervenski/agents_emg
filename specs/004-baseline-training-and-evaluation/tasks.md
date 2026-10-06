@@ -89,7 +89,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T011 [P] [US2] Implement NeutralModelExporter generating model_params.npz and sidecar model_manifest.sha256 in semg_baseline/export.py
   <!-- harness-task {"requirements":["FR-005.5","FR-011.1"],"acceptance_criteria":["SC-001","SC-006"],"plan_decisions":["Decision-3","Decision-5"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_baseline/export.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
-- [ ] T012 [P] [US2] Implement NeutralNumpyPredictor for runtime inference simulation without sklearn in semg_baseline/predictor.py
+- [x] T012 [P] [US2] Implement NeutralNumpyPredictor for runtime inference simulation without sklearn in semg_baseline/predictor.py
   <!-- harness-task {"requirements":["FR-005.5","FR-005.6"],"acceptance_criteria":["SC-006"],"plan_decisions":["Decision-3"],"dependencies":["T001","T011"],"test_type":"UNIT","allowed_files":["semg_baseline/predictor.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 - [ ] T013 [US2] Implement append-only TrainingJobExecutor with state-aware schema validation and deterministic fingerprinting in semg_baseline/runner.py
