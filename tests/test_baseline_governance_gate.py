@@ -1172,6 +1172,25 @@ def test_repository_aware_approval_commit_provenance(tmp_path: Path) -> None:
     (tmp_path / "README.md").write_text("# Test", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "unrelated commit"], cwd=tmp_path, check=True, capture_output=True)
+    commit_unrelated = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    record_wrong_commit = ADRRecord(
+        adr_id="ADR-004-001",
+        status="APPROVED",
+        proposed_date="2026-10-03",
+        approver="Allisson Chervenski <allissonchervenski5@gmail.com>",
+        approval_date="2026-10-06",
+        git_commit=commit_unrelated,
+        fingerprint="dummy",
+        raw_content="",
+        file_path=adr_file,
+    )
+    ok, errs = verify_approval_commit(tmp_path, record_wrong_commit)
+    assert ok is False
+    assert errs
+    assert any("has pending or missing approver" in e or "not found" in e for e in errs)
 
     # Case D: Hex hash syntactically valid but nonexistent in Git -> FAIL
     record_nonexistent_commit = ADRRecord(
