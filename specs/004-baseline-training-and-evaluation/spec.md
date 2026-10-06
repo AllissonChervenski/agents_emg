@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/004-baseline-training-and-evaluation`  
 **Created**: 2026-10-02  
-**Status**: Draft (Ready for Clarify)  
+**Status**: Tasks & Analyze Complete — Ready for TDD  
 **Input**: User description: "A Feature 004 deve estabelecer um baseline offline, reproduzível e auditável de classificação de gestos sEMG sobre o NinaPro DB2 usando os contratos congelados da Feature 003. Baseline inicial: classical sEMG time-domain features (MAV, RMS, WL, ZC, SSC) + regularized LDA. Vocabulário primário: 50 classes (REST 0 + gestos 1..49) e secundário: 49 classes ativas. Avaliação within-subject com leave-one-training-repetition-out em [1,3,4,6] e teste único em [2,5]. Avaliação cross-subject nos 5 folds congelados. Contrato formal de TrainingJob com rastreabilidade total de linhagem e hashes científicos. Pré-processamento e thresholds detalhados no CLARIFY."
 
 ## Clarifications
