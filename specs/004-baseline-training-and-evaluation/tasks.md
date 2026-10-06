@@ -28,7 +28,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 **Purpose**: Initialize the core package structure for `semg_baseline`, shared fixtures, and automated governance gate.
 
-- [ ] T001 [P] Setup core package layout and public exports in semg_baseline/__init__.py
+- [x] T001 [P] Setup core package layout and public exports in semg_baseline/__init__.py
   <!-- harness-task {"requirements":["FR-001"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1","Decision-5"],"dependencies":[],"test_type":"UNIT","allowed_files":["semg_baseline/__init__.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 - [ ] T002 [P] Implement deterministic procedural synthetic RecordingData generator and test fixtures in tests/fixtures/synthetic_semg.py
