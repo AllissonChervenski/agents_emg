@@ -57,7 +57,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T007 [P] [US1] Implement analytical time-domain feature extractor (MAV, RMS, WL, ZC, SSC for 12 channels) in semg_baseline/features.py
   <!-- harness-task {"requirements":["FR-004"],"acceptance_criteria":["SC-002"],"plan_decisions":["Decision-2"],"dependencies":["T001","T002"],"test_type":"UNIT","allowed_files":["semg_baseline/features.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
-- [ ] T008 [US1] Implement data-driven ZC/SSC threshold calibrator on training rest windows in semg_baseline/thresholds.py
+- [x] T008 [US1] Implement data-driven ZC/SSC threshold calibrator on training rest windows in semg_baseline/thresholds.py
   <!-- harness-task {"requirements":["FR-012.4"],"acceptance_criteria":["SC-002"],"plan_decisions":["Decision-2"],"dependencies":["T001","T007"],"test_type":"UNIT","allowed_files":["semg_baseline/thresholds.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 - [ ] T009 [US1] Implement train-only custom Z-score feature scaler with zero-variance protection in semg_baseline/scaling.py
