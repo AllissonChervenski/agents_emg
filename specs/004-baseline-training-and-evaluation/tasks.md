@@ -54,7 +54,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T006 [P] [US1] Implement steady-state pure window segmenter with boundary exclusion and transition audit in semg_baseline/window.py
   <!-- harness-task {"requirements":["FR-012.2","FR-012.3"],"acceptance_criteria":["SC-002"],"plan_decisions":["Decision-2"],"dependencies":["T001"],"test_type":"UNIT","allowed_files":["semg_baseline/window.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
-- [ ] T007 [P] [US1] Implement analytical time-domain feature extractor (MAV, RMS, WL, ZC, SSC for 12 channels) in semg_baseline/features.py
+- [x] T007 [P] [US1] Implement analytical time-domain feature extractor (MAV, RMS, WL, ZC, SSC for 12 channels) in semg_baseline/features.py
   <!-- harness-task {"requirements":["FR-004"],"acceptance_criteria":["SC-002"],"plan_decisions":["Decision-2"],"dependencies":["T001","T002"],"test_type":"UNIT","allowed_files":["semg_baseline/features.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 - [ ] T008 [US1] Implement data-driven ZC/SSC threshold calibrator on training rest windows in semg_baseline/thresholds.py
