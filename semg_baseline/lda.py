@@ -1,11 +1,12 @@
 """Canonical Regularized Linear Discriminant Analysis (LDA) trainer for sEMG baseline.
 
-Implements FR-005.1, FR-005.2, FR-005.3, FR-005.4, FR-006.2, FR-006.3, SC-005, Decision-3:
+Implements FR-005.1, FR-005.2, FR-005.3, FR-005.4, FR-006.2, FR-006.3, FR-011.5, SC-005, Decision-3:
 - Canonical 50-class baseline fitted with uniform priors P(c) = 1/50 (FR-005.1).
 - Secondary reference model fitted with empirical priors P(c) = N_c / N_train (FR-005.2).
 - Uniform and empirical priors trained as distinct independent fits.
 - Ledoit-Wolf analytic covariance shrinkage via solver='lsqr', shrinkage='auto' (FR-005.3).
 - Model parameter extraction and evidence persistence (FR-005.4).
+- Fail-closed validation for expected vocabulary, missing classes, and unexpected labels (FR-011.5).
 - Host-only governance allowlist compliance (FR-006.2, FR-006.3).
 """
 
@@ -14,10 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import importlib.metadata
-import sys
 
 import numpy as np
-from sklearn.covariance import ledoit_wolf
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 
@@ -38,7 +37,6 @@ class LdaModelArtifacts:
     means_: np.ndarray
     covariance_: np.ndarray
     priors_: np.ndarray
-    shrinkage_: float
     solver: str
     shrinkage_method: str
     sklearn_version: str
@@ -60,7 +58,7 @@ class CanonicalLdaTrainer:
         prior_type : PriorType | str, default=PriorType.UNIFORM
             Class prior distribution: 'uniform' (P(c) = 1/K) or 'empirical' (P(c) = N_c / N_train).
         num_classes : int, default=50
-            Nominal number of gesture classes in vocabulary.
+            Nominal number of gesture classes in vocabulary (must be >= 2).
         """
         if isinstance(prior_type, PriorType):
             self.prior_type = prior_type
@@ -78,13 +76,15 @@ class CanonicalLdaTrainer:
             )
 
         self.num_classes = int(num_classes)
+        if self.num_classes < 2:
+            raise ValueError(f"num_classes must be >= 2, got {self.num_classes}")
+
         self.classes_: np.ndarray | None = None
         self.coef_: np.ndarray | None = None
         self.intercept_: np.ndarray | None = None
         self.means_: np.ndarray | None = None
         self.covariance_: np.ndarray | None = None
         self.priors_: np.ndarray | None = None
-        self.shrinkage_: float | None = None
         self._clf: LinearDiscriminantAnalysis | None = None
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> CanonicalLdaTrainer:
@@ -120,19 +120,28 @@ class CanonicalLdaTrainer:
         if np.isinf(X_arr).any():
             raise ValueError("Feature matrix X contains Inf values")
 
+        # Validate that training labels strictly match the configured vocabulary
+        expected_classes = np.arange(self.num_classes, dtype=np.int32)
         classes_present = np.unique(y_arr)
-        k_classes = len(classes_present)
-        if k_classes < 2:
+        if not np.array_equal(classes_present, expected_classes):
+            missing = sorted(set(expected_classes.tolist()) - set(classes_present.tolist()))
+            unexpected = sorted(set(classes_present.tolist()) - set(expected_classes.tolist()))
+            err_parts: list[str] = []
+            if missing:
+                err_parts.append(f"missing classes: {missing}")
+            if unexpected:
+                err_parts.append(f"unexpected classes: {unexpected}")
             raise ValueError(
-                f"LDA requires at least 2 distinct classes to fit, found {k_classes}"
+                f"Class vocabulary mismatch for num_classes={self.num_classes}: "
+                + "; ".join(err_parts)
             )
 
         # Compute priors strictly according to policy
         if self.prior_type == PriorType.UNIFORM:
-            priors = np.full(k_classes, 1.0 / k_classes, dtype=np.float64)
+            priors = np.full(self.num_classes, 1.0 / self.num_classes, dtype=np.float64)
         else:
             # Empirical priors: P(c) = N_c / N_train strictly computed on training sample counts
-            counts = np.array([np.sum(y_arr == c) for c in classes_present], dtype=np.float64)
+            counts = np.array([np.sum(y_arr == c) for c in expected_classes], dtype=np.float64)
             priors = counts / float(len(y_arr))
 
         clf = LinearDiscriminantAnalysis(
@@ -149,14 +158,7 @@ class CanonicalLdaTrainer:
         self.means_ = np.asarray(clf.means_, dtype=np.float64)
         self.covariance_ = np.asarray(clf.covariance_, dtype=np.float64)
         self.priors_ = np.asarray(clf.priors_, dtype=np.float64)
-        # Compute pooled analytic shrinkage coefficient via Ledoit-Wolf on centered within-class residuals
-        class_to_idx = {c: i for i, c in enumerate(self.classes_)}
-        sample_class_indices = np.array([class_to_idx[c] for c in y_arr], dtype=np.intp)
-        X_centered = X_arr - self.means_[sample_class_indices]
-        _, shrinkage_val = ledoit_wolf(X_centered, assume_centered=True)
-        self.shrinkage_ = float(shrinkage_val)
 
-        _evict_sklearn_from_sys_modules()
         return self
 
     def _check_is_fitted(self) -> None:
@@ -233,7 +235,6 @@ class CanonicalLdaTrainer:
         assert self.means_ is not None
         assert self.covariance_ is not None
         assert self.priors_ is not None
-        assert self.shrinkage_ is not None
 
         sklearn_ver = importlib.metadata.version("scikit-learn")
 
@@ -244,7 +245,6 @@ class CanonicalLdaTrainer:
             means_=self.means_,
             covariance_=self.covariance_,
             priors_=self.priors_,
-            shrinkage_=self.shrinkage_,
             solver="lsqr",
             shrinkage_method="ledoit_wolf_auto",
             sklearn_version=sklearn_ver,
@@ -282,14 +282,3 @@ class CanonicalLdaTrainer:
             "mean": np.asarray(scaler_mean, dtype=np.float64),
             "scale": np.asarray(scaler_scale, dtype=np.float64),
         }
-
-
-def _evict_sklearn_from_sys_modules() -> None:
-    """Evict scikit-learn modules from sys.modules to prevent process-wide pollution."""
-    for key in list(sys.modules):
-        if key == "sklearn" or key.startswith("sklearn."):
-            sys.modules.pop(key, None)
-
-
-# Evict sklearn upon module import so idle imports do not pollute process state
-_evict_sklearn_from_sys_modules()

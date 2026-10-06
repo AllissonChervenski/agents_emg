@@ -1,4 +1,4 @@
-"""Unit and contract tests for CanonicalLdaTrainer (FR-005.1, FR-005.2, FR-005.3, FR-005.4, FR-006.2, FR-006.3, SC-005, Decision-3).
+"""Unit and contract tests for CanonicalLdaTrainer (FR-005.1, FR-005.2, FR-005.3, FR-005.4, FR-006.2, FR-006.3, FR-011.5, SC-005, Decision-3).
 
 Validates:
 - Canonical 50-class baseline fitted with uniform priors P(c) = 1/50 (FR-005.1).
@@ -7,6 +7,8 @@ Validates:
 - Ledoit-Wolf analytic covariance shrinkage via solver='lsqr', shrinkage='auto' (FR-005.3).
 - Model parameter extraction and evidence persistence (FR-005.4).
 - Equivalence between decision_function and linear formula X @ coef_.T + intercept_.
+- Equivalence oracle with NeutralNumpyPredictor within TOL-LDA-NEUTRAL-SCORES (FR-005.6).
+- Fail-closed validation for num_classes contract, missing class in train, and unexpected classes (FR-011.5).
 - Input validation (NaN, Inf, empty, dimension mismatch, invalid prior_type).
 - Host-only governance allowlist compliance.
 """
@@ -21,6 +23,7 @@ from semg_baseline.lda import (
     LdaModelArtifacts,
     PriorType,
 )
+from semg_baseline.predictor import NeutralNumpyPredictor
 
 
 def _generate_synthetic_features(
@@ -65,10 +68,6 @@ def test_canonical_lda_uniform_priors_fit() -> None:
     assert trainer.intercept_.shape == (n_classes,)
     assert trainer.covariance_.shape == (60, 60)
     assert trainer.means_.shape == (n_classes, 60)
-
-    # Shrinkage parameter must be computed in [0, 1]
-    assert isinstance(trainer.shrinkage_, (float, np.floating))
-    assert 0.0 <= trainer.shrinkage_ <= 1.0
 
     # Predictions
     preds = trainer.predict(X)
@@ -152,28 +151,56 @@ def test_canonical_lda_shrinkage_auto_ledoit_wolf() -> None:
     # Must fit without singular matrix error due to Ledoit-Wolf regularization
     trainer.fit(X, y)
 
-    # Covariance conditioning must be finite
+    artifacts = trainer.get_model_artifacts()
+    assert artifacts.solver == "lsqr"
+    assert artifacts.shrinkage_method == "ledoit_wolf_auto"
+
+    # Covariance matrix must be finite, symmetric, and positive definite
+    assert trainer.covariance_.shape == (n_features, n_features)
+    assert np.isfinite(trainer.covariance_).all(), "Covariance entries must be finite"
+    assert np.allclose(trainer.covariance_, trainer.covariance_.T, atol=1e-8), "Covariance must be symmetric"
     eigvals = np.linalg.eigvalsh(trainer.covariance_)
     assert np.all(eigvals > 0.0), "Regularized covariance must be strictly positive definite"
-    assert trainer.shrinkage_ > 0.0, "Shrinkage parameter must be positive for N < P"
+
+    # Coefficients and intercept must be finite
+    assert trainer.coef_.shape == (n_classes, n_features)
+    assert np.isfinite(trainer.coef_).all(), "Coefficients must be finite"
+    assert trainer.intercept_.shape == (n_classes,)
+    assert np.isfinite(trainer.intercept_).all(), "Intercepts must be finite"
+
+    # Decision function scores must be finite
+    scores = trainer.decision_function(X)
+    assert np.isfinite(scores).all(), "Decision scores must be finite"
 
 
 def test_canonical_lda_linear_decision_function_oracle() -> None:
-    """Decision scores must exactly match the linear formula X @ coef_.T + intercept_ (FR-005.5)."""
-    X, y = _generate_synthetic_features(n_samples_per_class=4, n_classes=10, n_features=60, seed=505)
+    """Decision scores must match linear formula and NeutralNumpyPredictor within TOL-LDA-NEUTRAL-SCORES (FR-005.5, FR-005.6)."""
+    n_classes = 10
+    n_features = 60
+    X, y = _generate_synthetic_features(n_samples_per_class=4, n_classes=n_classes, n_features=n_features, seed=505)
 
-    trainer = CanonicalLdaTrainer(prior_type=PriorType.UNIFORM, num_classes=10)
+    trainer = CanonicalLdaTrainer(prior_type=PriorType.UNIFORM, num_classes=n_classes)
     trainer.fit(X, y)
 
     computed_scores = trainer.decision_function(X)
     expected_scores = X @ trainer.coef_.T + trainer.intercept_
 
-    assert np.allclose(computed_scores, expected_scores, atol=1e-5)
+    # Tolerance strictly governed by TOL-LDA-NEUTRAL-SCORES registry (rtol=1e-9, atol=1e-7)
+    assert np.allclose(computed_scores, expected_scores, rtol=1e-9, atol=1e-7)
 
     # Argmax of scores must equal predicted class
     best_class_idx = np.argmax(computed_scores, axis=1)
     expected_preds = trainer.classes_[best_class_idx]
     assert np.array_equal(trainer.predict(X), expected_preds)
+
+    # Integrated equivalence oracle with NeutralNumpyPredictor (FR-005.6)
+    scaler_mean = np.zeros(n_features, dtype=np.float64)
+    scaler_scale = np.ones(n_features, dtype=np.float64)
+    export_dict = trainer.export_neutral_arrays(scaler_mean=scaler_mean, scaler_scale=scaler_scale)
+    predictor = NeutralNumpyPredictor(**export_dict)
+    neutral_preds, neutral_scores = predictor.predict(X)
+    assert np.array_equal(neutral_preds, trainer.predict(X))
+    assert np.allclose(neutral_scores, trainer.decision_function(X), rtol=1e-9, atol=1e-7)
 
 
 def test_canonical_lda_model_artifacts_and_export() -> None:
@@ -196,8 +223,12 @@ def test_canonical_lda_model_artifacts_and_export() -> None:
     assert artifacts.intercept_.shape == (n_classes,)
     assert artifacts.covariance_.shape == (n_features, n_features)
     assert artifacts.means_.shape == (n_classes, n_features)
+    assert artifacts.priors_.shape == (n_classes,)
 
-    # Neutral export format integration
+    # Confirm no scalar lambda* field is defined in LdaModelArtifacts (Q3, Decision-3)
+    assert not hasattr(artifacts, "shrinkage_")
+
+    # Neutral export format integration: exactly 5 arrays
     scaler_mean = np.zeros(n_features, dtype=np.float64)
     scaler_scale = np.ones(n_features, dtype=np.float64)
     export_dict = trainer.export_neutral_arrays(scaler_mean=scaler_mean, scaler_scale=scaler_scale)
@@ -256,3 +287,56 @@ def test_canonical_lda_accepts_string_or_enum_prior() -> None:
 
     t4 = CanonicalLdaTrainer(prior_type="empirical")
     assert t4.prior_type == PriorType.EMPIRICAL
+
+
+def test_canonical_lda_missing_class_in_train_fails_closed() -> None:
+    """Training must fail closed when expected vocabulary class is missing (FR-011.5, Decision-3)."""
+    # 49 classes present (0..48), class 49 missing for canonical 50-class vocabulary
+    X, y = _generate_synthetic_features(n_samples_per_class=4, n_classes=49, n_features=60, seed=707)
+
+    trainer = CanonicalLdaTrainer(prior_type=PriorType.UNIFORM, num_classes=50)
+    with pytest.raises(ValueError, match="missing classes.*49|vocabulary"):
+        trainer.fit(X, y)
+
+
+def test_canonical_lda_unexpected_class_in_train_fails_closed() -> None:
+    """Training must fail closed when unexpected class label outside vocabulary appears (FR-011.5)."""
+    # 51 classes present (0..50), label 50 is unexpected for canonical 50-class vocabulary
+    X, y = _generate_synthetic_features(n_samples_per_class=4, n_classes=51, n_features=60, seed=808)
+
+    trainer = CanonicalLdaTrainer(prior_type=PriorType.UNIFORM, num_classes=50)
+    with pytest.raises(ValueError, match="unexpected classes.*50|vocabulary"):
+        trainer.fit(X, y)
+
+
+def test_canonical_lda_num_classes_contract_and_secondary_vocabularies() -> None:
+    """num_classes >= 2 validated in constructor and secondary vocabulary priors strictly exact."""
+    with pytest.raises(ValueError, match="num_classes.*>= 2"):
+        CanonicalLdaTrainer(num_classes=1)
+
+    with pytest.raises(ValueError, match="num_classes.*>= 2"):
+        CanonicalLdaTrainer(num_classes=0)
+
+    # Exercise E1: exactly 18 classes -> priors exactly 1/18
+    X_e1, y_e1 = _generate_synthetic_features(n_samples_per_class=4, n_classes=18, n_features=60, seed=901)
+    t_e1 = CanonicalLdaTrainer(prior_type=PriorType.UNIFORM, num_classes=18).fit(X_e1, y_e1)
+    assert np.allclose(t_e1.priors_, np.full(18, 1.0 / 18.0), atol=1e-12)
+
+    # Exercise E2: exactly 24 classes -> priors exactly 1/24
+    X_e2, y_e2 = _generate_synthetic_features(n_samples_per_class=4, n_classes=24, n_features=60, seed=902)
+    t_e2 = CanonicalLdaTrainer(prior_type=PriorType.UNIFORM, num_classes=24).fit(X_e2, y_e2)
+    assert np.allclose(t_e2.priors_, np.full(24, 1.0 / 24.0), atol=1e-12)
+
+    # Exercise E3: exactly 10 classes -> priors exactly 1/10
+    X_e3, y_e3 = _generate_synthetic_features(n_samples_per_class=4, n_classes=10, n_features=60, seed=903)
+    t_e3 = CanonicalLdaTrainer(prior_type=PriorType.UNIFORM, num_classes=10).fit(X_e3, y_e3)
+    assert np.allclose(t_e3.priors_, np.full(10, 1.0 / 10.0), atol=1e-12)
+
+
+def teardown_module() -> None:
+    """Evict sklearn from sys.modules after running LDA tests to prevent polluting subsequent test state."""
+    import sys
+
+    for mod in list(sys.modules):
+        if mod == "sklearn" or mod.startswith("sklearn."):
+            sys.modules.pop(mod, None)
