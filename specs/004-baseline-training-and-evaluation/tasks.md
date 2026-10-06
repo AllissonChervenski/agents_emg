@@ -34,7 +34,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T002 [P] Implement deterministic procedural synthetic RecordingData generator and test fixtures in tests/fixtures/synthetic_semg.py
   <!-- harness-task {"requirements":["FR-011.5"],"acceptance_criteria":["SC-002","SC-006"],"plan_decisions":["Decision-5"],"dependencies":[],"test_type":"UNIT","allowed_files":["tests/fixtures/synthetic_semg.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
-- [ ] T003 [P] Implement automated dependency governance gate verifying ADR status, signature, allowlists, and fingerprint in semg_baseline/governance.py
+- [x] T003 [P] Implement automated dependency governance gate verifying ADR status, signature, allowlists, and fingerprint in semg_baseline/governance.py
   <!-- harness-task {"requirements":["FR-006"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1"],"dependencies":[],"test_type":"UNIT","allowed_files":["semg_baseline/governance.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 **Checkpoint**: `semg_baseline` package is importable, synthetic fixtures isolate tests from 17 GiB raw DB2 data, and governance gate asserts `CONDITIONAL_PASS`.
