@@ -73,7 +73,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 **Independent Test**: Execute `BaselineFeaturePipeline` on synthetic recordings; assert feature matrix shape `(N, 60)`, zero NaN/Inf, strict exclusion of transition windows, and train-only calibration.
 
-- [ ] T010 [US1] Implement integrated BaselineFeaturePipeline combining stages 1 to 5 in semg_baseline/pipeline.py
+- [x] T010 [US1] Implement integrated BaselineFeaturePipeline combining stages 1 to 5 in semg_baseline/pipeline.py
   <!-- harness-task {"requirements":["FR-001","FR-004","FR-012","FR-013"],"acceptance_criteria":["SC-001","SC-002"],"plan_decisions":["Decision-2"],"dependencies":["T004","T005","T006","T007","T008","T009"],"test_type":"UNIT","allowed_files":["semg_baseline/pipeline.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 **Checkpoint**: User Story 1 complete; 60-dimensional feature vectors are extracted from frozen dataset views without data leakage.
