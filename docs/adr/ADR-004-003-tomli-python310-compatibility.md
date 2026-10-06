@@ -7,8 +7,8 @@
 - **Data de Proposição**: 2026-10-06
 - **Aprovador Humano**: `Allisson Chervenski <allissonchervenski5@gmail.com>`
 - **Data de Aprovação Humana**: `2026-10-06`
-- **Commit Git de Aprovação**: `[PENDING HUMAN COMMIT]`
-- **Fingerprint Criptográfico (SHA-256 pós-aprovação)**: `[PENDING LOCK]`
+- **Commit Git de Aprovação**: `95f75716ce6df2f639a1d139a8cb9833774eb96a`
+- **Fingerprint Criptográfico (SHA-256 pós-aprovação)**: `0ff584a0181e7ff7dab466630f03c1211c307ec375b936dc46b3fc28fb8004c0`
 
 ---
 
