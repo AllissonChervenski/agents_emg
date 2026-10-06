@@ -457,6 +457,16 @@ def verify_pyproject_dependencies(
     if not path.is_file():
         return False, [f"pyproject.toml not found at: {path}"]
 
+    if jsonschema_adr_record is None and hasattr(adr_record, "file_path") and adr_record.file_path:
+        default_json_adr = adr_record.file_path.parent / "ADR-004-002-jsonschema-host-contract-validation.md"
+        if default_json_adr.is_file():
+            jsonschema_adr_record = parse_adr(default_json_adr)
+
+    if tomli_adr_record is None and hasattr(adr_record, "file_path") and adr_record.file_path:
+        default_tomli_adr = adr_record.file_path.parent / "ADR-004-003-tomli-python310-compatibility.md"
+        if default_tomli_adr.is_file():
+            tomli_adr_record = parse_adr(default_tomli_adr)
+
     with open(path, "rb") as f:
         data: dict[str, Any] = tomllib.load(f)
 

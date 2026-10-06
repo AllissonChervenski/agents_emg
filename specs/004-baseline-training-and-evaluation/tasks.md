@@ -94,7 +94,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 - [x] T013 [US2] Implement append-only TrainingJobExecutor with state-aware schema validation and deterministic fingerprinting in semg_baseline/runner.py
   <!-- harness-task {"requirements":["FR-003","FR-011.1","FR-011.2","FR-011.3","FR-011.4"],"acceptance_criteria":["SC-001","SC-006"],"plan_decisions":["Decision-5"],"dependencies":["T004","T011"],"test_type":"UNIT","allowed_files":["semg_baseline/runner.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
-  *Note*: Implementation and unit tests complete. Formal operational acceptance of TrainingJob schema validation against canonical jsonschema validator remains pending dependency governance transition T013b.
+  *Note*: IMPLEMENTATION + OPERATIONAL ACCEPTANCE COMPLETE. TrainingJob schema validation operational under governed jsonschema Draft 2020-12 validator.
 
 - [x] T013a [GOV] Harden governance gate with stdlib-only validation and eliminate zero-variance information loss across export/load boundary in semg_baseline/governance.py, semg_baseline/export.py, semg_baseline/predictor.py
   <!-- harness-task {"requirements":["FR-005.5","FR-006.1","FR-006.4","FR-011.1","FR-013"],"acceptance_criteria":["SC-001","SC-002","SC-006"],"plan_decisions":["Decision-1","Decision-2","Decision-3"],"dependencies":["T003","T011","T012"],"test_type":"UNIT","allowed_files":["semg_baseline/governance.py","semg_baseline/export.py","semg_baseline/predictor.py","specs/004-baseline-training-and-evaluation/contracts/neutral_model_manifest_schema.json"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
@@ -102,18 +102,18 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - [x] T013c [GOV] Finalize aggregate multi-ADR governance status calculation and symbol-level API-surface AST enforcement for jsonschema and tomli in semg_baseline/governance.py and update semg_baseline/runner.py import pattern
   <!-- harness-task {"requirements":["FR-006.1","FR-006.4","FR-006.6","FR-011.1"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1"],"dependencies":["T003","T013","T013a"],"test_type":"UNIT","allowed_files":["semg_baseline/governance.py","semg_baseline/runner.py","tests/test_baseline_governance_gate.py","specs/004-baseline-training-and-evaluation/tasks.md"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
-**Checkpoint**: Phase 4 implementation and multi-ADR governance hardening complete; append-only job runner, cryptographic lineage, neutral inference boundary, and aggregate governance & API-surface gates are established. Operational/reproducibility acceptance of TrainingJob schema validation remains pending external human ADR sign-off and dependency governance transition T013b.
+**Checkpoint**: Phase 4 implementation and multi-ADR governance hardening complete; append-only job runner, cryptographic lineage, neutral inference boundary, aggregate governance & API-surface gates are established, and T013b dependency governance transition is fully executed.
 
 ---
 
 ## Phase 5: User Story 3 — Within-Subject Baseline Training with Leave-One-Repetition-Out Validation (P1)
 
-**Goal**: Train regularized LDA with Ledoit-Wolf shrinkage, uniform priors ($P=1/50$) and empirical priors ($N_c/N_{\text{train}}$) over repetitions `[1, 3, 4, 6]`, evaluating once on test repetitions `[2, 5]`. (Prerequisite: all Feature 004 required dependency ADRs are human-approved, cryptographically locked, and T013b has passed).
+**Goal**: Train regularized LDA with Ledoit-Wolf shrinkage, uniform priors ($P=1/50$) and empirical priors ($N_c/N_{\text{train}}$) over repetitions `[1, 3, 4, 6]`, evaluating once on test repetitions `[2, 5]`. (T013b dependency transition complete; T014 is UNBLOCKED and ready for RED phase).
 
 **Independent Test**: Run Within-Subject training on synthetic subject data; assert 4 validation folds evaluate `[1, 3, 4, 6]`; assert final test evaluates strictly on `[2, 5]`; assert equivalence oracle matches neutral numpy predictor within `TOL-LDA-NEUTRAL-SCORES`.
 
-- [ ] T013b [GOV] Execute formal dependency governance transition for all three governed dependencies (ADR-004-001 scikit-learn, ADR-004-002 jsonschema, ADR-004-003 tomli): human approval Stage A, cryptographic lock Stage B, authorized pyproject.toml mutation, uv.lock generation, clean-environment installation gate, and automated gate re-verification
-  <!-- harness-task {"requirements":["FR-006.1","FR-006.4","FR-006.6","FR-011.1","FR-011.6"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1"],"dependencies":["T013c"],"test_type":"INTEGRATION","allowed_files":["docs/adr/ADR-004-001-scikit-learn-host-only.md","docs/adr/ADR-004-002-jsonschema-host-contract-validation.md","docs/adr/ADR-004-003-tomli-python310-compatibility.md","pyproject.toml","uv.lock","specs/004-baseline-training-and-evaluation/tasks.md"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
+- [x] T013b [GOV] Execute formal dependency governance transition for all three governed dependencies (ADR-004-001 scikit-learn, ADR-004-002 jsonschema, ADR-004-003 tomli): human approval Stage A, cryptographic lock Stage B, authorized pyproject.toml mutation, uv.lock generation, clean-environment installation gate, and automated gate re-verification
+  <!-- harness-task {"requirements":["FR-006.1","FR-006.4","FR-006.6","FR-011.1","FR-011.6"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1"],"dependencies":["T013c"],"test_type":"INTEGRATION","allowed_files":["docs/adr/ADR-004-001-scikit-learn-host-only.md","docs/adr/ADR-004-002-jsonschema-host-contract-validation.md","docs/adr/ADR-004-003-tomli-python310-compatibility.md","pyproject.toml","uv.lock","semg_baseline/governance.py","specs/004-baseline-training-and-evaluation/tasks.md"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 - [ ] T014 [US3] Implement CanonicalLdaTrainer with uniform/empirical priors and Ledoit-Wolf analytic shrinkage in semg_baseline/lda.py
   <!-- harness-task {"requirements":["FR-005.1","FR-005.2","FR-005.3","FR-005.4","FR-006.2","FR-006.3"],"acceptance_criteria":["SC-005"],"plan_decisions":["Decision-3"],"dependencies":["T010","T013b"],"test_type":"UNIT","allowed_files":["semg_baseline/lda.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
@@ -199,7 +199,7 @@ T013 (Job Executor) ─────────► T017 (Report Generator) ─�
 ## Implementation Strategy
 
 1. **Foundation & Host Contracts (T001–T013c)**: T001–T013 implementation is complete at source level. T013 contains host-side jsonschema integration whose operational acceptance remains governance-blocked until T013b. T013c hardens aggregate multi-ADR governance and symbol-level API-surface AST enforcement. No sklearn-based modeling is executed before T013b.
-2. **ADR Sign-Off & Governance Lock Gate (T013b)**: Await external human approval of ADR-004-001, ADR-004-002, and ADR-004-003. Once human approval and commit are recorded, T013b executes technical transition: cryptographic lock, authorized `pyproject.toml` mutation, `uv.lock` generation, and clean-environment installation verification. Unblocks T014.
+2. **ADR Sign-Off & Governance Lock Gate (T013b)**: Completed. Human approval Stage A recorded, cryptographic lock Stage B committed, authorized `pyproject.toml` mutation applied, `uv.lock` generated, clean-environment installation verified, all automated verification gates pass. T014 is unblocked.
 3. **Modeling & Protocols (T014–T016)**: Implement canonical regularized LDA, Within-Subject LOTO protocol, and Cross-Subject 5-fold evaluation.
 4. **Reporting, Diagnostics & Controls (T017–T019)**: Implement dual-vocabulary report generator, exercise confounding auditor, and shuffled-label negative control.
 5. **Final Quality Audit (T020)**: Complete deterministic verification, schema validation, and acceptance sign-off.
