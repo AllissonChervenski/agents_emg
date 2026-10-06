@@ -8,7 +8,7 @@
 - **Aprovador Humano**: `Allisson Chervenski <allissonchervenski5@gmail.com>`
 - **Data de Aprovação Humana**: `2026-10-06`
 - **Commit Git de Aprovação**: `95f75716ce6df2f639a1d139a8cb9833774eb96a`
-- **Fingerprint Criptográfico (SHA-256 pós-aprovação)**: `0ff584a0181e7ff7dab466630f03c1211c307ec375b936dc46b3fc28fb8004c0`
+- **Fingerprint Criptográfico (SHA-256 pós-aprovação)**: `561dbbce6d27464a1e9aa00c4938a9a9acb69a334c19e8810994c0ee382e1936`
 
 ---
 
@@ -68,5 +68,7 @@ Assim como nos ADRs 004-001 e 004-002, a autorização de `tomli` segue o protoc
 
 ## 6. Estado Atual
 
-- **Status**: `PROPOSED` (pendente de aprovação humana).
-- A declaração de `tomli` em `pyproject.toml` permanece **bloqueada** até a conclusão formal do ciclo de governança.
+- **Status**: `APPROVED / LOCKED`
+- Stage A concluído no Commit A: `95f75716ce6df2f639a1d139a8cb9833774eb96a`.
+- Stage B concluído.
+- Autorização exclusivamente condicional: `tomli>=2.0.0,<3.0.0; python_version < "3.11"` conforme ADR e pyproject/lockfile governados.

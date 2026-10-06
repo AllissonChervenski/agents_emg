@@ -19,7 +19,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - In GREEN, the implementer edits strictly the paths listed in `allowed_files`. Test files are protected against `TEST_TAMPERING`.
 - Mathematical, DSP, feature extraction, and ML tasks are marked `"numeric_sensitive": true`. Structural, governance, and manifest tasks are marked `"numeric_sensitive": false`.
 - Raw data directory `data/raw/ninapro_db2/` and Feature 003 artifacts are strictly READ-ONLY. No task may modify or reinterpret raw archives.
-- **Dependency Governance Constraint**: ADR-004-001 (`scikit-learn`), ADR-004-002 (`jsonschema`), and ADR-004-003 (`tomli`) are currently `PROPOSED` (governance state `CONDITIONAL_PASS`). Tasks modifying `pyproject.toml` or executing code depending on external third-party dependencies remain strictly `BLOCKED` until human sign-off is committed and cryptographically locked (`test_baseline_governance_gate.py`). Non-governed tasks (DSP, pure windowing, features, threshold calibration, Z-score scaling, neutral predictor) are decoupled and can proceed without third-party dependencies.
+- **Dependency Governance Constraint**: ADR-004-001 (`scikit-learn`), ADR-004-002 (`jsonschema`), and ADR-004-003 (`tomli`) are `APPROVED / LOCKED` (aggregate dependency governance status `APPROVED`, `all_required_dependencies_approved = true`). T013b technical transition is complete; residual consistency & provenance verification T013d is active. T014 is eligible for RED after T013d post-lock verification completion.
 - T020 is a non-implementation review task marked `NOT_AUTOMATABLE`.
 
 ---
@@ -108,15 +108,19 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 ## Phase 5: User Story 3 — Within-Subject Baseline Training with Leave-One-Repetition-Out Validation (P1)
 
-**Goal**: Train regularized LDA with Ledoit-Wolf shrinkage, uniform priors ($P=1/50$) and empirical priors ($N_c/N_{\text{train}}$) over repetitions `[1, 3, 4, 6]`, evaluating once on test repetitions `[2, 5]`. (T013b dependency transition complete; T014 is UNBLOCKED and ready for RED phase).
+**Goal**: Train regularized LDA with Ledoit-Wolf shrinkage, uniform priors ($P=1/50$) and empirical priors ($N_c/N_{\text{train}}$) over repetitions `[1, 3, 4, 6]`, evaluating once on test repetitions `[2, 5]`. (T013b formally accepted; T013d complete; T014 is UNBLOCKED and ready for RED phase).
 
 **Independent Test**: Run Within-Subject training on synthetic subject data; assert 4 validation folds evaluate `[1, 3, 4, 6]`; assert final test evaluates strictly on `[2, 5]`; assert equivalence oracle matches neutral numpy predictor within `TOL-LDA-NEUTRAL-SCORES`.
 
 - [x] T013b [GOV] Execute formal dependency governance transition for all three governed dependencies (ADR-004-001 scikit-learn, ADR-004-002 jsonschema, ADR-004-003 tomli): human approval Stage A, cryptographic lock Stage B, authorized pyproject.toml mutation, uv.lock generation, clean-environment installation gate, and automated gate re-verification
   <!-- harness-task {"requirements":["FR-006.1","FR-006.4","FR-006.6","FR-011.1","FR-011.6"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1"],"dependencies":["T013c"],"test_type":"INTEGRATION","allowed_files":["docs/adr/ADR-004-001-scikit-learn-host-only.md","docs/adr/ADR-004-002-jsonschema-host-contract-validation.md","docs/adr/ADR-004-003-tomli-python310-compatibility.md","pyproject.toml","uv.lock","semg_baseline/governance.py","specs/004-baseline-training-and-evaluation/tasks.md"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
+  *Note*: Technical execution and formal governance acceptance COMPLETE under verified Commit A provenance and locked state.
+
+- [x] T013d [GOV] Post-lock consistency and approval-commit provenance verification in docs/adr/ADR-004-002-*, docs/adr/ADR-004-003-*, semg_baseline/governance.py, tests/test_baseline_governance_gate.py, specs/004-baseline-training-and-evaluation/tasks.md
+  <!-- harness-task {"requirements":["FR-006.1","FR-006.4","FR-006.6","FR-011.1","FR-011.6"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1"],"dependencies":["T013b"],"test_type":"UNIT","allowed_files":["docs/adr/ADR-004-002-jsonschema-host-contract-validation.md","docs/adr/ADR-004-003-tomli-python310-compatibility.md","semg_baseline/governance.py","tests/test_baseline_governance_gate.py","specs/004-baseline-training-and-evaluation/tasks.md"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
 
 - [ ] T014 [US3] Implement CanonicalLdaTrainer with uniform/empirical priors and Ledoit-Wolf analytic shrinkage in semg_baseline/lda.py
-  <!-- harness-task {"requirements":["FR-005.1","FR-005.2","FR-005.3","FR-005.4","FR-006.2","FR-006.3"],"acceptance_criteria":["SC-005"],"plan_decisions":["Decision-3"],"dependencies":["T010","T013b"],"test_type":"UNIT","allowed_files":["semg_baseline/lda.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+  <!-- harness-task {"requirements":["FR-005.1","FR-005.2","FR-005.3","FR-005.4","FR-006.2","FR-006.3"],"acceptance_criteria":["SC-005"],"plan_decisions":["Decision-3"],"dependencies":["T010","T013b","T013d"],"test_type":"UNIT","allowed_files":["semg_baseline/lda.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 - [ ] T015 [US3] Implement WithinSubjectRunner executing LOTO validation and single test evaluation in semg_baseline/within_subject.py
   <!-- harness-task {"requirements":["FR-005.7","FR-008"],"acceptance_criteria":["SC-003"],"plan_decisions":["Decision-3","Decision-5"],"dependencies":["T010","T013","T014"],"test_type":"UNIT","allowed_files":["semg_baseline/within_subject.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
@@ -176,7 +180,7 @@ T001 (Package Layout) ──┬──► T004 (Lineage) ──┐
                                                                                                     ▼
 T002 (Fixtures) ─────────────► Used across all tests                                          T020 (Audit)
                                                                                                     ▲
-T003 (Governance Gate) ──► T013a ──► T013c ──► Blocks T013b / T014 until all 3 ADRs approved & locked │
+T003 (Governance Gate) ──► T013a ──► T013c ──► T013b ──► T013d ──► T014 (LDA Trainer)───────────────┤
                                         │                                                           │
                                         ▼                                                           │
 T011 (Exporter) ─────────────► T012 (Predictor)                                                     │

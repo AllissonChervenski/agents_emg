@@ -14,6 +14,7 @@ Verifies:
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import pytest
 
 from semg_baseline.governance import (
@@ -32,6 +33,7 @@ from semg_baseline.governance import (
     validate_jsonschema_version_spec,
     validate_sklearn_version_spec,
     validate_tomli_version_spec,
+    verify_approval_commit,
     verify_imports_in_source,
     verify_pyproject_dependencies,
 )
@@ -878,41 +880,23 @@ def _setup_mock_repo(
     adr2_stage: str = "PROPOSED",
     adr3_stage: str = "PROPOSED",
 ) -> Path:
-    """Helper creating isolated directory with 3 ADRs and clean pyproject.toml."""
+    """Helper creating isolated git repository with 3 ADRs and clean pyproject.toml."""
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test Approver"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "eval@example.com"], cwd=tmp_path, check=True, capture_output=True)
+
     adr_dir = tmp_path / "docs" / "adr"
     adr_dir.mkdir(parents=True, exist_ok=True)
 
-    def _write_adr(filename: str, adr_id: str, status: str, stage: str) -> None:
+    def _write_initial(filename: str, status: str, stage: str) -> None:
         if stage == "PROPOSED":
             approver = "[PENDING HUMAN APPROVAL]"
             app_date = "[PENDING HUMAN APPROVAL]"
-            commit = "[PENDING HUMAN COMMIT]"
-            fp = "[PENDING LOCK]"
-        elif stage == "STAGE_A":
-            approver = "Human Approver <eval@example.com>"
-            app_date = "2026-10-06"
-            commit = "[PENDING HUMAN COMMIT]"
-            fp = "[PENDING LOCK]"
-        elif stage == "STAGE_B":
-            approver = "Human Approver <eval@example.com>"
-            app_date = "2026-10-06"
-            commit = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
-            draft = ADR_TEMPLATE.format(
-                status=status,
-                approver=approver,
-                approval_date=app_date,
-                git_commit=commit,
-                fingerprint="[PENDING LOCK]",
-            )
-            fp = compute_adr_fingerprint(draft)
-        elif stage == "TAMPERED":
-            approver = "Human Approver <eval@example.com>"
-            app_date = "2026-10-06"
-            commit = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
-            fp = "badfingerprint0000000000000000000000000000000000000000000000000000"
         else:
-            raise ValueError(f"Unknown stage: {stage}")
-
+            approver = "Human Approver <eval@example.com>"
+            app_date = "2026-10-06"
+        commit = "[PENDING HUMAN COMMIT]"
+        fp = "[PENDING LOCK]"
         content = ADR_TEMPLATE.format(
             status=status,
             approver=approver,
@@ -922,11 +906,46 @@ def _setup_mock_repo(
         )
         (adr_dir / filename).write_text(content, encoding="utf-8")
 
-    _write_adr("ADR-004-001-scikit-learn-host-only.md", "ADR-004-001", adr1_status, adr1_stage)
-    _write_adr("ADR-004-002-jsonschema-host-contract-validation.md", "ADR-004-002", adr2_status, adr2_stage)
-    _write_adr("ADR-004-003-tomli-python310-compatibility.md", "ADR-004-003", adr3_status, adr3_stage)
-
+    _write_initial("ADR-004-001-scikit-learn-host-only.md", adr1_status, adr1_stage)
+    _write_initial("ADR-004-002-jsonschema-host-contract-validation.md", adr2_status, adr2_stage)
+    _write_initial("ADR-004-003-tomli-python310-compatibility.md", adr3_status, adr3_stage)
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mock"\ndependencies = []\n', encoding="utf-8")
+
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "docs(adr): human approval Stage A"], cwd=tmp_path, check=True, capture_output=True)
+    proc_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    stage_a_commit = proc_head.stdout.strip()
+
+    def _apply_stage_b(filename: str, status: str, stage: str) -> None:
+        if stage in {"STAGE_B", "TAMPERED"}:
+            approver = "Human Approver <eval@example.com>"
+            app_date = "2026-10-06"
+            commit = stage_a_commit
+            draft = ADR_TEMPLATE.format(
+                status=status,
+                approver=approver,
+                approval_date=app_date,
+                git_commit=commit,
+                fingerprint="[PENDING LOCK]",
+            )
+            fp = (
+                compute_adr_fingerprint(draft)
+                if stage == "STAGE_B"
+                else "badfingerprint0000000000000000000000000000000000000000000000000000"
+            )
+            content = ADR_TEMPLATE.format(
+                status=status,
+                approver=approver,
+                approval_date=app_date,
+                git_commit=commit,
+                fingerprint=fp,
+            )
+            (adr_dir / filename).write_text(content, encoding="utf-8")
+
+    _apply_stage_b("ADR-004-001-scikit-learn-host-only.md", adr1_status, adr1_stage)
+    _apply_stage_b("ADR-004-002-jsonschema-host-contract-validation.md", adr2_status, adr2_stage)
+    _apply_stage_b("ADR-004-003-tomli-python310-compatibility.md", adr3_status, adr3_stage)
+
     return tmp_path
 
 
@@ -1073,3 +1092,154 @@ def test_active_repo_dependency_governance_gate() -> None:
         assert report.all_required_dependencies_approved is True
         assert is_sklearn_allowed(REPO_ROOT) is True
         assert_sklearn_allowed(REPO_ROOT)  # Should not raise
+
+
+def test_repository_aware_approval_commit_provenance(tmp_path: Path) -> None:
+    """Validate repository-aware Git provenance checks for Stage A human approval."""
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, capture_output=True)
+
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True, exist_ok=True)
+    adr_file = adr_dir / "ADR-004-001-scikit-learn-host-only.md"
+
+    # Case A: Commit contains ADR still PROPOSED -> FAIL
+    adr_file.write_text(
+        ADR_TEMPLATE.format(
+            status="PROPOSED",
+            approver="[PENDING HUMAN APPROVAL]",
+            approval_date="[PENDING HUMAN APPROVAL]",
+            git_commit="[PENDING HUMAN COMMIT]",
+            fingerprint="[PENDING LOCK]",
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "initial proposed"], cwd=tmp_path, check=True, capture_output=True)
+    commit_proposed = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    record_with_proposed_commit = ADRRecord(
+        adr_id="ADR-004-001",
+        status="APPROVED",
+        proposed_date="2026-10-03",
+        approver="Allisson Chervenski <allissonchervenski5@gmail.com>",
+        approval_date="2026-10-06",
+        git_commit=commit_proposed,
+        fingerprint="dummy",
+        raw_content="",
+        file_path=adr_file,
+    )
+    ok, errs = verify_approval_commit(tmp_path, record_with_proposed_commit)
+    assert ok is False
+    assert any("has status 'PROPOSED'" in e for e in errs)
+
+    # Case B: Commit contains APPROVED but approver is pending -> FAIL
+    adr_file.write_text(
+        ADR_TEMPLATE.format(
+            status="APPROVED",
+            approver="[PENDING HUMAN APPROVAL]",
+            approval_date="2026-10-06",
+            git_commit="[PENDING HUMAN COMMIT]",
+            fingerprint="[PENDING LOCK]",
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "approved without approver"], cwd=tmp_path, check=True, capture_output=True)
+    commit_pending_approver = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    record_with_pending_approver = ADRRecord(
+        adr_id="ADR-004-001",
+        status="APPROVED",
+        proposed_date="2026-10-03",
+        approver="Allisson Chervenski <allissonchervenski5@gmail.com>",
+        approval_date="2026-10-06",
+        git_commit=commit_pending_approver,
+        fingerprint="dummy",
+        raw_content="",
+        file_path=adr_file,
+    )
+    ok, errs = verify_approval_commit(tmp_path, record_with_pending_approver)
+    assert ok is False
+    assert any("has pending or missing approver" in e for e in errs)
+
+    # Case C: Hash of another commit without approval (e.g. unrelated change) -> FAIL
+    (tmp_path / "README.md").write_text("# Test", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "unrelated commit"], cwd=tmp_path, check=True, capture_output=True)
+
+    # Case D: Hex hash syntactically valid but nonexistent in Git -> FAIL
+    record_nonexistent_commit = ADRRecord(
+        adr_id="ADR-004-001",
+        status="APPROVED",
+        proposed_date="2026-10-03",
+        approver="Allisson Chervenski <allissonchervenski5@gmail.com>",
+        approval_date="2026-10-06",
+        git_commit="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        fingerprint="dummy",
+        raw_content="",
+        file_path=adr_file,
+    )
+    ok, errs = verify_approval_commit(tmp_path, record_nonexistent_commit)
+    assert ok is False
+    assert any("does not exist in git repository" in e for e in errs)
+
+    # Case E: Valid Stage A commit exists -> PASS
+    adr_file.write_text(
+        ADR_TEMPLATE.format(
+            status="APPROVED",
+            approver="Allisson Chervenski <allissonchervenski5@gmail.com>",
+            approval_date="2026-10-06",
+            git_commit="[PENDING HUMAN COMMIT]",
+            fingerprint="[PENDING LOCK]",
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "docs(adr): Stage A approval"], cwd=tmp_path, check=True, capture_output=True)
+    commit_stage_a = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    draft_stage_b = ADR_TEMPLATE.format(
+        status="APPROVED",
+        approver="Allisson Chervenski <allissonchervenski5@gmail.com>",
+        approval_date="2026-10-06",
+        git_commit=commit_stage_a,
+        fingerprint="[PENDING LOCK]",
+    )
+    valid_fp = compute_adr_fingerprint(draft_stage_b)
+    content_stage_b = ADR_TEMPLATE.format(
+        status="APPROVED",
+        approver="Allisson Chervenski <allissonchervenski5@gmail.com>",
+        approval_date="2026-10-06",
+        git_commit=commit_stage_a,
+        fingerprint=valid_fp,
+    )
+    adr_file.write_text(content_stage_b, encoding="utf-8")
+    record_stage_b = parse_adr(adr_file)
+
+    ok, errs = verify_approval_commit(tmp_path, record_stage_b)
+    assert ok is True
+    assert errs == []
+
+    # Case F: Stage B fingerprint tampered -> validate_adr fails
+    tampered_content = ADR_TEMPLATE.format(
+        status="APPROVED",
+        approver="Allisson Chervenski <allissonchervenski5@gmail.com>",
+        approval_date="2026-10-06",
+        git_commit=commit_stage_a,
+        fingerprint="badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadb",
+    )
+    adr_file.write_text(tampered_content, encoding="utf-8")
+    record_tampered = parse_adr(adr_file)
+    ok_val, errs_val, status_val = validate_adr(record_tampered)
+    assert ok_val is False
+    assert status_val == GovernanceStatus.FAIL
+    assert any("fingerprint mismatch" in e for e in errs_val)
+

@@ -19,6 +19,7 @@ from enum import Enum
 import hashlib
 from pathlib import Path
 import re
+import subprocess
 from typing import Any
 
 try:
@@ -438,6 +439,116 @@ def validate_adr(record: ADRRecord) -> tuple[bool, list[str], GovernanceStatus]:
     return False, errors, GovernanceStatus.FAIL
 
 
+def verify_approval_commit(
+    repo_root: Path | str,
+    adr_record: ADRRecord,
+) -> tuple[bool, list[str]]:
+    """Verify that an ADR's approval commit exists in Git and contains genuine Stage A human approval.
+
+    Enforces repository-aware cryptographic provenance:
+    1. Validates that `adr_record.git_commit` exists via `git cat-file -e <commit>^{commit}`.
+    2. Inspects ADR file contents in that commit via `git show <commit>:<relative_path>`.
+    3. Confirms that in the approval commit (Stage A):
+       - Status is 'APPROVED'
+       - Approver is non-empty and not pending (matches adr_record.approver)
+       - Approval date is non-empty and not pending (matches adr_record.approval_date)
+       - Git commit field contains 'pending' (proves it was recorded at Stage A before commit hash was known)
+       - Fingerprint field contains 'pending' (proves it was unsealed at Stage A before Stage B lock)
+    """
+    root = Path(repo_root).resolve()
+    commit = adr_record.git_commit.strip()
+    if not commit or "pending" in commit.lower():
+        return False, [f"ADR {adr_record.adr_id} approval commit is pending or missing: '{commit}'"]
+
+    # 1. Verify commit exists in repository
+    try:
+        proc_cat = subprocess.run(
+            ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+    except Exception as e:
+        return False, [f"Failed to execute git cat-file for ADR {adr_record.adr_id}: {e}"]
+
+    if proc_cat.returncode != 0:
+        return False, [
+            f"ADR {adr_record.adr_id} approval commit '{commit}' does not exist in git repository at '{root}'"
+        ]
+
+    # 2. Extract ADR file relative path to repo root
+    try:
+        rel_path = adr_record.file_path.resolve().relative_to(root).as_posix()
+    except ValueError:
+        rel_path = f"docs/adr/{adr_record.file_path.name}"
+
+    try:
+        proc_show = subprocess.run(
+            ["git", "show", f"{commit}:{rel_path}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+    except Exception as e:
+        return False, [f"Failed to execute git show for ADR {adr_record.adr_id}: {e}"]
+
+    if proc_show.returncode != 0:
+        return False, [
+            f"ADR {adr_record.adr_id} file '{rel_path}' not found in approval commit '{commit}'"
+        ]
+
+    stage_a_content = proc_show.stdout
+
+    def _extract_field(pattern: str, default: str = "") -> str:
+        match = re.search(pattern, stage_a_content)
+        if match:
+            return match.group(1).strip().strip("`'\"")
+        return default
+
+    status = _extract_field(r"-\s*\*\*Status\*\*:\s*(.+)")
+    approver = _extract_field(r"-\s*\*\*Aprovador Humano\*\*:\s*(.+)")
+    approval_date = _extract_field(r"-\s*\*\*Data de Aprovação Humana\*\*:\s*(.+)")
+    git_commit_field = _extract_field(r"-\s*\*\*Commit Git de Aprovação\*\*:\s*(.+)")
+    fingerprint_field = _extract_field(r"-\s*\*\*Fingerprint Criptográfico[^\*]*\*\*:\s*(.+)")
+
+    errors: list[str] = []
+
+    if status != "APPROVED":
+        errors.append(
+            f"ADR {adr_record.adr_id} in approval commit '{commit}' has status '{status}' (expected 'APPROVED')"
+        )
+
+    if not approver or "pending" in approver.lower():
+        errors.append(
+            f"ADR {adr_record.adr_id} in approval commit '{commit}' has pending or missing approver: '{approver}'"
+        )
+    elif approver != adr_record.approver:
+        errors.append(
+            f"ADR {adr_record.adr_id} in approval commit '{commit}' approver '{approver}' does not match Stage B approver '{adr_record.approver}'"
+        )
+
+    if not approval_date or "pending" in approval_date.lower():
+        errors.append(
+            f"ADR {adr_record.adr_id} in approval commit '{commit}' has pending or missing approval date: '{approval_date}'"
+        )
+    elif approval_date != adr_record.approval_date:
+        errors.append(
+            f"ADR {adr_record.adr_id} in approval commit '{commit}' approval date '{approval_date}' does not match Stage B date '{adr_record.approval_date}'"
+        )
+
+    if not git_commit_field or "pending" not in git_commit_field.lower():
+        errors.append(
+            f"ADR {adr_record.adr_id} in approval commit '{commit}' does not represent Stage A (git_commit is not pending: '{git_commit_field}')"
+        )
+
+    if not fingerprint_field or "pending" not in fingerprint_field.lower():
+        errors.append(
+            f"ADR {adr_record.adr_id} in approval commit '{commit}' does not represent Stage A (fingerprint is not pending: '{fingerprint_field}')"
+        )
+
+    return len(errors) == 0, errors
+
+
 def _extract_package_name(dep_spec: str) -> str:
     """Extract canonical package name from a PEP 508 dependency specification."""
     match = re.match(r"^([a-zA-Z0-9_\-\.]+)", dep_spec.strip())
@@ -827,6 +938,11 @@ def check_dependency_governance(
         _, adr_errors, sklearn_status = validate_adr(adr_record)
         errors.extend(adr_errors)
         adr_status_str = adr_record.status
+        if sklearn_status == GovernanceStatus.APPROVED:
+            prov_valid, prov_errors = verify_approval_commit(repo_path, adr_record)
+            if not prov_valid:
+                sklearn_status = GovernanceStatus.FAIL
+                errors.extend(prov_errors)
 
     # 1b. Parse and validate ADR-004-002
     jsonschema_record: ADRRecord | None = None
@@ -837,6 +953,11 @@ def check_dependency_governance(
         jsonschema_record = parse_adr(jsonschema_adr_path)
         _, json_errors, jsonschema_status = validate_adr(jsonschema_record)
         errors.extend(json_errors)
+        if jsonschema_status == GovernanceStatus.APPROVED:
+            prov_valid, prov_errors = verify_approval_commit(repo_path, jsonschema_record)
+            if not prov_valid:
+                jsonschema_status = GovernanceStatus.FAIL
+                errors.extend(prov_errors)
 
     # 1c. Parse and validate ADR-004-003
     tomli_record: ADRRecord | None = None
@@ -847,6 +968,11 @@ def check_dependency_governance(
         tomli_record = parse_adr(tomli_adr_path)
         _, tomli_errors, tomli_status = validate_adr(tomli_record)
         errors.extend(tomli_errors)
+        if tomli_status == GovernanceStatus.APPROVED:
+            prov_valid, prov_errors = verify_approval_commit(repo_path, tomli_record)
+            if not prov_valid:
+                tomli_status = GovernanceStatus.FAIL
+                errors.extend(prov_errors)
 
     dep_statuses: dict[str, GovernanceStatus] = {
         "scikit-learn": sklearn_status,

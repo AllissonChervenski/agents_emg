@@ -8,7 +8,7 @@
 - **Aprovador Humano**: `Allisson Chervenski <allissonchervenski5@gmail.com>`
 - **Data de Aprovação Humana**: `2026-10-06`
 - **Commit Git de Aprovação**: `95f75716ce6df2f639a1d139a8cb9833774eb96a`
-- **Fingerprint Criptográfico (SHA-256 pós-aprovação)**: `75caf4f65ef42ef4f8f8ce55daf975c30503a08c1f5e002b1045d87aa476e318`
+- **Fingerprint Criptográfico (SHA-256 pós-aprovação)**: `4a6c0024378a764d5a062a0f989bd6dc10e6e03d7a71ec9021143f11a71473cc`
 
 ---
 
@@ -71,5 +71,7 @@ Assim como no ADR-004-001, a autorização de `jsonschema` segue o protocolo rig
 
 ## 6. Estado Atual
 
-- **Status**: `PROPOSED` (pendente de aprovação humana).
-- A declaração de `jsonschema` em `pyproject.toml` permanece **bloqueada**.
+- **Status**: `APPROVED / LOCKED`
+- Stage A concluído no Commit A: `95f75716ce6df2f639a1d139a8cb9833774eb96a`.
+- Stage B concluído.
+- `jsonschema>=4.19.0,<5.0.0` autorizado conforme ADR e pyproject/lockfile governados.
