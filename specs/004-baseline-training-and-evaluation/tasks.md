@@ -105,8 +105,11 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 **Independent Test**: Run Within-Subject training on synthetic subject data; assert 4 validation folds evaluate `[1, 3, 4, 6]`; assert final test evaluates strictly on `[2, 5]`; assert equivalence oracle matches neutral numpy predictor within `TOL-LDA-NEUTRAL-SCORES`.
 
+- [ ] T013b [GOV] Execute formal dependency governance transition (ADR approval Stage A, governance lock Stage B, authorized pyproject.toml mutation, lockfile generation, and gate re-verification)
+  <!-- harness-task {"requirements":["FR-006.1","FR-006.4","FR-006.6"],"acceptance_criteria":["SC-001"],"plan_decisions":["Decision-1"],"dependencies":["T003","T013"],"test_type":"INTEGRATION","allowed_files":["docs/adr/ADR-004-001-scikit-learn-host-only.md","pyproject.toml","specs/004-baseline-training-and-evaluation/tasks.md"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":false} -->
+
 - [ ] T014 [US3] Implement CanonicalLdaTrainer with uniform/empirical priors and Ledoit-Wolf analytic shrinkage in semg_baseline/lda.py
-  <!-- harness-task {"requirements":["FR-005.1","FR-005.2","FR-005.3","FR-005.4","FR-006.2","FR-006.3"],"acceptance_criteria":["SC-005"],"plan_decisions":["Decision-3"],"dependencies":["T003","T010"],"test_type":"UNIT","allowed_files":["semg_baseline/lda.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+  <!-- harness-task {"requirements":["FR-005.1","FR-005.2","FR-005.3","FR-005.4","FR-006.2","FR-006.3"],"acceptance_criteria":["SC-005"],"plan_decisions":["Decision-3"],"dependencies":["T010","T013b"],"test_type":"UNIT","allowed_files":["semg_baseline/lda.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
 
 - [ ] T015 [US3] Implement WithinSubjectRunner executing LOTO validation and single test evaluation in semg_baseline/within_subject.py
   <!-- harness-task {"requirements":["FR-005.7","FR-008"],"acceptance_criteria":["SC-003"],"plan_decisions":["Decision-3","Decision-5"],"dependencies":["T010","T013","T014"],"test_type":"UNIT","allowed_files":["semg_baseline/within_subject.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->

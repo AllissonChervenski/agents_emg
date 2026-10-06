@@ -9,6 +9,7 @@ Validates:
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import numpy as np
 import pytest
@@ -111,5 +112,11 @@ def test_feature_scaler_shape_mismatch_raises_error() -> None:
 
 
 def test_feature_scaler_does_not_import_sklearn_standard_scaler() -> None:
-    """FeatureScaler must be a neutral custom implementation with zero sklearn coupling."""
-    assert "sklearn.preprocessing" not in sys.modules
+    """FeatureScaler must be a neutral custom implementation with zero sklearn coupling in an isolated process."""
+    cmd = [
+        sys.executable,
+        "-c",
+        "import sys; import semg_baseline.scaling; assert 'sklearn' not in sys.modules, f'Leaked: {[m for m in sys.modules if m.startswith(\"sklearn\")]}'",
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert res.returncode == 0

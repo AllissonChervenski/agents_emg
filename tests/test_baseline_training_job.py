@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 import sys
 import numpy as np
 import pytest
@@ -564,8 +565,11 @@ def test_verify_job_detects_tampering(tmp_path: Path) -> None:
 
 
 def test_runner_does_not_import_sklearn() -> None:
-    """Importing semg_baseline.runner must never import scikit-learn."""
-    import semg_baseline.runner as runner_mod
-
-    assert runner_mod is not None
-    assert "sklearn" not in sys.modules
+    """Importing semg_baseline.runner must never import scikit-learn in an isolated process."""
+    cmd = [
+        sys.executable,
+        "-c",
+        "import sys; import semg_baseline.runner; assert 'sklearn' not in sys.modules, f'Leaked: {[m for m in sys.modules if m.startswith(\"sklearn\")]}'",
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert res.returncode == 0

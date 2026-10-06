@@ -1,5 +1,6 @@
 """Tests for semg_baseline package initialization and public namespace (T001)."""
 
+import subprocess
 import sys
 
 
@@ -40,8 +41,11 @@ def test_baseline_package_namespace_strict() -> None:
 
 
 def test_baseline_package_no_sklearn_import_side_effect() -> None:
-    """Verify that importing semg_baseline does not import scikit-learn."""
-    # Ensure clean state for check
-    import semg_baseline  # noqa: F401
-
-    assert "sklearn" not in sys.modules, "semg_baseline must not import sklearn during package initialization"
+    """Verify that importing semg_baseline does not import scikit-learn in an isolated process."""
+    cmd = [
+        sys.executable,
+        "-c",
+        "import sys; import semg_baseline; assert 'sklearn' not in sys.modules, f'Leaked: {[m for m in sys.modules if m.startswith(\"sklearn\")]}'",
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert res.returncode == 0

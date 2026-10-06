@@ -10,6 +10,7 @@ Validates:
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 import numpy as np
@@ -156,5 +157,11 @@ def test_predictor_fails_closed_on_tampered_model(tmp_path: Path) -> None:
 
 
 def test_predictor_does_not_import_sklearn() -> None:
-    """semg_baseline.predictor must have zero dependency on sklearn."""
-    assert "sklearn" not in sys.modules or "sklearn.discriminant_analysis" not in sys.modules
+    """semg_baseline.predictor must have zero dependency on sklearn in an isolated process."""
+    cmd = [
+        sys.executable,
+        "-c",
+        "import sys; import semg_baseline.predictor; assert 'sklearn' not in sys.modules, f'Leaked: {[m for m in sys.modules if m.startswith(\"sklearn\")]}'",
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert res.returncode == 0

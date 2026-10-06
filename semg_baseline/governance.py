@@ -1,11 +1,13 @@
 """Automated dependency governance gate for scikit-learn and third-party libraries.
 
 Enforces FR-006, SC-001, Decision-1, and Constitution v1.1.0 (commit ce75be0):
-- Human approval lifecycle (PROPOSED -> CONDITIONAL_PASS, APPROVED -> PASS).
+- Human approval lifecycle (PROPOSED -> CONDITIONAL_PASS, APPROVED (Stage A) -> APPROVED_PENDING_LOCK,
+  LOCKED (Stage B) -> APPROVED / PASS).
 - Cryptographic SHA-256 fingerprinting of the Architecture Decision Record (ADR).
-- Strict import allowlist (semg_baseline/**, tests/**; prohibited in semg_dsp/**, semg_dataset/**).
-- Strict API surface allowlist (discriminant_analysis, covariance, metrics;
+- Strict positive import path allowlist (semg_baseline/**, tests/test_baseline_*.py, tests/feature_004/**).
+- Strict symbol-level API surface allowlist (LinearDiscriminantAnalysis, ledoit_wolf, specific metrics;
   prohibited: model_selection, pipeline, preprocessing).
+- Strict version range enforcement (>=1.5.0, <2.0.0).
 - Deterministic fail-closed gate before pyproject.toml mutation or sklearn execution.
 """
 
@@ -19,6 +21,9 @@ from pathlib import Path
 import re
 from typing import Any
 
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
+
 try:
     import tomllib  # Python 3.11+
 except ImportError:  # pragma: no cover
@@ -30,6 +35,7 @@ class GovernanceStatus(str, Enum):
 
     PROPOSED = "PROPOSED"
     CONDITIONAL_PASS = "CONDITIONAL_PASS"
+    APPROVED_PENDING_LOCK = "APPROVED_PENDING_LOCK"
     APPROVED = "APPROVED"
     FAIL = "FAIL"
 
@@ -73,6 +79,7 @@ ALLOWED_BASE_PACKAGES = {
     "mypy",
     "setuptools",
     "anyio",
+    "packaging",
 }
 
 # Allowlisted sklearn submodules
@@ -88,6 +95,81 @@ PROHIBITED_SKLEARN_SUBMODULES = {
     "pipeline",
     "preprocessing",
 }
+
+# Strict allowlist of permitted symbols per submodule
+ALLOWED_SKLEARN_SYMBOLS: dict[str, set[str]] = {
+    "discriminant_analysis": {
+        "LinearDiscriminantAnalysis",
+    },
+    "metrics": {
+        "confusion_matrix",
+        "accuracy_score",
+        "balanced_accuracy_score",
+        "f1_score",
+        "precision_score",
+        "recall_score",
+    },
+    "covariance": {
+        "ledoit_wolf",
+        "LedoitWolf",
+        "empirical_covariance",
+        "shrunk_covariance",
+    },
+}
+
+
+def is_path_allowlisted_for_sklearn(file_path: Path | str) -> bool:
+    """Return True only if file_path falls strictly within positive allowlist for sklearn imports.
+
+    Allowed paths (FR-006.2, ADR-004-001):
+    1. semg_baseline/**
+    2. tests/test_baseline_*.py
+    3. tests/feature_004/**
+    """
+    path_str = str(file_path).replace("\\", "/").strip()
+    if path_str.startswith("./"):
+        path_str = path_str[2:]
+
+    if path_str.startswith("semg_baseline/"):
+        return True
+    if path_str.startswith("tests/feature_004/"):
+        return True
+    if re.match(r"^tests/test_baseline_[^/]+\.py$", path_str):
+        return True
+
+    return False
+
+
+def validate_sklearn_version_spec(dep_spec: str) -> tuple[bool, str]:
+    """Validate that scikit-learn dependency specifier strictly satisfies both >=1.5.0 and <2.0.0."""
+    match = re.match(r"^[a-zA-Z0-9_\-\.]+\s*(.*)$", dep_spec.strip())
+    if not match or not match.group(1).strip():
+        return False, f"scikit-learn specifier '{dep_spec}' lacks version constraints."
+
+    spec_str = match.group(1).strip()
+    try:
+        spec_set = SpecifierSet(spec_str)
+        has_ge_1_5 = False
+        has_lt_2_0 = False
+
+        for spec in spec_set:
+            op = spec.operator
+            ver = Version(spec.version)
+            if op in (">=", "==") and Version("1.5.0") <= ver < Version("2.0.0"):
+                has_ge_1_5 = True
+            elif op == "<" and Version("1.5.0") < ver <= Version("2.0.0"):
+                has_lt_2_0 = True
+            elif op == "<=" and Version("1.5.0") < ver < Version("2.0.0"):
+                has_lt_2_0 = True
+
+        if not (has_ge_1_5 and has_lt_2_0):
+            return False, (
+                f"scikit-learn specifier '{dep_spec}' must enforce both lower bound >=1.5.0 "
+                f"and upper bound <2.0.0 (parsed: '{spec_str}')."
+            )
+        return True, ""
+    except Exception as e:
+        return False, f"Failed to parse scikit-learn version specifier '{spec_str}': {e}"
 
 
 def canonicalize_adr_content(content: str) -> str:
@@ -122,7 +204,6 @@ def parse_adr(adr_path: Path | str) -> ADRRecord:
         match = re.search(pattern, content)
         if match:
             raw_val = match.group(1).strip()
-            # Strip backticks if present
             return raw_val.strip("`'\"")
         return default
 
@@ -152,7 +233,11 @@ def parse_adr(adr_path: Path | str) -> ADRRecord:
 def validate_adr(record: ADRRecord) -> tuple[bool, list[str], GovernanceStatus]:
     """Validate ADR metadata, human approval signatures, and cryptographic lock.
 
-    Returns (is_valid, errors, status).
+    Enforces the two-stage approval workflow:
+    - Stage A (Human Approval Commit): status is APPROVED, approver and date are filled,
+      commit is pending -> returns GovernanceStatus.APPROVED_PENDING_LOCK (sklearn blocked).
+    - Stage B (Governance Lock Commit): approval git commit hash is recorded and
+      cryptographic fingerprint matches canonical content -> returns GovernanceStatus.APPROVED (sklearn permitted).
     """
     errors: list[str] = []
 
@@ -172,24 +257,31 @@ def validate_adr(record: ADRRecord) -> tuple[bool, list[str], GovernanceStatus]:
                 f"ADR marked APPROVED but approval date is pending: '{record.approval_date}'"
             )
 
-        # Check git commit
-        if not record.git_commit or "pending" in record.git_commit.lower():
+        # If human approval fields failed, this is an invalid state
+        if errors:
+            return False, errors, GovernanceStatus.FAIL
+
+        # Check approval git commit (Commit A)
+        commit_pending = not record.git_commit or "pending" in record.git_commit.lower()
+        fingerprint_pending = not record.fingerprint or "pending" in record.fingerprint.lower()
+
+        # If either commit or fingerprint is pending, ADR is in Stage A (APPROVED_PENDING_LOCK)
+        if commit_pending or fingerprint_pending:
+            return True, [], GovernanceStatus.APPROVED_PENDING_LOCK
+
+        # Validate git commit hash format (7 to 40 hex chars)
+        if not re.match(r"^[a-f0-9]{7,40}$", record.git_commit):
             errors.append(
-                f"ADR marked APPROVED but approval git commit is pending: '{record.git_commit}'"
+                f"ADR approval git commit hash format invalid: '{record.git_commit}' (expected 7-40 hex chars)"
             )
 
-        # Check cryptographic fingerprint
-        if not record.fingerprint or "pending" in record.fingerprint.lower():
+        # Validate cryptographic fingerprint against canonicalized content
+        expected_fp = compute_adr_fingerprint(record.raw_content)
+        if record.fingerprint != expected_fp:
             errors.append(
-                f"ADR marked APPROVED but fingerprint is pending: '{record.fingerprint}'"
+                f"ADR cryptographic fingerprint mismatch: expected '{expected_fp}', "
+                f"found '{record.fingerprint}'"
             )
-        else:
-            expected_fp = compute_adr_fingerprint(record.raw_content)
-            if record.fingerprint != expected_fp:
-                errors.append(
-                    f"ADR cryptographic fingerprint mismatch: expected '{expected_fp}', "
-                    f"found '{record.fingerprint}'"
-                )
 
         if errors:
             return False, errors, GovernanceStatus.FAIL
@@ -202,7 +294,6 @@ def validate_adr(record: ADRRecord) -> tuple[bool, list[str], GovernanceStatus]:
 
 def _extract_package_name(dep_spec: str) -> str:
     """Extract canonical package name from a PEP 508 dependency specification."""
-    # Match package name before any version specifier, extra, or environment marker
     match = re.match(r"^([a-zA-Z0-9_\-\.]+)", dep_spec.strip())
     if match:
         return match.group(1).lower().replace("_", "-")
@@ -240,11 +331,9 @@ def verify_pyproject_dependencies(
                     f"(ADR status is '{adr_record.status}')."
                 )
             else:
-                # ADR is APPROVED: verify version specification if present
-                if "<2.0" not in dep and "<2" not in dep and "==1." not in dep and ">=1.5" not in dep:
-                    errors.append(
-                        f"scikit-learn dependency specifier '{dep}' does not match ADR required range >=1.5.0, <2.0.0."
-                    )
+                is_valid_spec, spec_err = validate_sklearn_version_spec(dep)
+                if not is_valid_spec:
+                    errors.append(spec_err)
         elif pkg_name in ALLOWED_BASE_PACKAGES:
             continue
         else:
@@ -267,25 +356,23 @@ def verify_imports_in_source(
     except SyntaxError as e:
         return False, [f"SyntaxError parsing '{path_str}': {e}"]
 
-    # Determine if this file path is strictly forbidden from importing sklearn
-    is_forbidden_path = (
-        "semg_dsp/" in path_str
-        or "semg_dataset/" in path_str
-        or "data/" in path_str
-    )
+    is_allowlisted = is_path_allowlisted_for_sklearn(file_path)
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 name = alias.name
                 if name == "sklearn" or name.startswith("sklearn."):
-                    if is_forbidden_path:
+                    if not is_allowlisted:
                         violations.append(
-                            f"SCOPE_VIOLATION: scikit-learn import prohibited in host-incompatible path '{path_str}'"
+                            f"SCOPE_VIOLATION: scikit-learn import prohibited outside allowlisted paths in '{path_str}'"
                         )
-                    # Check submodule allowlist
-                    parts = name.split(".")
-                    if len(parts) > 1:
+                    if name == "sklearn":
+                        violations.append(
+                            f"API_VIOLATION: Bare 'import sklearn' prohibited in '{path_str}'. Must import specific allowlisted submodules or symbols."
+                        )
+                    else:
+                        parts = name.split(".")
                         submodule = parts[1]
                         if submodule in PROHIBITED_SKLEARN_SUBMODULES:
                             violations.append(
@@ -295,17 +382,36 @@ def verify_imports_in_source(
                             violations.append(
                                 f"API_VIOLATION: Submodule 'sklearn.{submodule}' not in allowlist in '{path_str}'"
                             )
+                        elif len(parts) > 2:
+                            violations.append(
+                                f"API_VIOLATION: Nested submodule '{name}' not in allowlist in '{path_str}'"
+                            )
 
         elif isinstance(node, ast.ImportFrom):
             mod = node.module or ""
             if mod == "sklearn" or mod.startswith("sklearn."):
-                if is_forbidden_path:
+                if not is_allowlisted:
                     violations.append(
-                        f"SCOPE_VIOLATION: scikit-learn import prohibited in host-incompatible path '{path_str}'"
+                        f"SCOPE_VIOLATION: scikit-learn import prohibited outside allowlisted paths in '{path_str}'"
                     )
 
-                parts = mod.split(".")
-                if len(parts) > 1:
+                if mod == "sklearn":
+                    for alias in node.names:
+                        submodule = alias.name
+                        if submodule == "*":
+                            violations.append(
+                                f"API_VIOLATION: Wildcard import '*' prohibited for 'sklearn' in '{path_str}'"
+                            )
+                        elif submodule in PROHIBITED_SKLEARN_SUBMODULES:
+                            violations.append(
+                                f"API_VIOLATION: Prohibited submodule 'sklearn.{submodule}' imported in '{path_str}'"
+                            )
+                        elif submodule not in ALLOWED_SKLEARN_SUBMODULES:
+                            violations.append(
+                                f"API_VIOLATION: Submodule 'sklearn.{submodule}' not in allowlist in '{path_str}'"
+                            )
+                else:
+                    parts = mod.split(".")
                     submodule = parts[1]
                     if submodule in PROHIBITED_SKLEARN_SUBMODULES:
                         violations.append(
@@ -315,17 +421,22 @@ def verify_imports_in_source(
                         violations.append(
                             f"API_VIOLATION: Submodule 'sklearn.{submodule}' not in allowlist in '{path_str}'"
                         )
-                elif mod == "sklearn":
-                    for alias in node.names:
-                        submodule = alias.name
-                        if submodule in PROHIBITED_SKLEARN_SUBMODULES:
-                            violations.append(
-                                f"API_VIOLATION: Prohibited submodule 'sklearn.{submodule}' imported in '{path_str}'"
-                            )
-                        elif submodule not in ALLOWED_SKLEARN_SUBMODULES:
-                            violations.append(
-                                f"API_VIOLATION: Submodule 'sklearn.{submodule}' not in allowlist in '{path_str}'"
-                            )
+                    elif len(parts) > 2:
+                        violations.append(
+                            f"API_VIOLATION: Nested submodule '{mod}' not in allowlist in '{path_str}'"
+                        )
+                    else:
+                        allowed_syms = ALLOWED_SKLEARN_SYMBOLS.get(submodule, set())
+                        for alias in node.names:
+                            sym_name = alias.name
+                            if sym_name == "*":
+                                violations.append(
+                                    f"API_VIOLATION: Wildcard import '*' prohibited for 'sklearn.{submodule}' in '{path_str}'"
+                                )
+                            elif sym_name not in allowed_syms:
+                                violations.append(
+                                    f"API_VIOLATION: Symbol '{sym_name}' from 'sklearn.{submodule}' not in API allowlist in '{path_str}'"
+                                )
 
     return len(violations) == 0, violations
 
@@ -371,7 +482,6 @@ def check_dependency_governance(
 ) -> GovernanceReport:
     """Run full deterministic automated dependency governance check across the repository."""
     if repo_root is None:
-        # Default to repo root relative to this file: semg_baseline/governance.py -> parent parent
         repo_path = Path(__file__).resolve().parent.parent
     else:
         repo_path = Path(repo_root).resolve()
@@ -425,6 +535,14 @@ def check_dependency_governance(
             errors=[],
         )
 
+    if adr_status == GovernanceStatus.APPROVED_PENDING_LOCK:
+        return GovernanceReport(
+            status=GovernanceStatus.APPROVED_PENDING_LOCK,
+            adr_status="APPROVED",
+            sklearn_permitted=False,
+            errors=[],
+        )
+
     if adr_status == GovernanceStatus.CONDITIONAL_PASS:
         return GovernanceReport(
             status=GovernanceStatus.CONDITIONAL_PASS,
@@ -454,5 +572,5 @@ def assert_sklearn_allowed(repo_root: Path | str | None = None) -> None:
         raise GovernanceViolation(
             f"scikit-learn execution is BLOCKED under current governance "
             f"(Status: {report.status.value}, ADR: {report.adr_status}). "
-            f"Violations: {report.errors if report.errors else 'ADR remains PROPOSED (PENDING HUMAN SIGN-OFF)'}."
+            f"Violations: {report.errors if report.errors else 'ADR remains PROPOSED or PENDING LOCK (requires human approval and lock)'}."
         )
