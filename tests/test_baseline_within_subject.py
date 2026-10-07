@@ -246,20 +246,27 @@ def test_within_subject_dual_vocabulary_support() -> None:
 
 
 def test_within_subject_selection_metric_fail_closed_and_lowest_r_tie_break() -> None:
-    """Selection metric must fail closed on unknown metric and deterministically pick lowest R on tie."""
-    # 1. Fail-closed on invalid selection metric
-    with pytest.raises(ValueError, match="Unknown selection_metric 'invalid_metric'"):
+    """Selection metric must enforce canonical balanced_accuracy and numerically pick lowest R on tie."""
+    # 1. Fail-closed on non-canonical selection metrics
+    with pytest.raises(ValueError, match="Non-canonical selection_metric 'invalid_metric'"):
         WithinSubjectRunner(selection_metric="invalid_metric")
 
-    # 2. Deterministic lowest-R tie-break verification
+    with pytest.raises(ValueError, match="Non-canonical selection_metric 'accuracy'"):
+        WithinSubjectRunner(selection_metric="accuracy")
+
+    with pytest.raises(ValueError, match="Non-canonical selection_metric 'macro_f1'"):
+        WithinSubjectRunner(selection_metric="macro_f1")
+
+    # 2. Deterministic order-independent lowest-R tie-break verification
     runner = WithinSubjectRunner(
         candidate_grid=(0.5, 1.0, 2.0),
         selection_metric="balanced_accuracy",
     )
-    # Simulate tie: candidate 0.5 and candidate 1.0 both achieve score 0.888
-    tie_summary = [
+
+    # Adversarial: candidates supplied in descending order [2.0, 1.0, 0.5] with all scores tied
+    reversed_tie_summary = [
         ValidationSelectionResult(
-            candidate_r=0.5,
+            candidate_r=2.0,
             mean_accuracy=0.85,
             mean_balanced_accuracy=0.888,
             mean_macro_f1=0.80,
@@ -273,15 +280,40 @@ def test_within_subject_selection_metric_fail_closed_and_lowest_r_tie_break() ->
             fold_results=[],
         ),
         ValidationSelectionResult(
-            candidate_r=2.0,
-            mean_accuracy=0.80,
-            mean_balanced_accuracy=0.850,
-            mean_macro_f1=0.75,
+            candidate_r=0.5,
+            mean_accuracy=0.85,
+            mean_balanced_accuracy=0.888,
+            mean_macro_f1=0.80,
             fold_results=[],
         ),
     ]
-    best_r, _ = runner._select_best_r(tie_summary)
-    assert best_r == 0.5, f"Expected lowest candidate R (0.5) on tie, got {best_r}"
+    best_r_reversed, _ = runner._select_best_r(reversed_tie_summary)
+    assert best_r_reversed == 0.5, f"Expected lowest candidate R (0.5) under reversed order, got {best_r_reversed}"
+
+    # Also verify ascending order produces identical result
+    forward_tie_summary = list(reversed(reversed_tie_summary))
+    best_r_forward, _ = runner._select_best_r(forward_tie_summary)
+    assert best_r_forward == 0.5, f"Expected lowest candidate R (0.5) under forward order, got {best_r_forward}"
+
+    # Higher score candidate must win even if its candidate R is larger
+    different_scores_summary = [
+        ValidationSelectionResult(
+            candidate_r=0.5,
+            mean_accuracy=0.80,
+            mean_balanced_accuracy=0.800,
+            mean_macro_f1=0.75,
+            fold_results=[],
+        ),
+        ValidationSelectionResult(
+            candidate_r=2.0,
+            mean_accuracy=0.92,
+            mean_balanced_accuracy=0.920,
+            mean_macro_f1=0.90,
+            fold_results=[],
+        ),
+    ]
+    best_r_score, _ = runner._select_best_r(different_scores_summary)
+    assert best_r_score == 2.0, f"Expected candidate with highest score (2.0), got {best_r_score}"
 
 
 def test_within_subject_vocabulary_fail_closed_prevents_silent_shrinkage() -> None:
@@ -321,3 +353,6 @@ def test_within_subject_structural_test_isolation_nan_poisoning_immunity() -> No
     # In contrast, attempting final test evaluation on poisoned test set must fail with NaN
     with pytest.raises(ValueError, match="NaN"):
         runner.run(rec)
+
+    # Failed test evaluation must not increment the completed evaluation event counter
+    assert runner.test_evaluation_count == 0

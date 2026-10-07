@@ -104,7 +104,7 @@ class WithinSubjectRunner:
     TRAINING_REPETITIONS: tuple[int, ...] = (1, 3, 4, 6)
     TEST_REPETITIONS: tuple[int, ...] = (2, 5)
     ALL_REQUIRED_REPETITIONS: tuple[int, ...] = (1, 2, 3, 4, 5, 6)
-    VALID_SELECTION_METRICS: tuple[str, ...] = ("balanced_accuracy", "accuracy", "macro_f1")
+    CANONICAL_SELECTION_METRIC: str = "balanced_accuracy"
     CANONICAL_VOCABULARIES: dict[str, int] = {
         "global_50_class": 50,
         "exercise_E1": 18,
@@ -142,12 +142,13 @@ class WithinSubjectRunner:
         self.access_callback = access_callback
         self.raw_access_callback = raw_access_callback
 
-        # Fail-closed selection metric validation
+        # Fail-closed selection metric validation (frozen canonical metric)
         metric_str = str(selection_metric).lower()
-        if metric_str not in self.VALID_SELECTION_METRICS:
+        if metric_str != self.CANONICAL_SELECTION_METRIC:
             raise ValueError(
-                f"Unknown selection_metric '{selection_metric}'. "
-                f"Must be one of {self.VALID_SELECTION_METRICS}."
+                f"Non-canonical selection_metric '{selection_metric}' is prohibited. "
+                f"The canonical Within-Subject benchmark strictly mandates "
+                f"selection_metric='{self.CANONICAL_SELECTION_METRIC}'."
             )
         self.selection_metric = metric_str
 
@@ -427,39 +428,24 @@ class WithinSubjectRunner:
     ) -> tuple[float, list[FoldResult]]:
         """Select best candidate R multiplier using internal validation results.
 
-        Selection Policy:
-        - Primary metric: configurable via self.selection_metric ('balanced_accuracy' default).
-        - Deterministic tie-break: lowest candidate R wins (first encountered in ascending candidate grid).
-        - Unknown metric: fail-closed with ValueError.
+        Canonical Selection Policy:
+        - Frozen metric: mean Balanced Accuracy across the 4 LOTO folds.
+        - Deterministic tie-break: lowest candidate R wins numerically,
+          completely independent of input summary order.
         """
         if not selection_summary:
             raise ValueError("Empty selection summary: no candidate configurations evaluated.")
 
-        best_candidate: float | None = None
-        best_score = -1.0
-        best_folds: list[FoldResult] = []
+        # Sort candidate results deterministically by:
+        # primary key: descending score (higher score is better)
+        # secondary key: ascending candidate_r (lowest R wins ties)
+        # Float scores are rounded to 12 decimal places to prevent spurious IEEE-754 precision artifacts.
+        def _candidate_sort_key(res: ValidationSelectionResult) -> tuple[float, float]:
+            score = round(float(res.mean_balanced_accuracy), 12)
+            return (-score, float(res.candidate_r))
 
-        for res in selection_summary:
-            if self.selection_metric == "balanced_accuracy":
-                score = res.mean_balanced_accuracy
-            elif self.selection_metric == "accuracy":
-                score = res.mean_accuracy
-            elif self.selection_metric == "macro_f1":
-                score = res.mean_macro_f1
-            else:
-                raise ValueError(
-                    f"Unknown selection_metric '{self.selection_metric}'. "
-                    f"Must be one of {self.VALID_SELECTION_METRICS}."
-                )
-
-            # Strict greater-than enforces lowest-R tie-break for candidates in ascending grid
-            if best_candidate is None or score > best_score:
-                best_score = score
-                best_candidate = res.candidate_r
-                best_folds = res.fold_results
-
-        assert best_candidate is not None
-        return best_candidate, best_folds
+        best_result = min(selection_summary, key=_candidate_sort_key)
+        return best_result.candidate_r, best_result.fold_results
 
     def evaluate_test(
         self,
@@ -470,10 +456,8 @@ class WithinSubjectRunner:
     ) -> tuple[float, float, float, np.ndarray, np.ndarray]:
         """Execute final test evaluation strictly once on test repetitions [2, 5].
 
-        Increments self._test_evaluation_count to provide an auditable execution event.
+        Increments self._test_evaluation_count upon successful evaluation completion.
         """
-        self._test_evaluation_count += 1
-
         test_windows, test_labels, test_rep_units, _ = self.prepare_repetition_windows(
             recording=recording,
             repetitions=self.TEST_REPETITIONS,
@@ -491,6 +475,9 @@ class WithinSubjectRunner:
         test_acc = float(accuracy_score(test_labels, test_preds))
         test_bal_acc = float(balanced_accuracy_score(test_labels, test_preds))
         test_macro_f1 = float(f1_score(test_labels, test_preds, average="macro", zero_division=0))
+
+        # Real auditable event counter increments strictly after successful evaluation
+        self._test_evaluation_count += 1
 
         return test_acc, test_bal_acc, test_macro_f1, test_preds, test_labels
 
