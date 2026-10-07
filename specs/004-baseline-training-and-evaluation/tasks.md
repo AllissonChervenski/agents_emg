@@ -19,7 +19,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - In GREEN, the implementer edits strictly the paths listed in `allowed_files`. Test files are protected against `TEST_TAMPERING`.
 - Mathematical, DSP, feature extraction, and ML tasks are marked `"numeric_sensitive": true`. Structural, governance, and manifest tasks are marked `"numeric_sensitive": false`.
 - Raw data directory `data/raw/ninapro_db2/` and Feature 003 artifacts are strictly READ-ONLY. No task may modify or reinterpret raw archives.
-- **Dependency Governance Constraint**: ADR-004-001 (`scikit-learn`), ADR-004-002 (`jsonschema`), and ADR-004-003 (`tomli`) are `APPROVED / LOCKED` (aggregate dependency governance status `APPROVED`, `all_required_dependencies_approved = true`). T013b is COMPLETE / FORMALLY ACCEPTED, T013d is COMPLETE / ACCEPTED, T014 is COMPLETE / SCIENTIFICALLY ACCEPTED. T015 is ACTIVE (RED phase).
+- **Dependency Governance Constraint**: ADR-004-001 (`scikit-learn`), ADR-004-002 (`jsonschema`), and ADR-004-003 (`tomli`) are `APPROVED / LOCKED` (aggregate dependency governance status `APPROVED`, `all_required_dependencies_approved = true`). T013b is COMPLETE / FORMALLY ACCEPTED, T013d is COMPLETE / ACCEPTED, T014 is COMPLETE / SCIENTIFICALLY ACCEPTED. T015 is COMPLETE (hardened GREEN under approved test extension). T016 is BLOCKED awaiting human acceptance.
 - T020 is a non-implementation review task marked `NOT_AUTOMATABLE`.
 
 ---
@@ -124,10 +124,10 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
   *Note*: Complete under approved test correction. Old RED hash: `5e00b149596da14adb92b009c60ab3ab6d192a3d52f5da6035324e02055df3e8`; New protected RED hash: `24d0e15a43830b49b9d5cd719329d6488f1f93694b9fa860f5a102dc15fef5b4` (erroneous scalar shrinkage assertion removed per Decision-3; adversarial missing/unexpected classes and vocabulary fail-closed contracts added per FR-011.5; score tolerance registry `TOL-LDA-NEUTRAL-SCORES` enforced; zero `sys.modules` eviction in production code). All 257 tests passing.
 
 - [x] T015 [US3] Implement WithinSubjectRunner executing LOTO validation and single test evaluation in semg_baseline/within_subject.py
-  <!-- harness-task {"requirements":["FR-005.7","FR-008"],"acceptance_criteria":["SC-003"],"plan_decisions":["Decision-3","Decision-5"],"dependencies":["T010","T013","T014"],"test_type":"UNIT","allowed_files":["semg_baseline/within_subject.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
-  *Note*: Complete. Protected RED hash verified: `0c578819ef8b1afb701ab187f2e0c4816b08c85f05ce59e616a29cb3fff28857` (`tests/test_baseline_within_subject.py`). Zero test leakage across LOTO validation folds (repetitions 2 and 5 unaccessed during selection), single final test evaluation on repetitions [2, 5], preprocessing anti-leakage verified, all 9 unit tests and 266 full suite tests passing.
+  <!-- harness-task {"requirements":["FR-005.7","FR-008"],"acceptance_criteria":["SC-003"],"plan_decisions":["Decision-3","Decision-5"],"dependencies":["T010","T013","T014"],"test_type":"UNIT","allowed_files":["semg_baseline/within_subject.py","tests/test_baseline_within_subject.py","specs/004-baseline-training-and-evaluation/tasks.md"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+  *Note*: Complete under approved test extension. Old RED hash: `0c578819ef8b1afb701ab187f2e0c4816b08c85f05ce59e616a29cb3fff28857`; New protected RED hash: `ec8f288fe5a5ce26197a62af294bf2040dafd90ff921b9b7adc4466f739d24d5` (`tests/test_baseline_within_subject.py`). Hardened contracts verified: (1) structural test isolation (repetitions [2, 5] receive zero raw access, filtering, or segmentation during selection; NaN-poisoning immunity on test reps demonstrated); (2) auditable execution event counter for single final test evaluation (`test_evaluation_count == 1`); (3) formally governed selection metric ('balanced_accuracy' default, lowest-R deterministic tie-break, fail-closed on unknown); (4) explicit vocabulary enforcement preventing silent class count shrinkage from 50 (default `num_classes=50`). All 12 unit tests and 269 full suite tests passing.
 
-**Checkpoint**: User Story 3 complete; individual user baseline classifier is fitted and validated with zero test leakage.
+**Checkpoint**: User Story 3 complete / pending human review acceptance; individual user baseline classifier is fitted and validated with zero test leakage.
 
 ---
 

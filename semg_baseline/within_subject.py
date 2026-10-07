@@ -7,11 +7,15 @@ Implements FR-005.7, FR-008, SC-003, Decision-3, Decision-5:
     Fold 3: Val=[4], Train=[1, 3, 6]
     Fold 4: Val=[6], Train=[1, 3, 4]
 - Disjoint partition separation: TRAIN ∩ VAL = ∅, TRAIN ∩ TEST = ∅, VAL ∩ TEST = ∅.
-- Test repetitions [2, 5] strictly invisible (zero access) during validation / configuration selection (FR-005.7).
-- Final model fitted on all training repetitions [1, 3, 4, 6].
+- Structural test isolation: Test repetitions [2, 5] receive strictly zero raw access,
+  filtering, segmentation, or prediction during validation / configuration selection (FR-005.7).
+- Independent causal filtering per repetition unit eliminating temporal filter state leakage.
+- Final model fitted strictly on all training repetitions [1, 3, 4, 6].
 - Final test evaluated strictly once on test repetitions [2, 5] (test_evaluation_count == 1).
 - Preprocessing anti-leakage: noise deadzones and feature scaling computed solely from fold train.
 - Candidate configuration selection over R in candidate grid strictly derived from training pool validation.
+- Formally governed selection metric with deterministic tie-break (lowest candidate R).
+- Fail-closed vocabulary enforcement preventing silent class count shrinkage.
 - Deterministic reproducibility under identical inputs and configurations.
 - Fail-closed validation for missing required repetitions (FR-011.5).
 """
@@ -31,6 +35,7 @@ from semg_baseline.scaling import FeatureScaler
 from semg_baseline.thresholds import ThresholdCalibration, ThresholdCalibrator
 from semg_baseline.window import PureWindowSegmenter, TransitionAudit
 from semg_dataset.contract import RecordingData
+from semg_dataset.manifest import associate_rest_to_repetition_units
 
 
 @dataclass(frozen=True)
@@ -99,11 +104,18 @@ class WithinSubjectRunner:
     TRAINING_REPETITIONS: tuple[int, ...] = (1, 3, 4, 6)
     TEST_REPETITIONS: tuple[int, ...] = (2, 5)
     ALL_REQUIRED_REPETITIONS: tuple[int, ...] = (1, 2, 3, 4, 5, 6)
+    VALID_SELECTION_METRICS: tuple[str, ...] = ("balanced_accuracy", "accuracy", "macro_f1")
+    CANONICAL_VOCABULARIES: dict[str, int] = {
+        "global_50_class": 50,
+        "exercise_E1": 18,
+        "exercise_E2": 24,
+        "exercise_E3": 10,
+    }
 
     def __init__(
         self,
         candidate_grid: Sequence[float] = (0.5, 1.0, 1.5, 2.0, 3.0),
-        num_classes: int | None = None,
+        num_classes: int | str = 50,
         prior_type: PriorType | str = PriorType.UNIFORM,
         view_name: str = "refined",
         filter_low_hz: float = 20.0,
@@ -114,10 +126,10 @@ class WithinSubjectRunner:
         stride: int = 100,
         num_channels: int = 12,
         access_callback: Callable[[int], None] | None = None,
+        raw_access_callback: Callable[[int, int], None] | None = None,
         selection_metric: str = "balanced_accuracy",
     ) -> None:
         self.candidate_grid = tuple(float(r) for r in candidate_grid)
-        self.num_classes = int(num_classes) if num_classes is not None else None
         self.prior_type = prior_type if isinstance(prior_type, PriorType) else PriorType(str(prior_type).lower())
         self.view_name = str(view_name)
         self.filter_low_hz = float(filter_low_hz)
@@ -128,7 +140,33 @@ class WithinSubjectRunner:
         self.stride = int(stride)
         self.num_channels = int(num_channels)
         self.access_callback = access_callback
-        self.selection_metric = str(selection_metric)
+        self.raw_access_callback = raw_access_callback
+
+        # Fail-closed selection metric validation
+        metric_str = str(selection_metric).lower()
+        if metric_str not in self.VALID_SELECTION_METRICS:
+            raise ValueError(
+                f"Unknown selection_metric '{selection_metric}'. "
+                f"Must be one of {self.VALID_SELECTION_METRICS}."
+            )
+        self.selection_metric = metric_str
+
+        # Vocabulary configuration
+        if isinstance(num_classes, str) and num_classes.lower() == "auto":
+            self.num_classes: int | str = "auto"
+        elif isinstance(num_classes, str) and num_classes in self.CANONICAL_VOCABULARIES:
+            self.num_classes = self.CANONICAL_VOCABULARIES[num_classes]
+        else:
+            try:
+                val = int(num_classes)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"Invalid num_classes '{num_classes}'. Must be an integer >= 2, "
+                    f"'auto', or one of {list(self.CANONICAL_VOCABULARIES.keys())}."
+                ) from None
+            if val < 2:
+                raise ValueError(f"num_classes must be >= 2, got {val}")
+            self.num_classes = val
 
         self.segmenter = PureWindowSegmenter(
             window_len=self.window_len,
@@ -136,11 +174,30 @@ class WithinSubjectRunner:
             fs=self.fs,
         )
 
+        # Execution event audit counters
+        self._test_evaluation_count: int = 0
+        self._accessed_raw_repetitions: list[int] = []
+
+    @property
+    def test_evaluation_count(self) -> int:
+        """Return the real number of test evaluations executed."""
+        return self._test_evaluation_count
+
+    @property
+    def accessed_raw_repetitions(self) -> list[int]:
+        """Return audit history of repetition units whose raw signals were accessed."""
+        return list(self._accessed_raw_repetitions)
+
     def _resolve_num_classes(self, labels: np.ndarray) -> int:
-        """Resolve effective class count: explicitly configured or inferred from labels."""
-        if self.num_classes is not None:
-            return self.num_classes
-        return int(np.max(labels)) + 1
+        """Resolve nominal vocabulary size.
+
+        In canonical benchmark mode, vocabulary size is strictly explicit and fixed.
+        Dynamic inference from labels is permitted only when explicitly configured
+        with num_classes='auto' for controlled procedural test fixtures.
+        """
+        if self.num_classes == "auto":
+            return int(np.max(labels)) + 1
+        return int(self.num_classes)
 
     @classmethod
     def get_fold_definitions(cls) -> list[FoldPartitionDef]:
@@ -152,53 +209,117 @@ class WithinSubjectRunner:
             FoldPartitionDef(fold_id=4, val_repetition=6, train_repetitions=[1, 3, 4]),
         ]
 
-    def _prepare_windows(
-        self, recording: RecordingData
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, TransitionAudit]:
-        """Filter continuous EMG and segment pure steady-state windows with repetition tracking."""
+    def prepare_repetition_windows(
+        self,
+        recording: RecordingData,
+        repetitions: Sequence[int],
+        validate_all_required: bool = False,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[TransitionAudit]]:
+        """Filter continuous EMG and segment pure steady-state windows strictly for specified repetitions.
+
+        Enforces structural zero-leakage partition isolation:
+        - Never reads, slices, or filters signals from unrequested repetitions.
+        - Filters each repetition unit independently to eliminate causal filter memory leakage across repetitions.
+        - Validates presence of all required repetitions when requested (FR-011.5).
+
+        Returns:
+            windows: Array of shape (N_admitted, window_len, num_channels) in float32.
+            labels: Array of shape (N_admitted,) containing integer gesture labels.
+            repetition_units: Array of shape (N_admitted,) containing integer repetition units.
+            audits: List of TransitionAudit records per admitted repetition unit.
+        """
         view = recording.get_view(self.view_name)
+        units = associate_rest_to_repetition_units(view.repetitions)
 
-        bp_filter = CausalBandpassFilter(
-            low_hz=self.filter_low_hz,
-            high_hz=self.filter_high_hz,
-            fs=self.fs,
-            order=self.filter_order,
-            num_channels=self.num_channels,
-        )
-        filtered_emg = bp_filter.process(view.signals)
+        # Fail-closed validation for required repetitions
+        if validate_all_required:
+            present_reps = set(np.unique(units).tolist())
+            missing_reps = set(self.ALL_REQUIRED_REPETITIONS) - present_reps
+            if missing_reps:
+                raise ValueError(
+                    f"Required repetition(s) missing from subject {recording.subject_id}: "
+                    f"{sorted(missing_reps)}"
+                )
 
-        windows, labels, audit = self.segmenter.segment(
-            emg=filtered_emg,
-            labels=view.labels,
-            repetitions=view.repetitions,
-        )
+        windows_list: list[np.ndarray] = []
+        labels_list: list[np.ndarray] = []
+        repetition_units_list: list[np.ndarray] = []
+        audits_list: list[TransitionAudit] = []
 
-        repetition_units = np.array(audit.admitted_repetition_units, dtype=np.int32)
+        for rep in repetitions:
+            rep_mask = units == rep
+            if not np.any(rep_mask):
+                continue
 
-        # Fail-closed validation: all required repetitions 1..6 must be present
-        present_reps = set(np.unique(repetition_units).tolist())
-        missing_reps = set(self.ALL_REQUIRED_REPETITIONS) - present_reps
-        if missing_reps:
-            raise ValueError(
-                f"Required repetition(s) missing from admitted windows in subject {recording.subject_id}: "
-                f"{sorted(missing_reps)}"
+            # Structural isolation: access raw signals strictly for repetition 'rep'
+            rep_signals = view.signals[rep_mask]
+            rep_labels = view.labels[rep_mask]
+            rep_original = view.repetitions[rep_mask]
+            rep_units_slice = units[rep_mask]
+
+            # Record raw access audit
+            self._accessed_raw_repetitions.append(rep)
+            if self.raw_access_callback is not None:
+                self.raw_access_callback(rep, len(rep_signals))
+
+            # Filter repetition unit independently (fresh filter state: zero inter-repetition leakage)
+            bp_filter = CausalBandpassFilter(
+                low_hz=self.filter_low_hz,
+                high_hz=self.filter_high_hz,
+                fs=self.fs,
+                order=self.filter_order,
+                num_channels=self.num_channels,
+            )
+            filtered_rep = bp_filter.process(rep_signals)
+
+            win_r, lbl_r, audit_r = self.segmenter.segment(
+                emg=filtered_rep,
+                labels=rep_labels,
+                repetitions=rep_original,
+                repetition_units=rep_units_slice,
             )
 
-        return windows, labels, repetition_units, audit
+            if len(win_r) > 0:
+                windows_list.append(win_r)
+                labels_list.append(lbl_r)
+                repetition_units_list.append(
+                    np.array(audit_r.admitted_repetition_units, dtype=np.int32)
+                )
+                audits_list.append(audit_r)
+
+        if not windows_list:
+            empty_windows = np.empty((0, self.window_len, self.num_channels), dtype=np.float32)
+            empty_labels = np.empty(0, dtype=view.labels.dtype)
+            empty_units = np.empty(0, dtype=np.int32)
+            return empty_windows, empty_labels, empty_units, audits_list
+
+        windows = np.vstack(windows_list)
+        labels = np.concatenate(labels_list)
+        repetition_units = np.concatenate(repetition_units_list)
+
+        return windows, labels, repetition_units, audits_list
 
     def count_admitted_windows(
         self, recording: RecordingData, repetitions: Sequence[int]
     ) -> int:
         """Count admitted windows matching specified repetitions."""
-        _, _, repetition_units, _ = self._prepare_windows(recording)
-        mask = np.isin(repetition_units, list(repetitions))
-        return int(np.sum(mask))
+        windows, _, _, _ = self.prepare_repetition_windows(recording, repetitions=repetitions)
+        return len(windows)
 
     def run_validation_selection(
         self, recording: RecordingData
     ) -> list[ValidationSelectionResult]:
-        """Execute internal 4-fold validation across candidate R values without test set exposure (FR-005.7)."""
-        windows, labels, repetition_units, _ = self._prepare_windows(recording)
+        """Execute internal 4-fold validation across candidate R values without test set exposure (FR-005.7).
+
+        Structural Invariant:
+        - Only TRAINING_REPETITIONS [1, 3, 4, 6] are loaded, filtered, or segmented.
+        - TEST_REPETITIONS [2, 5] receive strictly zero raw access or preprocessing.
+        """
+        windows, labels, repetition_units, _ = self.prepare_repetition_windows(
+            recording=recording,
+            repetitions=self.TRAINING_REPETITIONS,
+            validate_all_required=True,
+        )
         fold_defs = self.get_fold_definitions()
 
         selection_results: list[ValidationSelectionResult] = []
@@ -213,7 +334,7 @@ class WithinSubjectRunner:
                 train_labels = labels[train_mask]
                 train_rep_units = repetition_units[train_mask]
 
-                # Instrument access callback
+                # Instrument window access callback
                 if self.access_callback is not None:
                     for r in train_rep_units:
                         self.access_callback(int(r))
@@ -304,42 +425,91 @@ class WithinSubjectRunner:
     def _select_best_r(
         self, selection_summary: list[ValidationSelectionResult]
     ) -> tuple[float, list[FoldResult]]:
-        """Select best candidate R multiplier using internal validation results."""
+        """Select best candidate R multiplier using internal validation results.
+
+        Selection Policy:
+        - Primary metric: configurable via self.selection_metric ('balanced_accuracy' default).
+        - Deterministic tie-break: lowest candidate R wins (first encountered in ascending candidate grid).
+        - Unknown metric: fail-closed with ValueError.
+        """
         if not selection_summary:
             raise ValueError("Empty selection summary: no candidate configurations evaluated.")
 
-        best_candidate = selection_summary[0].candidate_r
+        best_candidate: float | None = None
         best_score = -1.0
-        best_folds = selection_summary[0].fold_results
+        best_folds: list[FoldResult] = []
 
         for res in selection_summary:
-            if self.selection_metric == "accuracy":
+            if self.selection_metric == "balanced_accuracy":
+                score = res.mean_balanced_accuracy
+            elif self.selection_metric == "accuracy":
                 score = res.mean_accuracy
             elif self.selection_metric == "macro_f1":
                 score = res.mean_macro_f1
             else:
-                score = res.mean_balanced_accuracy
+                raise ValueError(
+                    f"Unknown selection_metric '{self.selection_metric}'. "
+                    f"Must be one of {self.VALID_SELECTION_METRICS}."
+                )
 
-            if score > best_score:
+            # Strict greater-than enforces lowest-R tie-break for candidates in ascending grid
+            if best_candidate is None or score > best_score:
                 best_score = score
                 best_candidate = res.candidate_r
                 best_folds = res.fold_results
 
+        assert best_candidate is not None
         return best_candidate, best_folds
+
+    def evaluate_test(
+        self,
+        recording: RecordingData,
+        trainer: CanonicalLdaTrainer,
+        extractor: TimeDomainFeatureExtractor,
+        scaler: FeatureScaler,
+    ) -> tuple[float, float, float, np.ndarray, np.ndarray]:
+        """Execute final test evaluation strictly once on test repetitions [2, 5].
+
+        Increments self._test_evaluation_count to provide an auditable execution event.
+        """
+        self._test_evaluation_count += 1
+
+        test_windows, test_labels, test_rep_units, _ = self.prepare_repetition_windows(
+            recording=recording,
+            repetitions=self.TEST_REPETITIONS,
+            validate_all_required=False,
+        )
+
+        if self.access_callback is not None:
+            for r in test_rep_units:
+                self.access_callback(int(r))
+
+        X_test_raw = extractor.extract(test_windows)
+        X_test_scaled = scaler.transform(X_test_raw)
+        test_preds = trainer.predict(X_test_scaled)
+
+        test_acc = float(accuracy_score(test_labels, test_preds))
+        test_bal_acc = float(balanced_accuracy_score(test_labels, test_preds))
+        test_macro_f1 = float(f1_score(test_labels, test_preds, average="macro", zero_division=0))
+
+        return test_acc, test_bal_acc, test_macro_f1, test_preds, test_labels
 
     def run(self, recording: RecordingData) -> WithinSubjectResult:
         """Execute full Within-Subject benchmark: LOTO validation, configuration selection, and final test."""
+        # Reset execution audit counters for this run
+        self._test_evaluation_count = 0
+        self._accessed_raw_repetitions.clear()
+
         # Step 1: Internal validation selection across candidate grid (zero access to test repetitions)
         selection_summary = self.run_validation_selection(recording)
         selected_r, validation_folds = self._select_best_r(selection_summary)
 
-        # Step 2: Prepare windows
-        windows, labels, repetition_units, _ = self._prepare_windows(recording)
-
-        # Step 3: Final training fit strictly on all training pool repetitions [1, 3, 4, 6]
-        train_mask = np.isin(repetition_units, list(self.TRAINING_REPETITIONS))
-        train_windows = windows[train_mask]
-        train_labels = labels[train_mask]
+        # Step 2: Prepare windows for final training fit strictly on all training pool repetitions [1, 3, 4, 6]
+        train_windows, train_labels, _, _ = self.prepare_repetition_windows(
+            recording=recording,
+            repetitions=self.TRAINING_REPETITIONS,
+            validate_all_required=False,
+        )
 
         calibrator = ThresholdCalibrator(
             candidate_grid=(selected_r,),
@@ -369,18 +539,13 @@ class WithinSubjectRunner:
         )
         final_trainer.fit(X_train_scaled, train_labels)
 
-        # Step 4: Final test evaluation strictly once on test repetitions [2, 5]
-        test_mask = np.isin(repetition_units, list(self.TEST_REPETITIONS))
-        test_windows = windows[test_mask]
-        test_labels = labels[test_mask]
-
-        X_test_raw = extractor.extract(test_windows)
-        X_test_scaled = scaler.transform(X_test_raw)
-        test_preds = final_trainer.predict(X_test_scaled)
-
-        test_acc = float(accuracy_score(test_labels, test_preds))
-        test_bal_acc = float(balanced_accuracy_score(test_labels, test_preds))
-        test_macro_f1 = float(f1_score(test_labels, test_preds, average="macro", zero_division=0))
+        # Step 3: Final test evaluation strictly once on test repetitions [2, 5]
+        test_acc, test_bal_acc, test_macro_f1, test_preds, test_labels = self.evaluate_test(
+            recording=recording,
+            trainer=final_trainer,
+            extractor=extractor,
+            scaler=scaler,
+        )
 
         assert scaler.mean_train is not None and scaler.scale_train is not None
 
@@ -397,7 +562,7 @@ class WithinSubjectRunner:
             test_macro_f1=test_macro_f1,
             test_predictions=test_preds,
             test_labels=test_labels,
-            test_evaluation_count=1,
+            test_evaluation_count=self._test_evaluation_count,
             n_final_train_samples=len(train_labels),
             final_scaler_mean=scaler.mean_train.copy(),
             final_scaler_scale=scaler.scale_train.copy(),
