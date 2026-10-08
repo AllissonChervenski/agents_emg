@@ -1,7 +1,8 @@
 """Unit, contract, and anti-leakage tests for CrossSubjectRunner (FR-009, SC-004, Decision-5).
 
 Validates:
-- Exactly 5 frozen Cross-Subject rotating folds from Feature 003.
+- Strict consumption of exactly the 5 frozen Cross-Subject folds from Feature 003.
+- Manifest identity validation: rejection of unauthorized subject permutations or split mutations.
 - Strict 24 train / 8 val / 8 test subject partition mapping per fold.
 - Mathematical disjointness: TRAIN ∩ VAL = ∅, TRAIN ∩ TEST = ∅, VAL ∩ TEST = ∅.
 - Complete subject preservation: TRAIN ∪ VAL ∪ TEST = exactly all 40 subjects.
@@ -9,11 +10,15 @@ Validates:
 - Structural test isolation: TEST subjects receive zero raw access, filtering,
   segmentation, or prediction during hyperparameter / R selection.
 - Immunity of selection phase to NaN-poisoned TEST subjects.
-- Preprocessing anti-leakage: noise thresholds and feature scaling derived strictly from 24 TRAIN subjects.
-- Regularized LDA fit strictly on 24 TRAIN subjects.
-- Selection of R governed by canonical Balanced Accuracy with order-independent lowest-R tie-break.
-- Final test evaluation executed strictly once per fold (5 evaluations across all 5 folds).
-- Adversarial rejection of invalid partitions (23 train, 9 val, overlapping subjects).
+- Three-tier role segregation:
+    * TRAIN (24 subjects): sole source for ThresholdCalibrator.fit, FeatureScaler.fit, CanonicalLdaTrainer.fit.
+    * VAL (8 subjects): sole source for R selection via transform() and predict().
+    * TEST (8 subjects): strictly invisible during selection; evaluated exactly once post-freeze.
+- Selection of R governed by canonical Balanced Accuracy on VAL with order-independent lowest-R tie-break.
+- Final test evaluation executed strictly once per fold (accumulating to 5 evaluations across all 5 folds).
+- Multi-fold aggregate summary contract: mean, median, and standard deviation for accuracy,
+  balanced_accuracy, and macro_f1.
+- Adversarial rejection of invalid partitions (23 train, 9 val, overlapping subjects, swapped subjects).
 - Adversarial rejection of missing subjects or class vocabulary mismatches.
 """
 
@@ -23,9 +28,11 @@ import numpy as np
 import pytest
 
 from semg_baseline.cross_subject import (
+    CrossSubjectAggregateMetrics,
     CrossSubjectBenchmarkResult,
     CrossSubjectFoldResult,
     CrossSubjectRunner,
+    MetricStats,
 )
 from semg_baseline.lda import CanonicalLdaTrainer
 from semg_dataset.contract import RecordingData
@@ -56,7 +63,7 @@ def _make_mock_synthetic_provider(
 
 
 def test_cross_subject_exactly_five_frozen_folds_from_feature_003() -> None:
-    """Runner must consume exactly 5 frozen folds from Feature 003 without regeneration (FR-009)."""
+    """Runner must consume exactly the 5 frozen folds from Feature 003 without regeneration (FR-009)."""
     runner = CrossSubjectRunner()
 
     assert runner.number_of_folds == 5
@@ -65,13 +72,36 @@ def test_cross_subject_exactly_five_frozen_folds_from_feature_003() -> None:
     assert manifest.protocol == "cross_subject"
     assert len(manifest.folds) == 5
 
-    # Identity check with canonical CrossSubjectSplitter
+    # Identity check with canonical Feature 003 CrossSubjectSplitter
     canonical_manifest = CrossSubjectSplitter().generate_splits()
     for fold, canonical_fold in zip(manifest.folds, canonical_manifest.folds):
         assert fold.fold_id == canonical_fold.fold_id
         assert fold.train_subjects == canonical_fold.train_subjects
         assert fold.val_subjects == canonical_fold.val_subjects
         assert fold.test_subjects == canonical_fold.test_subjects
+
+
+def test_cross_subject_manifest_identity_rejection_of_swapped_subjects() -> None:
+    """Runner must reject manifests with swapped subjects even if 24/8/8 counts match."""
+    canonical = CrossSubjectSplitter().generate_splits()
+    f1 = canonical.folds[0]
+
+    # Swap S1 (from train) with S33 (from test) in fold 1
+    bad_train = [s if s != "S1" else "S33" for s in f1.train_subjects]
+    bad_test = [s if s != "S33" else "S1" for s in f1.test_subjects]
+    mutated_f1 = FoldPartition(
+        fold_id=1,
+        train_subjects=bad_train,
+        val_subjects=f1.val_subjects,
+        test_subjects=bad_test,
+    )
+    mutated_manifest = SplitManifest(
+        protocol="cross_subject",
+        folds=[mutated_f1] + canonical.folds[1:],
+    )
+
+    with pytest.raises(ValueError, match="[Ff]rozen.*[Mm]anifest|identity mismatch|Feature 003"):
+        CrossSubjectRunner(split_manifest=mutated_manifest)
 
 
 def test_cross_subject_partitions_24_8_8_and_disjointness() -> None:
@@ -114,7 +144,6 @@ def test_cross_subject_test_subjects_invisible_during_selection() -> None:
 
     runner.subject_access_callback = on_subject_access
 
-    # Provide synthetic recordings for train + val subjects
     all_needed_subjects = fold_1.train_subjects + fold_1.val_subjects + fold_1.test_subjects
     provider = _make_mock_synthetic_provider(all_needed_subjects)
 
@@ -159,6 +188,9 @@ def test_cross_subject_test_poisoning_immunity_during_selection() -> None:
     # In contrast, full fold execution must fail when final test evaluation opens poisoned TEST data
     with pytest.raises(ValueError, match="NaN"):
         runner.run_fold(fold_id=1, recording_provider=provider)
+
+    # Failed test evaluation must not increment the test evaluation counter
+    assert runner.test_evaluation_count == 0
 
 
 def test_cross_subject_preprocessing_and_lda_strictly_train_only() -> None:
@@ -225,7 +257,6 @@ def test_cross_subject_selection_metric_frozen_and_lowest_r_tie_break() -> None:
         selection_metric="balanced_accuracy",
     )
 
-    # Mock tie summary in reversed order [2.0, 1.0, 0.5] with identical validation scores
     from semg_baseline.within_subject import ValidationSelectionResult
 
     reversed_tie_summary = [
@@ -310,7 +341,6 @@ def test_cross_subject_missing_subject_in_provider_fails_closed() -> None:
     """Missing subject in recording provider must fail closed with clear error."""
     runner = CrossSubjectRunner(num_classes=4)
     fold_1 = runner.split_manifest.folds[0]
-    # Provider missing one train subject
     incomplete_subjects = fold_1.train_subjects[1:] + fold_1.val_subjects + fold_1.test_subjects
     provider = _make_mock_synthetic_provider(incomplete_subjects)
 
@@ -318,8 +348,8 @@ def test_cross_subject_missing_subject_in_provider_fails_closed() -> None:
         runner.run_fold(fold_id=1, recording_provider=provider)
 
 
-def test_cross_subject_run_all_folds_returns_benchmark_result() -> None:
-    """run_all_folds must aggregate all 5 folds into CrossSubjectBenchmarkResult with 5 total evaluations."""
+def test_cross_subject_run_all_folds_aggregates_mean_median_std() -> None:
+    """run_all_folds must aggregate 5 folds into structured summary with mean, median, and std (FR-009, SC-004)."""
     runner = CrossSubjectRunner(num_classes=4, candidate_grid=(1.0,))
     all_subjects = [f"S{i}" for i in range(1, 41)]
     provider = _make_mock_synthetic_provider(all_subjects)
@@ -330,6 +360,13 @@ def test_cross_subject_run_all_folds_returns_benchmark_result() -> None:
     assert len(benchmark_res.folds) == 5
     assert benchmark_res.total_test_evaluations == 5
     assert runner.test_evaluation_count == 5
-    assert 0.0 <= benchmark_res.mean_accuracy <= 1.0
-    assert 0.0 <= benchmark_res.mean_balanced_accuracy <= 1.0
-    assert 0.0 <= benchmark_res.mean_macro_f1 <= 1.0
+
+    # Structured statistical summary verification (mean, median, std)
+    agg = benchmark_res.aggregate
+    assert isinstance(agg, CrossSubjectAggregateMetrics)
+
+    for metric_stat in (agg.accuracy, agg.balanced_accuracy, agg.macro_f1):
+        assert isinstance(metric_stat, MetricStats)
+        assert 0.0 <= metric_stat.mean <= 1.0
+        assert 0.0 <= metric_stat.median <= 1.0
+        assert metric_stat.std >= 0.0

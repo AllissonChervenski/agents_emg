@@ -139,7 +139,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 - [ ] T016 [US4] Implement CrossSubjectRunner executing 5-fold evaluation over frozen partitions in semg_baseline/cross_subject.py
   <!-- harness-task {"requirements":["FR-009"],"acceptance_criteria":["SC-004"],"plan_decisions":["Decision-5"],"dependencies":["T010","T013","T014"],"test_type":"UNIT","allowed_files":["semg_baseline/cross_subject.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
-  *Note*: RED phase active. Protected RED hash: `225b487e54d70b3a3ab46543c77e8cdf112fa14e18a20517bcd1d7fd4e3ad252` (`tests/test_baseline_cross_subject.py`). EXPECTED_FAILURE demonstrated (`ModuleNotFoundError: No module named 'semg_baseline.cross_subject'`). Allowed files strictly `["semg_baseline/cross_subject.py"]`.
+  *Note*: RED phase active (held for clarification of Cross-Subject selection policy). Original RED hash: `225b487e54d70b3a3ab46543c77e8cdf112fa14e18a20517bcd1d7fd4e3ad252`; Hardened RED hash: `6aad9a45b37a037314abcd8a12fc49e651c63349b1d9460db797b1165da3af58` (`tests/test_baseline_cross_subject.py`). EXPECTED_FAILURE demonstrated (`ModuleNotFoundError: No module named 'semg_baseline.cross_subject'`). Allowed files strictly `["semg_baseline/cross_subject.py"]`.
 
 **Checkpoint**: User Story 4 complete; inter-subject transferability baseline is evaluated across all 5 frozen folds.
 
