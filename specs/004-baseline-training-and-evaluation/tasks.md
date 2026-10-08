@@ -19,7 +19,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 - In GREEN, the implementer edits strictly the paths listed in `allowed_files`. Test files are protected against `TEST_TAMPERING`.
 - Mathematical, DSP, feature extraction, and ML tasks are marked `"numeric_sensitive": true`. Structural, governance, and manifest tasks are marked `"numeric_sensitive": false`.
 - Raw data directory `data/raw/ninapro_db2/` and Feature 003 artifacts are strictly READ-ONLY. No task may modify or reinterpret raw archives.
-- **Dependency Governance Constraint**: ADR-004-001 (`scikit-learn`), ADR-004-002 (`jsonschema`), and ADR-004-003 (`tomli`) are `APPROVED / LOCKED` (aggregate dependency governance status `APPROVED`, `all_required_dependencies_approved = true`). T013b is COMPLETE / FORMALLY ACCEPTED, T013d is COMPLETE / ACCEPTED, T014 is COMPLETE / SCIENTIFICALLY ACCEPTED. T015 is COMPLETE (hardened GREEN under approved test extension). T016 is BLOCKED awaiting human acceptance.
+- **Dependency Governance Constraint**: ADR-004-001 (`scikit-learn`), ADR-004-002 (`jsonschema`), and ADR-004-003 (`tomli`) are `APPROVED / LOCKED` (aggregate dependency governance status `APPROVED`, `all_required_dependencies_approved = true`). T013b is COMPLETE / FORMALLY ACCEPTED, T013d is COMPLETE / ACCEPTED, T014 is COMPLETE / SCIENTIFICALLY ACCEPTED, T015 is COMPLETE / SCIENTIFICALLY ACCEPTED (US3 ACCEPTED). T016 is ACTIVE (RED phase).
 - T020 is a non-implementation review task marked `NOT_AUTOMATABLE`.
 
 ---
@@ -139,6 +139,7 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 - [ ] T016 [US4] Implement CrossSubjectRunner executing 5-fold evaluation over frozen partitions in semg_baseline/cross_subject.py
   <!-- harness-task {"requirements":["FR-009"],"acceptance_criteria":["SC-004"],"plan_decisions":["Decision-5"],"dependencies":["T010","T013","T014"],"test_type":"UNIT","allowed_files":["semg_baseline/cross_subject.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
+  *Note*: RED phase active. Protected RED hash: `225b487e54d70b3a3ab46543c77e8cdf112fa14e18a20517bcd1d7fd4e3ad252` (`tests/test_baseline_cross_subject.py`). EXPECTED_FAILURE demonstrated (`ModuleNotFoundError: No module named 'semg_baseline.cross_subject'`). Allowed files strictly `["semg_baseline/cross_subject.py"]`.
 
 **Checkpoint**: User Story 4 complete; inter-subject transferability baseline is evaluated across all 5 frozen folds.
 
