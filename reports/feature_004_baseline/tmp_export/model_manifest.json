@@ -1,0 +1,56 @@
+{
+  "arrays": [
+    {
+      "dtype": "int32",
+      "name": "classes",
+      "semantic_role": "class_labels",
+      "sha256": "10b4796eac59c7d81c33711f219ba227247a4e338adad078159ba01e87590841",
+      "shape": [
+        10
+      ]
+    },
+    {
+      "dtype": "float64",
+      "name": "coef",
+      "semantic_role": "discriminant_coefficients",
+      "sha256": "92ed9616aec5ff93213ea16fe96fc09b8a5ed54a7acb474130a5d8297d2774a0",
+      "shape": [
+        10,
+        60
+      ]
+    },
+    {
+      "dtype": "float64",
+      "name": "intercept",
+      "semantic_role": "discriminant_intercepts",
+      "sha256": "b958822426ed992b4ca1b824d1d11108ea741dfa3b86e2555971e873c16eb695",
+      "shape": [
+        10
+      ]
+    },
+    {
+      "dtype": "float64",
+      "name": "mean",
+      "semantic_role": "scaler_mean",
+      "sha256": "08191b20148188b1ed4513f74e595435700fd6b934a279d9f2541467d6d723d9",
+      "shape": [
+        60
+      ]
+    },
+    {
+      "dtype": "float64",
+      "name": "scale",
+      "semantic_role": "scaler_scale",
+      "sha256": "203ff178eac5631cf1ece8542a43e4b91df42f2090a807295152d82893ea74be",
+      "shape": [
+        60
+      ]
+    }
+  ],
+  "job_fingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "job_id": "job_export_demo",
+  "model_format_version": "1.0.0",
+  "model_taxonomy": "exercise_E3",
+  "priors_type": "uniform",
+  "zero_variance_indices": []
+}

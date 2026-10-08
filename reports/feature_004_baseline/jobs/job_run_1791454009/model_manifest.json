@@ -1,0 +1,117 @@
+{
+  "arrays": [
+    {
+      "dtype": "int32",
+      "name": "classes",
+      "semantic_role": "class_labels",
+      "sha256": "10b4796eac59c7d81c33711f219ba227247a4e338adad078159ba01e87590841",
+      "shape": [
+        10
+      ]
+    },
+    {
+      "dtype": "float64",
+      "name": "coef",
+      "semantic_role": "discriminant_coefficients",
+      "sha256": "24ddaa4710480313757f965c38d60208a334556cb244f830d5006a893edd8da7",
+      "shape": [
+        10,
+        60
+      ]
+    },
+    {
+      "dtype": "float64",
+      "name": "intercept",
+      "semantic_role": "discriminant_intercepts",
+      "sha256": "cb70a4e9f3ddc7576a38eb5bdf1106fa6d40ef006ba059fbd3901e5450ec4160",
+      "shape": [
+        10
+      ]
+    },
+    {
+      "dtype": "float64",
+      "name": "mean",
+      "semantic_role": "scaler_mean",
+      "sha256": "41e09ab16161976ef905e3c39d7c6542759631afa4fff8d624fa0f56be7cf958",
+      "shape": [
+        60
+      ]
+    },
+    {
+      "dtype": "float64",
+      "name": "scale",
+      "semantic_role": "scaler_scale",
+      "sha256": "41e09ab16161976ef905e3c39d7c6542759631afa4fff8d624fa0f56be7cf958",
+      "shape": [
+        60
+      ]
+    }
+  ],
+  "job_fingerprint": "89db4b380763c14545d145f136fab9084bcbeeb3dbb9ccca308a50d1a72b58f6",
+  "job_id": "job_run_1791454009",
+  "model_format_version": "1.0.0",
+  "model_taxonomy": "exercise_E3",
+  "priors_type": "uniform",
+  "zero_variance_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59
+  ]
+}

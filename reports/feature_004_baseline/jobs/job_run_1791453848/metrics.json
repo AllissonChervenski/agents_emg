@@ -1,0 +1,5 @@
+{
+  "top1_accuracy": 0.885,
+  "balanced_accuracy": 0.872,
+  "macro_f1": 0.865
+}
