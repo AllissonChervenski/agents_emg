@@ -137,9 +137,9 @@ Each task includes adjacent `harness-task` metadata for Python orchestrator cons
 
 **Independent Test**: Execute cross-subject runner on synthetic multi-subject fixtures; assert exactly 24 train / 8 val / 8 test subjects per fold; assert zero partition overlap.
 
-- [ ] T016 [US4] Implement CrossSubjectRunner executing 5-fold evaluation over frozen partitions in semg_baseline/cross_subject.py
+- [x] T016 [US4] Implement CrossSubjectRunner executing 5-fold evaluation over frozen partitions in semg_baseline/cross_subject.py
   <!-- harness-task {"requirements":["FR-009"],"acceptance_criteria":["SC-004"],"plan_decisions":["Decision-5","Decision-6"],"dependencies":["T010","T013","T014"],"test_type":"UNIT","allowed_files":["semg_baseline/cross_subject.py"],"tdd_phases":["RED","GREEN","REFACTOR"],"numeric_sensitive":true} -->
-  *Note*: RED phase accepted and frozen with protected hash `6aad9a45b37a037314abcd8a12fc49e651c63349b1d9460db797b1165da3af58` (`tests/test_baseline_cross_subject.py`). Scientific contract reconciled (FR-009, FR-012.4, Decision-6). GREEN phase authorized. Allowed files strictly `["semg_baseline/cross_subject.py"]`.
+  *Note*: GREEN phase complete. Implemented `CrossSubjectRunner`, `CrossSubjectFoldResult`, `CrossSubjectBenchmarkResult`, `CrossSubjectAggregateMetrics`, and `MetricStats` in `semg_baseline/cross_subject.py`. 12/12 unit tests pass. Protected RED snapshot hash intact: `6aad9a45b37a037314abcd8a12fc49e651c63349b1d9460db797b1165da3af58`. Allowed files strictly respected.
 
 **Checkpoint**: User Story 4 complete; inter-subject transferability baseline is evaluated across all 5 frozen folds.
 
