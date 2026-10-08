@@ -334,8 +334,8 @@ classDiagram
   - `per_class_metrics`: Structured dictionary mapping class label strings (`"0"`..`"49"`) to `{precision, recall, f1, support}`.
   - `confusion_matrix_shape`: Shape array (e.g. `[50, 50]`).
   - `confusion_matrix_hash`: SHA-256 digest of confusion matrix array.
-  - `rest_metrics`: `{precision, recall, false_alarm_rate}` (all $[0.0, 1.0]$).
-  - `active_only_metrics`: `{top1_accuracy, macro_f1}` strictly over active classes $1..49$ ($[0.0, 1.0]$).
+  - `rest_metrics`: `{precision, recall, false_alarm_rate}` (all $[0.0, 1.0]$). Validated for every model taxonomy containing REST=0 (`global_50_class`, `exercise_E1`, `exercise_E2`, `exercise_E3`). `false_alarm_rate` is defined as the fraction of true REST samples misclassified as any active class ($1.0 - \text{recall}_{\text{rest}}$).
+  - `active_only_metrics`: Structured object representing the derived evaluation view over active gestures ($y_{\text{true}} > 0$), containing: `{top1_accuracy, balanced_accuracy, macro_f1, per_class_metrics, confusion_matrix_shape, confusion_matrix_hash, active_to_rest_count}`. Active-to-rest misclassifications ($y_{\text{true}} > 0, y_{\text{pred}} == 0$) are fully preserved as errors in scalar metrics and represented in the $49 \times 50$ (or $(K-1) \times K$) confusion matrix where column 0 indexes predictions to REST.
   - `subject_or_fold_breakdown`: Dictionary mapping partition IDs to `{top1_accuracy, balanced_accuracy, macro_f1}`.
   - `confounding_diagnostic`: `{rest_exercise_accuracy, chance_level, confounding_delta, confounding_indicated, interpretation}`.
 - **Consolidated Reports Policy**:

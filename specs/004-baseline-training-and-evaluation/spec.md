@@ -162,7 +162,7 @@ As a scientific reviewer or clinician, I need evaluation metrics reported primar
 
 **Acceptance Scenarios**:
 1. **Given** model predictions on a test set, **When** generating primary evaluation reports, **Then** metrics are computed over all 50 classes (0..49), with REST explicitly tracked.
-2. **Given** the same predictions, **When** generating secondary evaluation reports, **Then** windows labeled REST (0) are excluded or masked according to the active-only protocol, and metrics are computed strictly over classes 1..49.
+2. **Given** the same predictions, **When** generating secondary evaluation reports, **Then** windows where ground truth is REST ($y_{\text{true}} == 0$) are masked/excluded; active windows misclassified as REST ($y_{\text{true}} > 0, y_{\text{pred}} == 0$) are strictly preserved as classification errors in active-only scalar metrics and tracked explicitly in the active confusion matrix (shape $[49, 50]$ for global 50-class).
 
 ---
 
@@ -230,8 +230,10 @@ As a scientific reviewer or clinician, I need evaluation metrics reported primar
   - Top-1 Accuracy (primary comparability metric)
   - Balanced Accuracy
   - Macro-F1
-  - Per-class Precision and Recall
-  - Multi-class Confusion Matrix
+  - Per-class Precision, Recall, F1, and Support
+  - Multi-class Confusion Matrix with canonical dimension preservation
+  - REST metrics (`precision`, `recall`, `false_alarm_rate = 1.0 - recall_rest`) validated for every taxonomy containing REST=0 (`global_50_class`, `exercise_E1`, `exercise_E2`, `exercise_E3`)
+  - Active-only derived metrics (`top1_accuracy`, `balanced_accuracy`, `macro_f1`, per-class metrics, active confusion matrix $[49, 50]$, `active_to_rest_count`) where ground truth REST is excluded and active-to-rest misclassifications are strictly preserved as errors
   - Per-subject breakdown and statistical aggregates (mean, median, standard deviation).
   System MUST NOT claim that Balanced Accuracy or Macro-F1 were part of Atzori's original benchmark without specific bibliographic citation.
 - **FR-011**: System MUST establish a formal, append-only, immutable `TrainingJob` contract with deterministic fingerprinting and JSON Schemas:

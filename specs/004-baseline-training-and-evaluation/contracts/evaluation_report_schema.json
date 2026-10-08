@@ -93,10 +93,48 @@
     },
     "active_only_metrics": {
       "type": "object",
-      "required": ["top1_accuracy", "macro_f1"],
+      "required": [
+        "top1_accuracy",
+        "balanced_accuracy",
+        "macro_f1",
+        "per_class_metrics",
+        "confusion_matrix_shape",
+        "confusion_matrix_hash",
+        "active_to_rest_count"
+      ],
       "properties": {
         "top1_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "macro_f1": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        "balanced_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "macro_f1": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "per_class_metrics": {
+          "type": "object",
+          "patternProperties": {
+            "^[0-9]+$": {
+              "type": "object",
+              "required": ["precision", "recall", "f1", "support"],
+              "properties": {
+                "precision": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "recall": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "f1": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                "support": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "confusion_matrix_shape": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "confusion_matrix_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "active_to_rest_count": {
+          "type": "integer",
+          "minimum": 0
+        }
       },
       "additionalProperties": false
     },
