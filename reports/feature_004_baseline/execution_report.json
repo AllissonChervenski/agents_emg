@@ -1,6 +1,6 @@
 {
   "feature": "004-baseline-training-and-evaluation",
-  "timestamp_utc": "2026-10-08T10:05:21.819297+00:00",
+  "timestamp_utc": "2026-10-08T18:15:45.959538+00:00",
   "environment": {
     "python": "3.14.7",
     "numpy": "2.5.3",
@@ -26,16 +26,15 @@
     "test_balanced_accuracy": 1.0,
     "test_macro_f1": 1.0,
     "test_evaluation_count": 1,
-    "elapsed_seconds": 9.553068219000124
+    "elapsed_seconds": 10.08315847799895
   },
   "layer3_cross_subject": {
     "status": "PASS",
-    "fold_id": 1,
-    "selected_r": 1.0,
-    "test_accuracy": 1.0,
-    "test_balanced_accuracy": 1.0,
-    "test_macro_f1": 1.0,
-    "elapsed_seconds": 57.310548446999746
+    "folds_evaluated": 5,
+    "mean_accuracy": 1.0,
+    "mean_balanced_accuracy": 1.0,
+    "mean_macro_f1": 1.0,
+    "elapsed_seconds": 308.32481952799935
   },
   "layer4_evaluator": {
     "status": "PASS",
@@ -710,8 +709,8 @@
   },
   "layer8_training_job_sealing": {
     "status": "PASS",
-    "job_id": "job_run_1791454009",
-    "sealed_dir": "/home/allisson/Projects/agents_emg/reports/feature_004_baseline/jobs/job_run_1791454009"
+    "job_id": "job_run_1791483686",
+    "sealed_dir": "/home/allisson/Projects/agents_emg/reports/feature_004_baseline/jobs/job_run_1791483686"
   },
-  "total_duration_seconds": 87.214781
+  "total_duration_seconds": 340.116795
 }
