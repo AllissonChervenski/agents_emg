@@ -48,9 +48,9 @@ The pipeline comprises:
 **Project Type**: Machine learning baseline and evaluation library (`semg_baseline/` package)  
 **Performance Targets**:
 - Unit test suite: `pytest -q tests/` completes in $< 5\text{ seconds}$ as an operational developer reference target.
-- Feature extraction: $> 500,000\text{ samples/sec}$ across 12 channels [PROVISIONAL / NON-GATING].
-- Single-subject Within-Subject baseline fit: $< 3\text{ seconds}$ [PROVISIONAL / NON-GATING].
-- Cross-Subject fold fit (24 subjects): $< 30\text{ seconds}$ per fold [PROVISIONAL / NON-GATING].  
+- Feature extraction: $> 500,000\text{ samples/sec}$ across 12 channels (PROVISIONAL / NON-GATING).
+- Single-subject Within-Subject baseline fit: $< 3\text{ seconds}$ (PROVISIONAL / NON-GATING).
+- Cross-Subject fold fit (24 subjects): $< 30\text{ seconds}$ per fold (PROVISIONAL / NON-GATING).  
 **Constraints**:
 - Zero modification or re-evaluation of Feature 003 contracts, views, alignments, or split manifests.
 - Zero modification to `data/raw/ninapro_db2/`.
@@ -58,7 +58,7 @@ The pipeline comprises:
 - Scikit-learn prohibited in `semg_dsp/` or embedded runtimes.
 - Zero data leakage across validation or test splits (leakage invariant on rest RMS, ZC/SSC thresholds, scaling, and priors).
 - Implementation and `pyproject.toml` edit blocked until ADR-004-001 transitions to `APPROVED` with human sign-off.  
-**Scale/Scope**: 40 subjects, 120 recordings, 50 gesture classes, 5 cross-subject folds, Within-Subject LOTO protocol, estimated steady-state windows subject to pure-window exclusions [PROVISIONAL].
+**Scale/Scope**: 40 subjects, 120 recordings, 50 gesture classes, 5 cross-subject folds, Within-Subject LOTO protocol, estimated steady-state windows subject to pure-window exclusions (PROVISIONAL).
 
 ---
 

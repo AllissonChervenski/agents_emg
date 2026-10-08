@@ -200,8 +200,8 @@
     },
     {
       "provider": "agy",
-      "model_id": "claude-sonnet-4-6",
-      "display_name": "Claude Sonnet 4.6 (Thinking)",
+      "model_id": "claude-opus-5-5-low",
+      "display_name": "Claude Opus 5.5 (Low)",
       "available": true,
       "context_window": null,
       "supports_coding": null,
@@ -218,8 +218,80 @@
     },
     {
       "provider": "agy",
-      "model_id": "claude-opus-4-6-thinking",
-      "display_name": "Claude Opus 4.6 (Thinking)",
+      "model_id": "claude-opus-5-5-medium",
+      "display_name": "Claude Opus 5.5 (Medium)",
+      "available": true,
+      "context_window": null,
+      "supports_coding": null,
+      "supports_reasoning": null,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "agy --output-format json models",
+      "confidence": "high",
+      "metadata": {}
+    },
+    {
+      "provider": "agy",
+      "model_id": "claude-opus-5-5-high",
+      "display_name": "Claude Opus 5.5 (High)",
+      "available": true,
+      "context_window": null,
+      "supports_coding": null,
+      "supports_reasoning": null,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "agy --output-format json models",
+      "confidence": "high",
+      "metadata": {}
+    },
+    {
+      "provider": "agy",
+      "model_id": "claude-sonnet-5-5-low",
+      "display_name": "Claude Sonnet 5.5 (Low)",
+      "available": true,
+      "context_window": null,
+      "supports_coding": null,
+      "supports_reasoning": null,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "agy --output-format json models",
+      "confidence": "high",
+      "metadata": {}
+    },
+    {
+      "provider": "agy",
+      "model_id": "claude-sonnet-5-5-medium",
+      "display_name": "Claude Sonnet 5.5 (Medium)",
+      "available": true,
+      "context_window": null,
+      "supports_coding": null,
+      "supports_reasoning": null,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "agy --output-format json models",
+      "confidence": "high",
+      "metadata": {}
+    },
+    {
+      "provider": "agy",
+      "model_id": "claude-sonnet-5-5-high",
+      "display_name": "Claude Sonnet 5.5 (High)",
       "available": true,
       "context_window": null,
       "supports_coding": null,
@@ -279,8 +351,77 @@
     },
     {
       "provider": "opencode",
+      "model_id": "opencode/exo-free",
+      "display_name": "Exo Free",
+      "available": true,
+      "context_window": 1048576,
+      "supports_coding": null,
+      "supports_reasoning": true,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "opencode models --verbose",
+      "confidence": "high",
+      "metadata": {
+        "family": null,
+        "toolcall": true,
+        "input_cost": 0,
+        "output_cost": 0
+      }
+    },
+    {
+      "provider": "opencode",
+      "model_id": "opencode/fledge-alpha-free",
+      "display_name": "Fledge Alpha Free",
+      "available": true,
+      "context_window": 1048576,
+      "supports_coding": null,
+      "supports_reasoning": true,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "opencode models --verbose",
+      "confidence": "high",
+      "metadata": {
+        "family": null,
+        "toolcall": true,
+        "input_cost": 0,
+        "output_cost": 0
+      }
+    },
+    {
+      "provider": "opencode",
       "model_id": "opencode/ling-3.0-flash-fin-free",
       "display_name": "Ling 3.0 Flash Fin Free",
+      "available": true,
+      "context_window": 262144,
+      "supports_coding": null,
+      "supports_reasoning": true,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "opencode models --verbose",
+      "confidence": "high",
+      "metadata": {
+        "family": "ling",
+        "toolcall": true,
+        "input_cost": 0,
+        "output_cost": 0
+      }
+    },
+    {
+      "provider": "opencode",
+      "model_id": "opencode/ling-3.1-flash-free",
+      "display_name": "Ling 3.1 Flash Free",
       "available": true,
       "context_window": 262144,
       "supports_coding": null,
@@ -436,6 +577,29 @@
         "toolcall": true,
         "input_cost": 0,
         "output_cost": 0
+      }
+    },
+    {
+      "provider": "opencode",
+      "model_id": "opencode-go/claude-haiku-5-5",
+      "display_name": "Claude Haiku 5.5",
+      "available": true,
+      "context_window": 1000000,
+      "supports_coding": null,
+      "supports_reasoning": true,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "opencode models --verbose",
+      "confidence": "high",
+      "metadata": {
+        "family": "claude-haiku",
+        "toolcall": true,
+        "input_cost": 0.1,
+        "output_cost": 0.5
       }
     },
     {
@@ -1084,8 +1248,8 @@
     },
     {
       "provider": "opencode",
-      "model_id": "opencode-go/space-bunny-free",
-      "display_name": "Space Bunny Free",
+      "model_id": "opencode-go/space-bunny",
+      "display_name": "Space Bunny",
       "available": true,
       "context_window": 1048576,
       "supports_coding": null,
@@ -1101,12 +1265,60 @@
       "metadata": {
         "family": null,
         "toolcall": true,
-        "input_cost": 0,
-        "output_cost": 0
+        "input_cost": 0.15,
+        "output_cost": 0.6
       }
     }
   ],
   "codex": [
+    {
+      "provider": "codex",
+      "model_id": "gpt-6.1-sol",
+      "display_name": "GPT-6.1-Sol",
+      "available": true,
+      "context_window": 272000,
+      "supports_coding": null,
+      "supports_reasoning": true,
+      "supports_structured_output": null,
+      "supports_file_editing": null,
+      "supports_shell": null,
+      "supports_agentic_work": null,
+      "speed_class": null,
+      "cost_class": null,
+      "metadata_source": "codex debug models",
+      "confidence": "high",
+      "metadata": {
+        "description": "Latest workhorse model for coding and everyday work.",
+        "priority": 1,
+        "default_reasoning_level": "low",
+        "supported_reasoning_levels": [
+          {
+            "effort": "low",
+            "description": "Fast responses with lighter reasoning"
+          },
+          {
+            "effort": "medium",
+            "description": "Balances speed and reasoning depth for everyday tasks"
+          },
+          {
+            "effort": "high",
+            "description": "Greater reasoning depth for complex problems"
+          },
+          {
+            "effort": "xhigh",
+            "description": "Extra high reasoning depth for complex problems"
+          },
+          {
+            "effort": "max",
+            "description": "Maximum reasoning depth for the hardest problems"
+          },
+          {
+            "effort": "ultra",
+            "description": "Maximum reasoning with automatic task delegation"
+          }
+        ]
+      }
+    },
     {
       "provider": "codex",
       "model_id": "gpt-6-astra",
@@ -1383,46 +1595,6 @@
           {
             "effort": "max",
             "description": "Maximum reasoning depth for the hardest problems"
-          }
-        ]
-      }
-    },
-    {
-      "provider": "codex",
-      "model_id": "gpt-5.5",
-      "display_name": "GPT-5.5",
-      "available": true,
-      "context_window": 272000,
-      "supports_coding": null,
-      "supports_reasoning": true,
-      "supports_structured_output": null,
-      "supports_file_editing": null,
-      "supports_shell": null,
-      "supports_agentic_work": null,
-      "speed_class": null,
-      "cost_class": null,
-      "metadata_source": "codex debug models",
-      "confidence": "high",
-      "metadata": {
-        "description": "Legacy coding model.",
-        "priority": 13,
-        "default_reasoning_level": "medium",
-        "supported_reasoning_levels": [
-          {
-            "effort": "low",
-            "description": "Fast responses with lighter reasoning"
-          },
-          {
-            "effort": "medium",
-            "description": "Balances speed and reasoning depth for everyday tasks"
-          },
-          {
-            "effort": "high",
-            "description": "Greater reasoning depth for complex problems"
-          },
-          {
-            "effort": "xhigh",
-            "description": "Extra high reasoning depth for complex problems"
           }
         ]
       }
