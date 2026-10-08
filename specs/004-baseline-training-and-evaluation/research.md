@@ -97,3 +97,28 @@
 - **Alternatives Rejected**:
   - *Committing training runs or real DB2 data to Git*: Rejected by Constitution Principle VI and repository size limits.
   - *Monolithic single-script execution*: Rejected because modular stages guarantee testability, auditability, and clear separation of concerns.
+
+---
+
+## Decision 6: Cross-Subject Validation, Hyperparameter Selection & Multi-Fold Aggregation Policy
+
+- **Decision**:
+  1. **Strict 5-Fold Partition Roles (24 TRAIN / 8 VAL / 8 TEST)**:
+     - For each of the 5 frozen Cross-Subject folds from Feature 003, subjects are partitioned into 24 TRAIN, 8 VAL, and 8 TEST subjects with zero overlap (TRAIN ∩ VAL = ∅, TRAIN ∩ TEST = ∅, VAL ∩ TEST = ∅) and complete universe preservation (TRAIN ∪ VAL ∪ TEST = 40 subjects).
+  2. **Trainable State Strictly Train-Only (Q2)**:
+     - All preprocessing calibration (noise deadzone thresholds $\epsilon = R \times \text{RMS\_rest\_train}$), feature normalization (`FeatureScaler`), and model parameters (`CanonicalLdaTrainer`) are fitted exclusively on data from the 24 TRAIN subjects.
+  3. **Hyperparameter Selection on VAL (Q1 & Q4)**:
+     - Candidate deadzone multipliers $R \in \{0.5, 1.0, 1.5, 2.0, 3.0\}$ are evaluated statelessly on the 8 VAL subjects using `transform()` and `predict()`.
+     - The canonical selection metric is mean Balanced Accuracy on VAL.
+     - In case of score ties, a deterministic, order-independent lowest-$R$ tie-break is applied (`min(candidate_r)`).
+  4. **Final Model Refit Strictly on 24 TRAIN (Q3)**:
+     - Once $R^*$ is selected, the final model is refitted strictly on the 24 TRAIN subjects with $R^*$ (VAL subjects are never pooled into the final training set).
+  5. **Zero-Access TEST Isolation & Test Evaluation Count**:
+     - The 8 TEST subjects remain completely unobserved (zero raw access, zero filtering, zero segmentation, zero prediction) during candidate selection.
+     - TEST data is evaluated strictly once post-freeze per fold, accumulating to exactly 5 evaluations across all 5 folds.
+  6. **Multi-Fold Aggregate Summary Contract**:
+     - Cross-subject benchmark results report per-fold metrics and an aggregate statistical summary (`CrossSubjectAggregateMetrics`) providing structured `MetricStats(mean, median, std)` for `accuracy`, `balanced_accuracy`, and `macro_f1`.
+  7. **Manifest Identity & Vocabulary Fail-Closed**:
+     - Rejection of split mutations or subject swaps even if partition counts (24/8/8) match.
+     - Fail-closed validation for gesture vocabulary mismatches under canonical 50-class mode.
+
