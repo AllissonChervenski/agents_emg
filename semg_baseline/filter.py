@@ -153,6 +153,17 @@ class CausalBandpassFilter:
             raise ValueError("Input signal array contains non-finite values (NaN or Inf)")
 
         sig_float32 = signals.astype(np.float32, copy=False)
-        out = self._filter.process_chunk(sig_float32)
-        assert isinstance(out, np.ndarray)
+        if sig_float32.shape[0] == 0:
+            return np.empty((0, self.num_channels), dtype=np.float32)
+
+        # Host-only SciPy acceleration of the same causal DF2T SOS cascade.
+        # Preserve the reference filter's state (including array identity) so
+        # reset() and chunked streaming keep their original behavior.
+        out, final_state = signal.sosfilt(
+            self._sos_coefficients,
+            sig_float32,
+            axis=0,
+            zi=self._filter.state,
+        )
+        self._filter.state[...] = final_state
         return out

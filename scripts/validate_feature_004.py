@@ -24,7 +24,7 @@ import sys
 import time
 from typing import Any
 
-import jsonschema
+from jsonschema import Draft202012Validator
 import numpy as np
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -222,7 +222,8 @@ def run_layer4_evaluator(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, An
     schema_path = CONTRACTS_DIR / "evaluation_report_schema.json"
     with open(schema_path, encoding="utf-8") as f:
         schema = json.load(f)
-    jsonschema.validate(instance=report_dict, schema=schema)
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(report_dict)
 
     print(f"  Model Taxonomy:            {report.model_taxonomy}")
     print(f"  Primary Top-1 Accuracy:    {report.top1_accuracy * 100:.2f}%")
@@ -297,7 +298,7 @@ def run_layer6_negative_control() -> dict[str, Any]:
 
 def run_layer7_export_oracle() -> dict[str, Any]:
     log_step("LAYER 7: Neutral Parameter Export & Oracle Equivalence")
-    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+    from semg_baseline.acceptance_models import make_validation_lda
 
     # Train sklearn LDA
     rng = np.random.default_rng(501)
@@ -306,7 +307,7 @@ def run_layer7_export_oracle() -> dict[str, Any]:
     y_train = rng.integers(0, K, size=200, dtype=np.int32)
     y_train[:K] = np.arange(K, dtype=np.int32)
 
-    clf = LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")
+    clf = make_validation_lda()
     clf.fit(X_train, y_train)
 
     from semg_baseline.scaling import FeatureScaler
@@ -400,11 +401,11 @@ def run_layer8_training_job_sealing() -> dict[str, Any]:
         model_config=model_cfg,
     )
 
-    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+    from semg_baseline.acceptance_models import make_validation_lda
     from semg_baseline.scaling import FeatureScaler
     from semg_baseline.thresholds import ThresholdCalibration
 
-    clf = LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")
+    clf = make_validation_lda()
     X_synth = np.ones((100, 60))
     y_synth = np.repeat(np.arange(10, dtype=np.int32), 10)
     clf.fit(X_synth, y_synth)

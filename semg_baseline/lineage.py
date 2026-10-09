@@ -13,7 +13,7 @@ import hashlib
 from pathlib import Path
 import re
 import subprocess
-from typing import Any, Sequence
+from typing import Any, Iterable, Sequence
 
 
 HEX64_REGEX = re.compile(r"^[a-f0-9]{64}$")
@@ -121,7 +121,7 @@ def get_alignment_hash(repo_root: Path | str | None = None) -> str:
 
 
 def compute_dataset_view_hash(
-    recordings: Sequence[Any], view_name: str = "refined"
+    recordings: Iterable[Any], view_name: str = "refined"
 ) -> str:
     """Compute deterministic combined hash across views of a sequence of RecordingData objects."""
     parts: list[str] = []
@@ -158,43 +158,152 @@ def get_current_git_commit(repo_root: Path | str | None = None) -> str:
 
 def verify_feature_003_frozen_contracts(
     repo_root: Path | str | None = None,
+    *,
+    expected_acceptance_sha256: str | None = None,
+    required_entries: Sequence[str] = (),
 ) -> tuple[bool, list[str]]:
-    """Cryptographically verify that Feature 003 acceptance and intake contracts are intact."""
+    """Check an acceptance manifest fail-closed and optionally pin its digest.
+
+    For scientific/real mode, ``expected_acceptance_sha256`` MUST come from a
+    trusted, independently pinned Feature 003 artifact, not from the mutable
+    manifest being verified. Otherwise this proves internal consistency only.
+    """
     root = (
         Path(repo_root).resolve()
         if repo_root is not None
         else Path(__file__).resolve().parent.parent
     )
     errors: list[str] = []
-
-    acc_dir = root / "reports" / "feature_003_acceptance"
+    acc_dir = (root / "reports" / "feature_003_acceptance").resolve()
     manifest_file = acc_dir / "manifest.sha256"
 
     if not manifest_file.is_file():
-        errors.append(f"Feature 003 acceptance manifest missing: {manifest_file}")
-        return False, errors
+        return False, [f"Feature 003 acceptance manifest missing: {manifest_file}"]
 
-    # Verify each entry in manifest.sha256
+    if expected_acceptance_sha256 is not None:
+        if not HEX64_REGEX.fullmatch(expected_acceptance_sha256):
+            errors.append("Invalid trusted acceptance SHA-256 fingerprint")
+        elif compute_file_sha256(manifest_file) != expected_acceptance_sha256:
+            errors.append("Feature 003 acceptance manifest digest differs from trusted fingerprint")
+
     content = manifest_file.read_text(encoding="utf-8")
-    for line in content.splitlines():
-        line = line.strip()
+    seen: set[str] = set()
+    for number, raw_line in enumerate(content.splitlines(), start=1):
+        line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        parts = line.split(None, 1)
-        if len(parts) != 2:
+        fields = line.split(None, 1)
+        if len(fields) != 2 or not HEX64_REGEX.fullmatch(fields[0]):
+            errors.append(f"Malformed acceptance manifest entry at line {number}")
             continue
-        expected_sha, rel_path = parts[0], parts[1].strip()
-        target_path = acc_dir / rel_path
-        if not target_path.is_file():
-            errors.append(f"Accepted file referenced in manifest is missing: {target_path}")
+        expected_sha, rel_str = fields
+        # Support the `sha256sum` text and binary-file markers.
+        rel_str = rel_str.removeprefix("*").strip()
+        rel = Path(rel_str)
+        if not rel_str or rel.is_absolute() or ".." in rel.parts:
+            errors.append(f"Unsafe acceptance manifest path at line {number}: {rel_str!r}")
             continue
-        actual_sha = compute_file_sha256(target_path)
-        if actual_sha != expected_sha:
-            errors.append(
-                f"Checksum mismatch for '{rel_path}': expected {expected_sha}, got {actual_sha}"
-            )
+        if rel.as_posix() in seen:
+            errors.append(f"Duplicate acceptance manifest entry: {rel.as_posix()}")
+            continue
+        seen.add(rel.as_posix())
+        path = (acc_dir / rel).resolve()
+        if not path.is_relative_to(acc_dir):
+            errors.append(f"Acceptance manifest path escapes root: {rel_str!r}")
+            continue
+        if not path.is_file():
+            errors.append(f"Accepted file referenced in manifest is missing: {path}")
+            continue
+        if compute_file_sha256(path) != expected_sha:
+            errors.append(f"Checksum mismatch for '{rel_str}'")
 
-    return len(errors) == 0, errors
+    if not seen:
+        errors.append("Feature 003 acceptance manifest has no valid file entries")
+    for entry in required_entries:
+        if entry not in seen:
+            errors.append(f"Required acceptance artifact not sealed by manifest: {entry}")
+    return not errors, errors
+
+
+def build_verified_scientific_lineage(
+    repo_root: Path | str,
+    *,
+    recordings: Iterable[Any],
+    split_manifest_path: Path | str,
+    expected_dataset_view_sha256: str,
+    expected_split_manifest_sha256: str,
+    expected_acceptance_sha256: str,
+    expected_raw_manifest_sha256: str,
+    expected_alignment_sha256: str,
+    protocol_id: str,
+    partition_id: str,
+    git_commit: str | None = None,
+) -> ScientificLineage:
+    """Construct REAL benchmark lineage exclusively from verified artifacts.
+
+    Every ``expected_*`` SHA-256 must be pinned in an authoritative frozen
+    Feature 003 source. An audit-file SHA-256 is *not* interchangeable with a
+    split-manifest digest or with the combined dataset-view content digest.
+    ``recordings`` must cover the same frozen view population as the trusted
+    view fingerprint (normally all accepted E1/E2/E3 recordings).
+    """
+    root = Path(repo_root).resolve()
+    expected = {
+        "dataset view": expected_dataset_view_sha256,
+        "split manifest": expected_split_manifest_sha256,
+        "acceptance": expected_acceptance_sha256,
+        "raw manifest": expected_raw_manifest_sha256,
+        "alignment": expected_alignment_sha256,
+    }
+    for name, sha in expected.items():
+        if not HEX64_REGEX.fullmatch(sha):
+            raise ValueError(f"Invalid trusted {name} SHA-256")
+
+    if protocol_id == "within_subject":
+        valid_partition = re.fullmatch(r"S(?:[1-9]|[1-3][0-9]|40)", partition_id)
+    elif protocol_id == "cross_subject":
+        valid_partition = re.fullmatch(r"fold_[1-5]", partition_id)
+    else:
+        raise ValueError(f"Unknown protocol_id: {protocol_id!r}")
+    if valid_partition is None:
+        raise ValueError(f"Invalid {protocol_id} partition: {partition_id!r}")
+
+    valid, errors = verify_feature_003_frozen_contracts(
+        root, expected_acceptance_sha256=expected_acceptance_sha256
+    )
+    if not valid:
+        raise RuntimeError("Frozen acceptance verification failed: " + "; ".join(errors))
+
+    split_path = Path(split_manifest_path)
+    if not split_path.is_absolute():
+        split_path = root / split_path
+    split_path = split_path.resolve()
+    if not split_path.is_relative_to(root):
+        raise ValueError("Split manifest must be located within the repository")
+
+    actual = {
+        "dataset view": compute_dataset_view_hash(recordings, "refined"),
+        "split manifest": compute_file_sha256(split_path),
+        "raw manifest": get_raw_dataset_manifest_hash(root),
+        "alignment": get_alignment_hash(root),
+    }
+    for name in actual:
+        if actual[name] != expected[name]:
+            raise RuntimeError(f"Verified {name} digest does not match frozen Feature 003 fingerprint")
+
+    commit = git_commit if git_commit is not None else get_current_git_commit(root)
+    if not commit or re.fullmatch(r"[a-f0-9]{40}|[a-f0-9]{64}", commit) is None:
+        raise RuntimeError("Real benchmark requires a valid Git commit SHA")
+    return ScientificLineage(
+        raw_dataset_manifest_hash=actual["raw manifest"],
+        dataset_view_hash=actual["dataset view"],
+        alignment_hash=actual["alignment"],
+        split_manifest_hash=actual["split manifest"],
+        acceptance_package_hash=expected_acceptance_sha256,
+        protocol_id=protocol_id,
+        partition_id=partition_id,
+        git_commit=commit,
+    )
 
 
 def build_scientific_lineage(
