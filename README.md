@@ -11,31 +11,32 @@ An agentically-engineered, mathematically validated surface electromyography (**
 
 ---
 
-## 1. Arquitetura e Desacoplamento do Orquestrador
+## 1. Visão Geral da Arquitetura
 
-> [!IMPORTANT]
-> **Desacoplamento Arquitetural**:
-> O controle de ciclo de vida, máquinas de estado de especificação e verificação determinística de agentes anteriormente integrados a este repositório foram formalmente desacoplados e migrados para o repositório independente [**`sdd-orchestrator`**](https://github.com/AllissonChervenski/sdd-orchestrator).
->
-> Este repositório (**`semg_classification`**) é dedicado exclusivamente à engenharia de sinal biomédico, extração de características em ponto fixo, modelagem estatística linear, benchmarks populacionais e firmware TinyML.
+O ecossistema `semg_classification` é estruturado em quatro camadas modulares independentes: processamento streaming de sinal em tempo real, gestão e particionamento de contratos de dados, modelagem discriminante com extração de características analíticas e implantação embarcada de baixíssima latência para microcontroladores ESP32.
 
 ```mermaid
-flowchart LR
-    subgraph ControlPlane ["Plano de Governança (Externo)"]
-        SDD["sdd-orchestrator (Python CLI)"]
+flowchart TD
+    subgraph SignalProcessing ["1. Aquisição & DSP Streaming (semg_dsp)"]
+        Raw["Sinal sEMG Multicanal (2 kHz)"] --> DF2T["Filtro Causal DF2T (Biquads SOS)"]
+        DF2T --> Window["StatefulWindowBuffer (W=200ms, S=50ms)"]
     end
 
-    subgraph DomainCore ["semg_classification (Este Repositório)"]
-        direction TB
-        DSP["semg_dsp (Causal Streaming DSP)"]
-        DATA["semg_dataset (Contratos & Splits)"]
-        BASE["semg_baseline (Features & LDA)"]
-        BENCH["reports/benchmarks (População N=40)"]
-        EMBED["TinyML ESP32 (Firmware & SIMD)"]
-        DSP --> DATA --> BASE --> BENCH --> EMBED
+    subgraph DataEngineering ["2. Contratos & Particionamento (semg_dataset)"]
+        Window --> Contract["Contratos de Gravação & Proveniência SHA-256"]
+        Contract --> Splits["Partições LOTO & Cross-Subject (Sem Vazamento)"]
     end
 
-    SDD -.->|"Validação de Especificações e Gates"| DomainCore
+    subgraph FeatureAndModeling ["3. Extração & Decodificação (semg_baseline)"]
+        Splits --> TD["Features Hudgins TD (MAV, RMS, WL, ZC, SSC)"]
+        TD --> Scaler["Train-only Z-Score Scaler"]
+        Scaler --> LDA["Canonical LDA Regularizado (Priors Uniformes)"]
+    end
+
+    subgraph EdgeTinyML ["4. Implantação Embarcada (ESP32 / TinyML)"]
+        LDA --> MicroLDA["Micro-LDA em Ponto Fixo (200 bytes de pesos)"]
+        MicroLDA --> Firmware["Controle Robótico de Prótese Mioelétrica (< 55 ms)"]
+    end
 ```
 
 ---
