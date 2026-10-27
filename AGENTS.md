@@ -11,11 +11,12 @@
 
 ## 1. Configuração e Stack do Projeto
 
-- **Orquestrador Central**: Python 3.10+ (`orchestrator/`)
+- **Repositório de Domínio (Classificação e DSP)**: `semg_classification` (`semg_dsp/`, `semg_dataset/`, `semg_baseline/`)
+- **Orquestrador Central**: Python 3.10+ desacoplado em repositório dedicado (`sdd-orchestrator` / `python -m orchestrator`)
 - **Test Runner (RED / GREEN)**: `python -m pytest -q`
-- **Linter & Formatador**: `python -m ruff check orchestrator tests`
+- **Linter & Formatador**: `python -m ruff check semg_dsp semg_dataset semg_baseline tests scripts`
 - **Verificação de Tipos**: `python -m mypy`
-- **Sintaxe**: `python -m compileall -q orchestrator tests`
+- **Sintaxe**: `python -m compileall -q semg_dsp semg_dataset semg_baseline tests scripts`
 - **Diretório de Especificação do SpecKit**: `specs/<feature>/`
 - **Memória & Constituição**: `.specify/memory/constitution.md`
 - **Pasta de Logs**: `logs/` (temporários, fora do commit)

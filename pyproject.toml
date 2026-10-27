@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agents-emg"
-version = "0.1.0"
-description = "Agents EMG: Causal Streaming DSP & Gesture Recognition Pipeline"
+name = "semg_classification"
+version = "0.2.0"
+description = "semg_classification: Causal Streaming DSP & Gesture Recognition Pipeline with TinyML ESP32 Deployment"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.20",
