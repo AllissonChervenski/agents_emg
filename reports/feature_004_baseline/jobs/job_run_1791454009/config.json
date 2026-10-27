@@ -1,0 +1,51 @@
+{
+  "job_id": "job_run_1791454009",
+  "job_fingerprint": "89db4b380763c14545d145f136fab9084bcbeeb3dbb9ccca308a50d1a72b58f6",
+  "protocol_id": "within_subject",
+  "partition_id": "S1",
+  "seed": 42,
+  "lineage": {
+    "raw_dataset_manifest_hash": "e3a1fa0b1a40e610c37474bcf1de0aeb705fe1e13a1f037f7fe76b71aeada1bc",
+    "dataset_view_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "alignment_hash": "434ba6578dca1630764cdd4972d20b2aa37b1b010779dab709b0df64f4e94a83",
+    "split_manifest_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "acceptance_package_hash": "12fc0a35131545c6f8ea08fea7682a6e211c17b3fea4c1963082241360fcc9e6"
+  },
+  "preprocessing_config": {
+    "filter_type": "butterworth_causal_sos",
+    "order": 4,
+    "low_cutoff_hz": 20.0,
+    "high_cutoff_hz": 450.0,
+    "sampling_rate_hz": 2000.0,
+    "notch_50hz_enabled": false,
+    "sos_coefficients_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "config_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "feature_config": {
+    "window_length_samples": 400,
+    "stride_samples": 100,
+    "decision_rate_hz": 20.0,
+    "feature_names": [
+      "MAV",
+      "RMS",
+      "WL",
+      "ZC",
+      "SSC"
+    ],
+    "transition_policy": "pure_window_steady_state",
+    "num_channels": 12,
+    "total_features_per_window": 60,
+    "config_hash": "3b78fb421f2fa0027fb503af60feb15de8a48bb43f7704bc7d868002030a779e"
+  },
+  "model_config": {
+    "model_family": "regularized_lda",
+    "solver": "lsqr",
+    "shrinkage": "auto",
+    "prior_type": "uniform",
+    "num_classes": 10,
+    "vocabulary_type": "exercise_E3",
+    "config_hash": "9ab13f73922b9ffbcca06a18eb44b18373c3b73e3ca2ae4fa8aab6f87c134e34"
+  },
+  "git_commit": "5acba4ccc429145b9c94c4d6b1dd257b09f598c8",
+  "dependency_lock_hash": "65a6244289f9837ad511e5e411040176b812a960083066c72bd2996d6060a33a"
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NeutralModelManifestSchema",
+  "description": "JSON Schema validating exported neutral numerical model parameter manifests for Feature 005 inference boundary (integrity protected via sidecar model_manifest.sha256)",
+  "type": "object",
+  "required": [
+    "model_format_version",
+    "job_id",
+    "job_fingerprint",
+    "model_taxonomy",
+    "priors_type",
+    "zero_variance_indices",
+    "arrays"
+  ],
+  "properties": {
+    "model_format_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[a-zA-Z0-9_\\-]+$"
+    },
+    "job_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "model_taxonomy": {
+      "type": "string",
+      "enum": ["global_50_class", "exercise_E1", "exercise_E2", "exercise_E3"]
+    },
+    "priors_type": {
+      "type": "string",
+      "enum": ["uniform", "empirical"]
+    },
+    "zero_variance_indices": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "uniqueItems": true
+    },
+    "arrays": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["name", "dtype", "shape", "sha256", "semantic_role"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["classes", "coef", "intercept", "mean", "scale"]
+          },
+          "dtype": {
+            "type": "string",
+            "enum": ["int32", "float64"]
+          },
+          "shape": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1 }
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "semantic_role": {
+            "type": "string",
+            "enum": [
+              "class_labels",
+              "discriminant_coefficients",
+              "discriminant_intercepts",
+              "scaler_mean",
+              "scaler_scale"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

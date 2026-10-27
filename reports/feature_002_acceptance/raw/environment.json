@@ -1,0 +1,11 @@
+{
+  "os": "Linux",
+  "platform": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+  "architecture": "x86_64",
+  "python_version": "3.14.7",
+  "python_implementation": "CPython",
+  "numpy_version": "2.5.3",
+  "scipy_version": "1.18.1",
+  "processor": "unknown",
+  "timezone": "-03"
+}

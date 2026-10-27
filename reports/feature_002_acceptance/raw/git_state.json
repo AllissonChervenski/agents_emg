@@ -1,0 +1,10 @@
+{
+  "repository": "agents_emg",
+  "branch": "audit/feature-002-acceptance",
+  "commit_sha": "f6d43c5672e52044937a431c898e211c318bb128",
+  "working_tree_clean": false,
+  "uncommitted_changes": [
+    "?? reports/",
+    "?? scripts/validate_feature_002.py"
+  ]
+}

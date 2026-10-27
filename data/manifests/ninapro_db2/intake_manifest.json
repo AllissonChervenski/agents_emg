@@ -1,0 +1,566 @@
+{
+  "schema_version": "1.0",
+  "dataset_name": "NinaPro DB2",
+  "dataset_role": "official raw dataset for Feature 003",
+  "audit_timestamp": "2026-10-02T05:35:55.080838+00:00",
+  "source_directory": "data/raw/ninapro_db2/",
+  "git_commit": "d4b284a35a9d60c99477161a1d7546099690d214",
+  "branch": "feat/003-dataset-contract-and-splits",
+  "environment": {
+    "os": "Linux",
+    "platform": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+    "python_version": "3.14.7",
+    "numpy_version": "2.5.3",
+    "scipy_version": "1.18.1"
+  },
+  "provenance": {
+    "dataset_origin": "NinaPro Database 2 (DB2) \u2014 Ninapro project (Atzori et al., 2014)",
+    "acquisition_system": "Delsys Trigno Wireless sEMG System (12 channels, 2000 Hz nominal)",
+    "license": "TO_BE_DOCUMENTED",
+    "official_url": "TO_BE_DOCUMENTED",
+    "intake_method": "Local workspace placement at data/raw/ninapro_db2/",
+    "immutability_enforced": true
+  },
+  "file_count": 40,
+  "archive_count": 40,
+  "subject_count_detected": 40,
+  "total_size_bytes": 18258634324,
+  "total_uncompressed_bytes": 18309164587,
+  "compression_ratio": 0.9972401655597177,
+  "total_mat_files": 120,
+  "total_emg_samples": 207713115,
+  "channels_per_emg": [
+    12
+  ],
+  "emg_dtypes": [
+    "float32"
+  ],
+  "has_any_nan": false,
+  "has_any_inf": false,
+  "emg_global_min": -0.011277434416115284,
+  "emg_global_max": 0.01201413944363594,
+  "archives": [
+    {
+      "filename": "DB2_s1.zip",
+      "subject_id": "S1",
+      "sha256": "299d04b7d2af3619e8b4682d52c12e952d89fc68c3e984086b7222fabb818490",
+      "size_bytes": 470253519,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S1_E1_A1.mat",
+        "S1_E2_A1.mat",
+        "S1_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s2.zip",
+      "subject_id": "S2",
+      "sha256": "fefb30984714abc9a31d975c86803a792c420c13a582c210dbee43dfb4c6d330",
+      "size_bytes": 481502659,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S2_E1_A1.mat",
+        "S2_E2_A1.mat",
+        "S2_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s3.zip",
+      "subject_id": "S3",
+      "sha256": "c0ef8fac391ae64e164777f92f7a4bcdf37d2005981502850f11db8984ab7953",
+      "size_bytes": 474557365,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S3_E1_A1.mat",
+        "S3_E2_A1.mat",
+        "S3_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s4.zip",
+      "subject_id": "S4",
+      "sha256": "5c2be310ee3b6f5e18be23b10747cb773c490399fe6a03285a5cf6b6394a974e",
+      "size_bytes": 476004105,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S4_E1_A1.mat",
+        "S4_E2_A1.mat",
+        "S4_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s5.zip",
+      "subject_id": "S5",
+      "sha256": "3a2b5443da3ba62b86c4cfa1844a6345c12e998908c7f165ecfaf30c902def71",
+      "size_bytes": 454287553,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S5_E1_A1.mat",
+        "S5_E2_A1.mat",
+        "S5_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s6.zip",
+      "subject_id": "S6",
+      "sha256": "463f10b50ed570d763edba2ed4d6afa6d8578be87c167d934faef1f7994161ac",
+      "size_bytes": 488806175,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S6_E1_A1.mat",
+        "S6_E2_A1.mat",
+        "S6_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s7.zip",
+      "subject_id": "S7",
+      "sha256": "ecb46996a4c57d44de7de656c801be9d81b46ad10cf3e2845f512996d9c049d6",
+      "size_bytes": 456117512,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S7_E1_A1.mat",
+        "S7_E2_A1.mat",
+        "S7_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s8.zip",
+      "subject_id": "S8",
+      "sha256": "0fa9fda3138260a09276437e472d4a7adbddbfcd9c9f956376c9e9cc6473b14b",
+      "size_bytes": 470879111,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S8_E1_A1.mat",
+        "S8_E2_A1.mat",
+        "S8_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s9.zip",
+      "subject_id": "S9",
+      "sha256": "22b107dcb2347c7bda199bda1ed5ad835214c9a4fe3ad087875cee0180d3e164",
+      "size_bytes": 455480310,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S9_E1_A1.mat",
+        "S9_E2_A1.mat",
+        "S9_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s10.zip",
+      "subject_id": "S10",
+      "sha256": "f67ee4bf0f8ded275c2c57e3785fd97aac0cc0c03800b4e3e787d1330f571580",
+      "size_bytes": 491006193,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S10_E1_A1.mat",
+        "S10_E2_A1.mat",
+        "S10_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s11.zip",
+      "subject_id": "S11",
+      "sha256": "b8c57de1aef71bf9b8b8dc1308a888d2c23234df6c3fa4d8327063aff778e253",
+      "size_bytes": 457382948,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S11_E1_A1.mat",
+        "S11_E2_A1.mat",
+        "S11_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s12.zip",
+      "subject_id": "S12",
+      "sha256": "e5bbb60d002388ff1748f1ea0b12c4e3848a5fee9726bef146849875e2e1ead1",
+      "size_bytes": 475052843,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S12_E1_A1.mat",
+        "S12_E2_A1.mat",
+        "S12_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s13.zip",
+      "subject_id": "S13",
+      "sha256": "f808c3e21d94d8a2dfa29e3d4de853b55bd4f725133c10b3671573521b8e49b5",
+      "size_bytes": 493206489,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S13_E1_A1.mat",
+        "S13_E2_A1.mat",
+        "S13_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s14.zip",
+      "subject_id": "S14",
+      "sha256": "e87cc81465a36bce95cccf33cb389cfa87e4d1b2b55566f4b20803edbad211cb",
+      "size_bytes": 455451923,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S14_E1_A1.mat",
+        "S14_E2_A1.mat",
+        "S14_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s15.zip",
+      "subject_id": "S15",
+      "sha256": "4f100a6a2bf70c426272a00797dd7d18e4dfdd66433d38c571dee8a132080625",
+      "size_bytes": 457020856,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S15_E1_A1.mat",
+        "S15_E2_A1.mat",
+        "S15_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s16.zip",
+      "subject_id": "S16",
+      "sha256": "07337c59249e55c9f76cdf460269a7af67cd49258035e66472dcee0b467efee5",
+      "size_bytes": 454982016,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S16_E1_A1.mat",
+        "S16_E2_A1.mat",
+        "S16_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s17.zip",
+      "subject_id": "S17",
+      "sha256": "bcb88546e41eec3815ea40c5896f7a958d75230a97afd52d61358deda793ec69",
+      "size_bytes": 417700311,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S17_E1_A1.mat",
+        "S17_E2_A1.mat",
+        "S17_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s18.zip",
+      "subject_id": "S18",
+      "sha256": "7cffa6acf28d2e2cf242a650f57fd399048deb6a376b9ffb308c29de4b882541",
+      "size_bytes": 505780960,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S18_E1_A1.mat",
+        "S18_E2_A1.mat",
+        "S18_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s19.zip",
+      "subject_id": "S19",
+      "sha256": "97f7481e4d1a63e6ed5490c4227c3af8bf440bf7c04ec6b7e26adb9334268b56",
+      "size_bytes": 433130564,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S19_E1_A1.mat",
+        "S19_E2_A1.mat",
+        "S19_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s20.zip",
+      "subject_id": "S20",
+      "sha256": "0377fa00c0ff6fd8c47b2bd955c1983a47864498a3a0231f1a2233dab2196fb8",
+      "size_bytes": 430059817,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S20_E1_A1.mat",
+        "S20_E2_A1.mat",
+        "S20_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s21.zip",
+      "subject_id": "S21",
+      "sha256": "9bc0b999b351e0e659f68b943a4945246fc22d98833ad354275f16043b84fb19",
+      "size_bytes": 405746384,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S21_E1_A1.mat",
+        "S21_E2_A1.mat",
+        "S21_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s22.zip",
+      "subject_id": "S22",
+      "sha256": "3c79f6b1bc62a955bc8b2b003cdb6f49dc2864eac1ebee9e1a6464be0e1f5e2f",
+      "size_bytes": 447367679,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S22_E1_A1.mat",
+        "S22_E2_A1.mat",
+        "S22_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s23.zip",
+      "subject_id": "S23",
+      "sha256": "a1caa9ec8f00a269c5f0dd0a9aebde27e5cdb7e4fe41a7da5de96e22531db01c",
+      "size_bytes": 485737907,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S23_E1_A1.mat",
+        "S23_E2_A1.mat",
+        "S23_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s24.zip",
+      "subject_id": "S24",
+      "sha256": "facc5304ca7680ff0e2872de79bee931084f93cac12ac3900cc5ead1249411e2",
+      "size_bytes": 409753403,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S24_E1_A1.mat",
+        "S24_E2_A1.mat",
+        "S24_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s25.zip",
+      "subject_id": "S25",
+      "sha256": "b44c4484d688eaf22988f114900538a47b48463fdd85e9883c27deb4c9de16fe",
+      "size_bytes": 477055193,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S25_E1_A1.mat",
+        "S25_E2_A1.mat",
+        "S25_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s26.zip",
+      "subject_id": "S26",
+      "sha256": "5a059e8bc48cdd2154a6c1fa299a975b7d05688b0276342e6df846cacb56fdae",
+      "size_bytes": 470859675,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S26_E1_A1.mat",
+        "S26_E2_A1.mat",
+        "S26_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s27.zip",
+      "subject_id": "S27",
+      "sha256": "7611853b100f81534587bd7ff7a72eac8ff09d19c9c996ac66a4f96d8562f308",
+      "size_bytes": 477191252,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S27_E1_A1.mat",
+        "S27_E2_A1.mat",
+        "S27_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s28.zip",
+      "subject_id": "S28",
+      "sha256": "b5232348be84f8dc82babccb689aaca12f7fb20fc40779238026ca7875771678",
+      "size_bytes": 423791808,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S28_E1_A1.mat",
+        "S28_E2_A1.mat",
+        "S28_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s29.zip",
+      "subject_id": "S29",
+      "sha256": "2217a4fbc6d0d03a12828d6c7fa33966e5a274a8e630fe0d9e622f62cd5f41a8",
+      "size_bytes": 424302119,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S29_E1_A1.mat",
+        "S29_E2_A1.mat",
+        "S29_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s30.zip",
+      "subject_id": "S30",
+      "sha256": "88c93d49cd081a514ae266ab2bb23293a8c5c4551f8accf00dece9959604f150",
+      "size_bytes": 423490193,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S30_E1_A1.mat",
+        "S30_E2_A1.mat",
+        "S30_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s31.zip",
+      "subject_id": "S31",
+      "sha256": "08e2ed1cfbec60b137ee908b0e821f7b4941c363c53d7770528d190be948eaa0",
+      "size_bytes": 419920237,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S31_E1_A1.mat",
+        "S31_E2_A1.mat",
+        "S31_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s32.zip",
+      "subject_id": "S32",
+      "sha256": "d0a30bc3463fc4b00b6752de022f6f8f0c56e285fc5316f8fa7c7d92e8cfdedb",
+      "size_bytes": 437152463,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S32_E1_A1.mat",
+        "S32_E2_A1.mat",
+        "S32_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s33.zip",
+      "subject_id": "S33",
+      "sha256": "0949ffa042dd59b00b878723ab26fbdde09db24fd838cd4dd8e665ab50e11404",
+      "size_bytes": 434574348,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S33_E1_A1.mat",
+        "S33_E2_A1.mat",
+        "S33_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s34.zip",
+      "subject_id": "S34",
+      "sha256": "871547bed5956f3a387412663c1d15c89b07ca660c9be5ed7db1b3aecf877a9d",
+      "size_bytes": 464773726,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S34_E1_A1.mat",
+        "S34_E2_A1.mat",
+        "S34_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s35.zip",
+      "subject_id": "S35",
+      "sha256": "dac78491c2a7735ff890d7df3ec5c32e227916d9ef3660a2f0763c1e068dd7e3",
+      "size_bytes": 432044082,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S35_E1_A1.mat",
+        "S35_E2_A1.mat",
+        "S35_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s36.zip",
+      "subject_id": "S36",
+      "sha256": "a2dee280548fe04e68706d2e107973eaf10490bf15bb1b5728a972e027002f1a",
+      "size_bytes": 462081876,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S36_E1_A1.mat",
+        "S36_E2_A1.mat",
+        "S36_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s37.zip",
+      "subject_id": "S37",
+      "sha256": "66953d4475eaa9b3df10ca551b195b2ccaef64e1a168120ea418473918288e5d",
+      "size_bytes": 466154971,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S37_E1_A1.mat",
+        "S37_E2_A1.mat",
+        "S37_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s38.zip",
+      "subject_id": "S38",
+      "sha256": "39549841232b17a3732fe54048e4c5409b8f0fdd240fc46ebfbc829b4b616082",
+      "size_bytes": 422998832,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S38_E1_A1.mat",
+        "S38_E2_A1.mat",
+        "S38_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s39.zip",
+      "subject_id": "S39",
+      "sha256": "d7308e1a27894274201503900acd882e98a7a4d541dd87567399b0508914cde2",
+      "size_bytes": 475922435,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S39_E1_A1.mat",
+        "S39_E2_A1.mat",
+        "S39_E3_A1.mat"
+      ]
+    },
+    {
+      "filename": "DB2_s40.zip",
+      "subject_id": "S40",
+      "sha256": "ef5dc523bab9206d1d3ad9bbfdf6a012fc40629ff7b91c762f857c02f4899bc0",
+      "size_bytes": 499052512,
+      "archive_valid": true,
+      "mat_count": 3,
+      "mat_files": [
+        "S40_E1_A1.mat",
+        "S40_E2_A1.mat",
+        "S40_E3_A1.mat"
+      ]
+    }
+  ],
+  "findings_count": 18,
+  "final_status": "READY_WITH_FINDINGS"
+}

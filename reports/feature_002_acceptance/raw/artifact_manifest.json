@@ -1,0 +1,68 @@
+{
+  "semg_dsp/__init__.py": {
+    "path": "semg_dsp/__init__.py",
+    "size_bytes": 634,
+    "sha256": "8d88bbdbd5b1b658058b6c356d608faa2a770fec3455995a3a62f907d11da905",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "semg_dsp/source.py": {
+    "path": "semg_dsp/source.py",
+    "size_bytes": 17740,
+    "sha256": "ee0f1d93e49e5dc371ec59a951028534ae68a85aab23814cfe4c5b27145801ac",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "semg_dsp/filter.py": {
+    "path": "semg_dsp/filter.py",
+    "size_bytes": 6639,
+    "sha256": "27fc7d894c3778106cc9e3c79bf35e48c9fbdcb57c247935447df8a83e3511fb",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "semg_dsp/window.py": {
+    "path": "semg_dsp/window.py",
+    "size_bytes": 6293,
+    "sha256": "95a7c85248e286c7df686e198d47ec4c4473365d519f13261cdbe8b595a0a20d",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "semg_dsp/pipeline.py": {
+    "path": "semg_dsp/pipeline.py",
+    "size_bytes": 3984,
+    "sha256": "d5d85ec37021a0f2e92d6c2f3a022a0daf6321f11ef4f59f2fc23f26ff37eaa8",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "tests/fixtures/dsp/l0_analytical_cases.npz": {
+    "path": "tests/fixtures/dsp/l0_analytical_cases.npz",
+    "size_bytes": 2786,
+    "sha256": "cb503647c62630255f2ecfc99f84b1022fc139795d485765e2e71c9bad383163",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "tests/fixtures/dsp/sos_test_filter.npz": {
+    "path": "tests/fixtures/dsp/sos_test_filter.npz",
+    "size_bytes": 10661,
+    "sha256": "715842f96afbbbb706cd8b6045a985a4454d7fd874d53c826595b3fbee46425b",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "specs/002-dsp-streaming-pipeline/spec.md": {
+    "path": "specs/002-dsp-streaming-pipeline/spec.md",
+    "size_bytes": 25498,
+    "sha256": "31163788a4b012ac05659f8b7a8a09fd5343cb86184dd35ee7853a3d1fe09be6",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "specs/002-dsp-streaming-pipeline/plan.md": {
+    "path": "specs/002-dsp-streaming-pipeline/plan.md",
+    "size_bytes": 14401,
+    "sha256": "0d8bfe3911744910205639b207c12991e61c356fb6b99a57921ca3079dc6056a",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "specs/002-dsp-streaming-pipeline/tasks.md": {
+    "path": "specs/002-dsp-streaming-pipeline/tasks.md",
+    "size_bytes": 14135,
+    "sha256": "4d3688946583b0fd8d9db3c2f98f6a69dacedbee42240f54dc1b60a1194363e2",
+    "generated_by": "Feature 002 development & audit"
+  },
+  "scripts/validate_feature_002.py": {
+    "path": "scripts/validate_feature_002.py",
+    "size_bytes": 66866,
+    "sha256": "c612287ed2a0250c4b28fffbcfb234d0d6feaa13b32592175a9171e7e12353a4",
+    "generated_by": "Feature 002 development & audit"
+  }
+}

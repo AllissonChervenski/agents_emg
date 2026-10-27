@@ -1,0 +1,775 @@
+{
+  "dataset_name": "NinaPro DB2",
+  "expected_subject_count": 40,
+  "observed_subject_count": 40,
+  "coverage_ratio": 1.0,
+  "expected_subjects": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26",
+    "S27",
+    "S28",
+    "S29",
+    "S30",
+    "S31",
+    "S32",
+    "S33",
+    "S34",
+    "S35",
+    "S36",
+    "S37",
+    "S38",
+    "S39",
+    "S40"
+  ],
+  "observed_subjects": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26",
+    "S27",
+    "S28",
+    "S29",
+    "S30",
+    "S31",
+    "S32",
+    "S33",
+    "S34",
+    "S35",
+    "S36",
+    "S37",
+    "S38",
+    "S39",
+    "S40"
+  ],
+  "missing_subjects": [],
+  "duplicate_subjects": [],
+  "unexpected_subjects": [],
+  "subjects": {
+    "S1": {
+      "subject_id": "S1",
+      "archive_file": "DB2_s1.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S1_E1_A1.mat",
+        "S1_E2_A1.mat",
+        "S1_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S2": {
+      "subject_id": "S2",
+      "archive_file": "DB2_s2.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S2_E1_A1.mat",
+        "S2_E2_A1.mat",
+        "S2_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S3": {
+      "subject_id": "S3",
+      "archive_file": "DB2_s3.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S3_E1_A1.mat",
+        "S3_E2_A1.mat",
+        "S3_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S4": {
+      "subject_id": "S4",
+      "archive_file": "DB2_s4.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S4_E1_A1.mat",
+        "S4_E2_A1.mat",
+        "S4_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S5": {
+      "subject_id": "S5",
+      "archive_file": "DB2_s5.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S5_E1_A1.mat",
+        "S5_E2_A1.mat",
+        "S5_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S6": {
+      "subject_id": "S6",
+      "archive_file": "DB2_s6.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S6_E1_A1.mat",
+        "S6_E2_A1.mat",
+        "S6_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S7": {
+      "subject_id": "S7",
+      "archive_file": "DB2_s7.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S7_E1_A1.mat",
+        "S7_E2_A1.mat",
+        "S7_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S8": {
+      "subject_id": "S8",
+      "archive_file": "DB2_s8.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S8_E1_A1.mat",
+        "S8_E2_A1.mat",
+        "S8_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S9": {
+      "subject_id": "S9",
+      "archive_file": "DB2_s9.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S9_E1_A1.mat",
+        "S9_E2_A1.mat",
+        "S9_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S10": {
+      "subject_id": "S10",
+      "archive_file": "DB2_s10.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S10_E1_A1.mat",
+        "S10_E2_A1.mat",
+        "S10_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S11": {
+      "subject_id": "S11",
+      "archive_file": "DB2_s11.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S11_E1_A1.mat",
+        "S11_E2_A1.mat",
+        "S11_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S12": {
+      "subject_id": "S12",
+      "archive_file": "DB2_s12.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S12_E1_A1.mat",
+        "S12_E2_A1.mat",
+        "S12_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S13": {
+      "subject_id": "S13",
+      "archive_file": "DB2_s13.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S13_E1_A1.mat",
+        "S13_E2_A1.mat",
+        "S13_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S14": {
+      "subject_id": "S14",
+      "archive_file": "DB2_s14.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S14_E1_A1.mat",
+        "S14_E2_A1.mat",
+        "S14_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S15": {
+      "subject_id": "S15",
+      "archive_file": "DB2_s15.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S15_E1_A1.mat",
+        "S15_E2_A1.mat",
+        "S15_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S16": {
+      "subject_id": "S16",
+      "archive_file": "DB2_s16.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S16_E1_A1.mat",
+        "S16_E2_A1.mat",
+        "S16_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S17": {
+      "subject_id": "S17",
+      "archive_file": "DB2_s17.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S17_E1_A1.mat",
+        "S17_E2_A1.mat",
+        "S17_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S18": {
+      "subject_id": "S18",
+      "archive_file": "DB2_s18.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S18_E1_A1.mat",
+        "S18_E2_A1.mat",
+        "S18_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S19": {
+      "subject_id": "S19",
+      "archive_file": "DB2_s19.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S19_E1_A1.mat",
+        "S19_E2_A1.mat",
+        "S19_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S20": {
+      "subject_id": "S20",
+      "archive_file": "DB2_s20.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S20_E1_A1.mat",
+        "S20_E2_A1.mat",
+        "S20_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S21": {
+      "subject_id": "S21",
+      "archive_file": "DB2_s21.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S21_E1_A1.mat",
+        "S21_E2_A1.mat",
+        "S21_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S22": {
+      "subject_id": "S22",
+      "archive_file": "DB2_s22.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S22_E1_A1.mat",
+        "S22_E2_A1.mat",
+        "S22_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S23": {
+      "subject_id": "S23",
+      "archive_file": "DB2_s23.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S23_E1_A1.mat",
+        "S23_E2_A1.mat",
+        "S23_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S24": {
+      "subject_id": "S24",
+      "archive_file": "DB2_s24.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S24_E1_A1.mat",
+        "S24_E2_A1.mat",
+        "S24_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S25": {
+      "subject_id": "S25",
+      "archive_file": "DB2_s25.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S25_E1_A1.mat",
+        "S25_E2_A1.mat",
+        "S25_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S26": {
+      "subject_id": "S26",
+      "archive_file": "DB2_s26.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S26_E1_A1.mat",
+        "S26_E2_A1.mat",
+        "S26_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S27": {
+      "subject_id": "S27",
+      "archive_file": "DB2_s27.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S27_E1_A1.mat",
+        "S27_E2_A1.mat",
+        "S27_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S28": {
+      "subject_id": "S28",
+      "archive_file": "DB2_s28.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S28_E1_A1.mat",
+        "S28_E2_A1.mat",
+        "S28_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S29": {
+      "subject_id": "S29",
+      "archive_file": "DB2_s29.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S29_E1_A1.mat",
+        "S29_E2_A1.mat",
+        "S29_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S30": {
+      "subject_id": "S30",
+      "archive_file": "DB2_s30.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S30_E1_A1.mat",
+        "S30_E2_A1.mat",
+        "S30_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S31": {
+      "subject_id": "S31",
+      "archive_file": "DB2_s31.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S31_E1_A1.mat",
+        "S31_E2_A1.mat",
+        "S31_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S32": {
+      "subject_id": "S32",
+      "archive_file": "DB2_s32.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S32_E1_A1.mat",
+        "S32_E2_A1.mat",
+        "S32_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S33": {
+      "subject_id": "S33",
+      "archive_file": "DB2_s33.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S33_E1_A1.mat",
+        "S33_E2_A1.mat",
+        "S33_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S34": {
+      "subject_id": "S34",
+      "archive_file": "DB2_s34.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S34_E1_A1.mat",
+        "S34_E2_A1.mat",
+        "S34_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S35": {
+      "subject_id": "S35",
+      "archive_file": "DB2_s35.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S35_E1_A1.mat",
+        "S35_E2_A1.mat",
+        "S35_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S36": {
+      "subject_id": "S36",
+      "archive_file": "DB2_s36.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S36_E1_A1.mat",
+        "S36_E2_A1.mat",
+        "S36_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S37": {
+      "subject_id": "S37",
+      "archive_file": "DB2_s37.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S37_E1_A1.mat",
+        "S37_E2_A1.mat",
+        "S37_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S38": {
+      "subject_id": "S38",
+      "archive_file": "DB2_s38.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S38_E1_A1.mat",
+        "S38_E2_A1.mat",
+        "S38_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S39": {
+      "subject_id": "S39",
+      "archive_file": "DB2_s39.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S39_E1_A1.mat",
+        "S39_E2_A1.mat",
+        "S39_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    },
+    "S40": {
+      "subject_id": "S40",
+      "archive_file": "DB2_s40.zip",
+      "present": true,
+      "archive_valid": true,
+      "mat_files_found": [
+        "S40_E1_A1.mat",
+        "S40_E2_A1.mat",
+        "S40_E3_A1.mat"
+      ],
+      "exercises_found": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "status": "PASS"
+    }
+  }
+}

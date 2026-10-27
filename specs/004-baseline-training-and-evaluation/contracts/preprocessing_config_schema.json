@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PreprocessingConfigSchema",
+  "description": "JSON Schema validating Preprocessing configuration for Feature 004",
+  "type": "object",
+  "required": [
+    "filter_type",
+    "order",
+    "low_cutoff_hz",
+    "high_cutoff_hz",
+    "sampling_rate_hz",
+    "notch_50hz_enabled",
+    "sos_coefficients_hash",
+    "config_hash"
+  ],
+  "properties": {
+    "filter_type": {
+      "type": "string",
+      "enum": ["butterworth_causal_sos"]
+    },
+    "order": {
+      "type": "integer",
+      "const": 4
+    },
+    "low_cutoff_hz": {
+      "type": "number",
+      "const": 20.0
+    },
+    "high_cutoff_hz": {
+      "type": "number",
+      "const": 450.0
+    },
+    "sampling_rate_hz": {
+      "type": "number",
+      "const": 2000.0
+    },
+    "notch_50hz_enabled": {
+      "type": "boolean",
+      "const": false
+    },
+    "sos_coefficients_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "config_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "additionalProperties": false
+}

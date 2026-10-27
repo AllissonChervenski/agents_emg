@@ -1,0 +1,50 @@
+[
+  {
+    "attack_id": "ATK-01",
+    "description": "Inject subject overlap between train and test (S5 in both)",
+    "detected": true,
+    "status": "PASS"
+  },
+  {
+    "attack_id": "ATK-02",
+    "description": "Inject repetition overlap between train and test (rep 2 in both)",
+    "detected": true,
+    "status": "PASS"
+  },
+  {
+    "attack_id": "ATK-03",
+    "description": "Inject subject overlap between train and val (S3 in both)",
+    "detected": true,
+    "status": "PASS"
+  },
+  {
+    "attack_id": "ATK-04",
+    "description": "Inject subject overlap between val and test (S4 in both)",
+    "detected": true,
+    "status": "PASS"
+  },
+  {
+    "attack_id": "ATK-05",
+    "description": "Inject duplicate subject inside train partition ([S1, S1])",
+    "detected": true,
+    "status": "PASS"
+  },
+  {
+    "attack_id": "ATK-06",
+    "description": "Inject duplicate subject inside val partition ([S2, S2])",
+    "detected": true,
+    "status": "PASS"
+  },
+  {
+    "attack_id": "ATK-07",
+    "description": "Inject duplicate subject inside test partition ([S3, S3])",
+    "detected": true,
+    "status": "PASS"
+  },
+  {
+    "attack_id": "ATK-08",
+    "description": "Inject multiple overlapping repetitions ([2, 5] in both train and test)",
+    "detected": true,
+    "status": "PASS"
+  }
+]

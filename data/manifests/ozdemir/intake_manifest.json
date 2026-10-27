@@ -1,0 +1,2242 @@
+{
+  "schema_version": "1.0",
+  "dataset_name": "Ozdemir et al. sEMG Dataset for Hand Gesture Recognition",
+  "dataset_identifier": "ozdemir_semg_4ch",
+  "provenance": {
+    "mendeley_doi": "10.17632/ckwc76xr2z.2",
+    "citation": "Ozdemir, Mehmet Akif et al., Dataset for multi-channel surface electromyography (sEMG) signals of hand gestures, Mendeley Data, V2 (2022)",
+    "institution": "Izmir Katip Celebi University, Department of Biomedical Engineering",
+    "contact": "makif.ozdemir@ikcu.edu.tr",
+    "acquisition_system": "4-Channel Surface EMG System (2000 Hz, discrete bipolar/differential, mV)",
+    "local_raw_path": "data/raw/ozdemir/"
+  },
+  "audit_timestamp": "2026-10-27T06:20:19.006699+00:00",
+  "summary": {
+    "total_files": 164,
+    "total_bytes": 9574748553,
+    "total_gigabytes": 8.917,
+    "subject_count": 40,
+    "channels": 4,
+    "channel_labels": [
+      "EMG_Raw_CH1",
+      "EMG_RAW_CH2",
+      "EMG_RAW_CH3",
+      "EMG_RAW_CH4"
+    ],
+    "sampling_rate_hz": 2000,
+    "duration_seconds_per_subject": 640.0,
+    "samples_per_recording": 1280000,
+    "repetitions": 5,
+    "gestures_count": 10,
+    "gestures": [
+      {
+        "id": 0,
+        "code": "X",
+        "name": "REST"
+      },
+      {
+        "id": 1,
+        "code": "E",
+        "name": "EXTENSION"
+      },
+      {
+        "id": 2,
+        "code": "F",
+        "name": "FLEXION"
+      },
+      {
+        "id": 3,
+        "code": "U",
+        "name": "ULNAR DEVIATION"
+      },
+      {
+        "id": 4,
+        "code": "R",
+        "name": "RADIAL DEVIATION"
+      },
+      {
+        "id": 5,
+        "code": "G",
+        "name": "GRIP"
+      },
+      {
+        "id": 6,
+        "code": "B",
+        "name": "ABDUCTION"
+      },
+      {
+        "id": 7,
+        "code": "D",
+        "name": "ADDUCTION"
+      },
+      {
+        "id": 8,
+        "code": "S",
+        "name": "SUPINATION"
+      },
+      {
+        "id": 9,
+        "code": "P",
+        "name": "PRONATION"
+      }
+    ],
+    "units": "mV",
+    "has_nan": false,
+    "has_inf": false,
+    "global_raw_min_mv": -10.0,
+    "global_raw_max_mv": 9.99969482421875,
+    "global_filt_min_mv": -8.838274051919825,
+    "global_filt_max_mv": 8.456798136648707,
+    "findings_count": 0,
+    "findings": [],
+    "readiness_status": "READY"
+  },
+  "auxiliary_files": [
+    {
+      "filename": "4CH_RAW+4CH_FILTERED_EMG.gtl",
+      "size_bytes": 62674,
+      "sha256": "c582d336bed96ab08e2b719c079224733553667f4528e02fd41e5224de72c318",
+      "status": "PRESENT"
+    },
+    {
+      "filename": "EMG_gesture_segmentation.m",
+      "size_bytes": 8172,
+      "sha256": "c45b5c71a536974f00511ddeb80c87939a969dfcdb0a448fa3f0e910cfa92fd4",
+      "status": "PRESENT"
+    },
+    {
+      "filename": "procedure.pptx",
+      "size_bytes": 34578428,
+      "sha256": "e0dac6be0b9c7a5bbe5e71fede74a17fca2b2a1927d28efc757bba347ce863b6",
+      "status": "PRESENT"
+    },
+    {
+      "filename": "survey_responses.xlsx",
+      "size_bytes": 15613,
+      "sha256": "75412226e568d0f424b3bbf606995e5b23a9b136a98a8d45f7f2e715ac464e94",
+      "status": "PRESENT"
+    }
+  ],
+  "subjects": [
+    {
+      "subject_id": "S1",
+      "numeric_id": 1,
+      "raw_mat": {
+        "filename": "1_raw.mat",
+        "size_bytes": 10290294,
+        "sha256": "14b60fb5d2ed5d2863e3e22b87b15d82b2f101534854839bce087e1e6bc33e33",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 1,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          5.04302978515625,
+          -6.04095458984375,
+          5.0457763671875,
+          -0.56854248046875
+        ],
+        "channel_max_mv": [
+          9.99969482421875,
+          -2.55859375,
+          7.6165771484375,
+          0.37506103515625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "1_filtered.mat",
+        "size_bytes": 39311635,
+        "sha256": "ebe7176eca0e8a663beaff14f147120b949dc274578498ea16440d4e31237456",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 1,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.7234105833858706,
+          -4.466378090857941,
+          -0.49295785710925905,
+          -0.5054131091969649
+        ],
+        "channel_max_mv": [
+          8.456798136648707,
+          1.4518399083749536,
+          7.215951105053704,
+          0.33904491275782356
+        ]
+      },
+      "raw_csv_bytes": 84915785,
+      "filtered_csv_bytes": 103647389,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S2",
+      "numeric_id": 2,
+      "raw_mat": {
+        "filename": "2_raw.mat",
+        "size_bytes": 10294684,
+        "sha256": "b0ce5dda5cd138f5dde5df256138b9e6edc916ee83458625781cc7654b16c73e",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 2,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -8.1231689453125,
+          -3.6334228515625,
+          -2.15087890625,
+          -0.55450439453125
+        ],
+        "channel_max_mv": [
+          -1.173095703125,
+          2.5543212890625,
+          1.02447509765625,
+          0.9375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "2_filtered.mat",
+        "size_bytes": 39333635,
+        "sha256": "48e4a3ee4498519b06a95b5b7189da2ecafad069906c5e5741678e3d8915b6d3",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 2,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.665370751572534,
+          -1.3306276354375648,
+          -0.5619038517657644,
+          -0.5696315496824176
+        ],
+        "channel_max_mv": [
+          1.2683720935056042,
+          2.0804200616195265,
+          0.7755510534975418,
+          0.7282362960526872
+        ]
+      },
+      "raw_csv_bytes": 86843055,
+      "filtered_csv_bytes": 103479692,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S3",
+      "numeric_id": 3,
+      "raw_mat": {
+        "filename": "3_raw.mat",
+        "size_bytes": 9818347,
+        "sha256": "fcaa440066c929625020bfe930d7f63aabf3c05a03e9b7c3ed5f5eb884e15470",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 3,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.45391845703125,
+          -10.0,
+          -5.48004150390625,
+          -0.94085693359375
+        ],
+        "channel_max_mv": [
+          1.65679931640625,
+          -2.58209228515625,
+          -0.5035400390625,
+          0.985107421875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "3_filtered.mat",
+        "size_bytes": 38541407,
+        "sha256": "721d67dfec9e8ec79106014941db41e37818d649b656ba6833a7ef2ab544c4f9",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 3,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.3802093443255536,
+          -4.3911963333043555,
+          -3.022638687487509,
+          -0.6745159604712719
+        ],
+        "channel_max_mv": [
+          1.3963228218327455,
+          0.9483944246290776,
+          1.2734050468452915,
+          0.7547052646521895
+        ]
+      },
+      "raw_csv_bytes": 84146707,
+      "filtered_csv_bytes": 103710510,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S4",
+      "numeric_id": 4,
+      "raw_mat": {
+        "filename": "4_raw.mat",
+        "size_bytes": 10632616,
+        "sha256": "cc10e13092b657a26a9bcec9bf9f58177a55cb3aabf4291e37cdf28e3cfc7b31",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 4,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -5.894775390625,
+          -5.076904296875,
+          1.68060302734375,
+          -0.71380615234375
+        ],
+        "channel_max_mv": [
+          9.99969482421875,
+          -2.6275634765625,
+          4.40216064453125,
+          0.55023193359375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "4_filtered.mat",
+        "size_bytes": 39331580,
+        "sha256": "4ef3efc37f44fa711614d07452181625832c1693e8e7407b6c6f08ac66073432",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 4,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -5.801410792940985,
+          -4.621674658126656,
+          -0.9311330575287998,
+          -0.5353813491255436
+        ],
+        "channel_max_mv": [
+          3.609927579618982,
+          0.5431368189100484,
+          3.3842596944264005,
+          0.5583958380101742
+        ]
+      },
+      "raw_csv_bytes": 84846360,
+      "filtered_csv_bytes": 103090792,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S5",
+      "numeric_id": 5,
+      "raw_mat": {
+        "filename": "5_raw.mat",
+        "size_bytes": 10393827,
+        "sha256": "c87ec64822e85de61460a225c8855ea23c9fdf2db69a6d6ccc51da0c80c77326",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 5,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.6671142578125,
+          -0.03326416015625,
+          0.079345703125,
+          -0.6396484375
+        ],
+        "channel_max_mv": [
+          3.16497802734375,
+          3.07952880859375,
+          2.45025634765625,
+          0.7257080078125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "5_filtered.mat",
+        "size_bytes": 39337638,
+        "sha256": "6687adbf3faaea6d64092fad13833f23b14a1fc51f8689d675e6b1fd13ee5a5b",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 5,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.1764975688735066,
+          -0.685424509864645,
+          -0.7932945573289705,
+          -0.5768222888816557
+        ],
+        "channel_max_mv": [
+          1.5009941890620373,
+          1.4502168044521704,
+          1.153032961282017,
+          0.6154455340571288
+        ]
+      },
+      "raw_csv_bytes": 83597015,
+      "filtered_csv_bytes": 103537897,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S6",
+      "numeric_id": 6,
+      "raw_mat": {
+        "filename": "6_raw.mat",
+        "size_bytes": 10272875,
+        "sha256": "f38fa930cc0c3c2f7d93c3f88761a7eb44f6cd53a117b8da7d2073afe7edacec",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 6,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -3.4088134765625,
+          -2.8546142578125,
+          -3.34259033203125,
+          -0.86578369140625
+        ],
+        "channel_max_mv": [
+          2.02056884765625,
+          0.64453125,
+          -0.4620361328125,
+          0.93414306640625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "6_filtered.mat",
+        "size_bytes": 39329028,
+        "sha256": "0c94d97d4213ac64b09b658f22312a65cdcd10548fa21cb37b735fe97c4abc2b",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 6,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.880084147730618,
+          -1.4558308611415813,
+          -1.8585913872821072,
+          -0.7946819088742196
+        ],
+        "channel_max_mv": [
+          2.816024456735608,
+          1.0714422707862745,
+          1.0809187177579915,
+          0.8990971605124878
+        ]
+      },
+      "raw_csv_bytes": 87249946,
+      "filtered_csv_bytes": 103548700,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S7",
+      "numeric_id": 7,
+      "raw_mat": {
+        "filename": "7_raw.mat",
+        "size_bytes": 10007795,
+        "sha256": "78857c0bb94a4869ffc57b174bdb08df396309346187b4de8b4f6e28e2efc36c",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 7,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.20965576171875,
+          -3.36944580078125,
+          0.281982421875,
+          -1.95892333984375
+        ],
+        "channel_max_mv": [
+          6.2554931640625,
+          1.473388671875,
+          3.8482666015625,
+          1.0455322265625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "7_filtered.mat",
+        "size_bytes": 39339790,
+        "sha256": "55c0764d313f9c8be8417ec6c5d257cf889aa8a525bf33e21e12858d32a1e6ee",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 7,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.4015299301569786,
+          -1.5254694878463182,
+          -0.6361165929360647,
+          -1.4279951252973357
+        ],
+        "channel_max_mv": [
+          2.2369497854402267,
+          2.1616298025595624,
+          2.963754134475992,
+          1.068524531126105
+        ]
+      },
+      "raw_csv_bytes": 84723391,
+      "filtered_csv_bytes": 103964576,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S8",
+      "numeric_id": 8,
+      "raw_mat": {
+        "filename": "8_raw.mat",
+        "size_bytes": 9770133,
+        "sha256": "b3bc91b4cbee6df3cf41cede3fafa04f8b0898577086d2f45b46f183118708e7",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 8,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -5.94085693359375,
+          -3.2489013671875,
+          -1.81182861328125,
+          -0.33294677734375
+        ],
+        "channel_max_mv": [
+          -0.91888427734375,
+          3.287353515625,
+          0.61126708984375,
+          0.3338623046875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "8_filtered.mat",
+        "size_bytes": 39338847,
+        "sha256": "e41ddffaa6e09ed55d7ce6ab319ddfb4214bac1f682a677b3d20ba46e377e4ac",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 8,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.5850013103358835,
+          -1.617324403722856,
+          -0.4356675726841755,
+          -0.2854450145676548
+        ],
+        "channel_max_mv": [
+          0.6016306951894792,
+          1.3035259977771059,
+          0.5600360583959133,
+          0.28369864403421746
+        ]
+      },
+      "raw_csv_bytes": 86150504,
+      "filtered_csv_bytes": 104186278,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S9",
+      "numeric_id": 9,
+      "raw_mat": {
+        "filename": "9_raw.mat",
+        "size_bytes": 9982092,
+        "sha256": "c046e5a3fb4380da8858a11ecddee9172a34192b663f93e812ed24410a84ad92",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 9,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.03546142578125,
+          -1.96533203125,
+          0.20599365234375,
+          -0.3179931640625
+        ],
+        "channel_max_mv": [
+          2.47650146484375,
+          2.27569580078125,
+          2.49114990234375,
+          0.37506103515625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "9_filtered.mat",
+        "size_bytes": 39335365,
+        "sha256": "173eceacc46479c5d5a76d1ba375c3dbe899736c790d53855822a5a344217697",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 9,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.7525804574301074,
+          -1.21437184305266,
+          -0.5212392027700743,
+          -0.2696686829572366
+        ],
+        "channel_max_mv": [
+          0.8641354759190706,
+          1.0263260617246583,
+          0.4777886529328189,
+          0.3512248478746949
+        ]
+      },
+      "raw_csv_bytes": 84113202,
+      "filtered_csv_bytes": 103932183,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S10",
+      "numeric_id": 10,
+      "raw_mat": {
+        "filename": "10_raw.mat",
+        "size_bytes": 9613776,
+        "sha256": "a5576392458f7811a89646164b52fd491692ee09278d91e563c17fbd004a48fe",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 10,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.62591552734375,
+          -1.03179931640625,
+          -5.69915771484375,
+          -0.27587890625
+        ],
+        "channel_max_mv": [
+          0.85052490234375,
+          2.38189697265625,
+          -2.373046875,
+          0.1483154296875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "10_filtered.mat",
+        "size_bytes": 39334932,
+        "sha256": "b372b6ea420951dbf700cc10c3ba103f5e9028dd0a12e471840b0ab856a34c78",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 10,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.4651651862579895,
+          -0.8483649562827609,
+          -2.8996828591784882,
+          -0.22496124252631394
+        ],
+        "channel_max_mv": [
+          0.6026091233872273,
+          1.346812756360896,
+          0.6344023684584429,
+          0.16123539104467183
+        ]
+      },
+      "raw_csv_bytes": 85123133,
+      "filtered_csv_bytes": 104274579,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S11",
+      "numeric_id": 11,
+      "raw_mat": {
+        "filename": "11_raw.mat",
+        "size_bytes": 10514541,
+        "sha256": "9a936122f5a62c7cb600a1d210a5865257984bc58f359755e7fa60dd822aff51",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 11,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -9.2254638671875,
+          0.74493408203125,
+          -1.8890380859375,
+          -0.56121826171875
+        ],
+        "channel_max_mv": [
+          -6.29180908203125,
+          8.31573486328125,
+          0.05615234375,
+          0.3802490234375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "11_filtered.mat",
+        "size_bytes": 39336046,
+        "sha256": "8803d1728050d7b5da0453f06971b9f474b45bc44e8a3a32be78e489c9d14305",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 11,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.9762260447310678,
+          -1.3011756882654604,
+          -0.40162329504762884,
+          -0.4635520528830871
+        ],
+        "channel_max_mv": [
+          0.882401876800392,
+          1.9707493976650927,
+          0.36425407184633296,
+          0.38175071956616635
+        ]
+      },
+      "raw_csv_bytes": 86139594,
+      "filtered_csv_bytes": 103254922,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S12",
+      "numeric_id": 12,
+      "raw_mat": {
+        "filename": "12_raw.mat",
+        "size_bytes": 10656779,
+        "sha256": "27e46bb2d59c8e4b3eaf9573a8ed103752564d476bf41c652df325f468bb1ab8",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 12,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.33489990234375,
+          -3.88885498046875,
+          -2.60498046875,
+          -0.6500244140625
+        ],
+        "channel_max_mv": [
+          3.2391357421875,
+          4.447021484375,
+          0.84503173828125,
+          0.80596923828125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "12_filtered.mat",
+        "size_bytes": 39333187,
+        "sha256": "93e129f7967521cef8bf81e61b84e703236b43901913d83d4ef5c2a0c65cc039",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 12,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.7712936359517872,
+          -2.818618220752158,
+          -0.7509504415498256,
+          -0.5358521403779596
+        ],
+        "channel_max_mv": [
+          2.1219738834787414,
+          1.8672312195493372,
+          0.4909518603573946,
+          0.5836008435869865
+        ]
+      },
+      "raw_csv_bytes": 85521194,
+      "filtered_csv_bytes": 102972132,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S13",
+      "numeric_id": 13,
+      "raw_mat": {
+        "filename": "13_raw.mat",
+        "size_bytes": 10088109,
+        "sha256": "f7811f7263bf115074c423b57bf79c1d6e393bfdd7370c51d4e6b0304bd5a361",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 13,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -5.379638671875,
+          0.53497314453125,
+          1.2554931640625,
+          -0.59417724609375
+        ],
+        "channel_max_mv": [
+          0.72479248046875,
+          4.6856689453125,
+          7.56011962890625,
+          0.39337158203125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "13_filtered.mat",
+        "size_bytes": 39336541,
+        "sha256": "16e0be5475714bdd8563ecf483659d31db89235c219954e30475652edd8e29fa",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 13,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.8378307417837797,
+          -1.06981181107123,
+          -0.6474142514394511,
+          -0.5407239589169409
+        ],
+        "channel_max_mv": [
+          0.6014079478506855,
+          1.4781083360905263,
+          0.30440714721820317,
+          0.31411846562105655
+        ]
+      },
+      "raw_csv_bytes": 84856080,
+      "filtered_csv_bytes": 103928181,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S14",
+      "numeric_id": 14,
+      "raw_mat": {
+        "filename": "14_raw.mat",
+        "size_bytes": 10883029,
+        "sha256": "000668a83b6bb2064a61f0648947b6aa4619b39d048a41977d6f66751d8c6af5",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 14,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.73272705078125,
+          5.26580810546875,
+          1.307373046875,
+          -0.4638671875
+        ],
+        "channel_max_mv": [
+          3.502197265625,
+          9.99969482421875,
+          4.0972900390625,
+          0.63690185546875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "14_filtered.mat",
+        "size_bytes": 38804629,
+        "sha256": "6f46feb86a0f475ebbe80b04295a4ae9e0966672fb8555bae9d1caf9ca126eab",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 14,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.886461057298789,
+          -1.8611349583968848,
+          -0.5449265181326082,
+          -0.5516048096141652
+        ],
+        "channel_max_mv": [
+          0.9650327105327486,
+          6.888278916178495,
+          2.407554444631465,
+          0.5604453483768748
+        ]
+      },
+      "raw_csv_bytes": 83762418,
+      "filtered_csv_bytes": 102470603,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S15",
+      "numeric_id": 15,
+      "raw_mat": {
+        "filename": "15_raw.mat",
+        "size_bytes": 9883806,
+        "sha256": "111138305d7c19a440ca43a74dd23c170d3c6ac5a1c32c93542274b733472910",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 15,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -6.2432861328125,
+          -3.818359375,
+          -3.1256103515625,
+          -0.30731201171875
+        ],
+        "channel_max_mv": [
+          -3.01055908203125,
+          2.76336669921875,
+          1.2445068359375,
+          0.39306640625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "15_filtered.mat",
+        "size_bytes": 39331289,
+        "sha256": "1bfc955ad2180854328688c830c3042bfac9f379854e74c2cf317fd5c01b6319",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 15,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -5.334696421794598,
+          -1.3034647870273108,
+          -0.6105841921514349,
+          -0.32746378268878584
+        ],
+        "channel_max_mv": [
+          1.1465707425333167,
+          1.6061635544861008,
+          0.36073221315597476,
+          0.3263042872685643
+        ]
+      },
+      "raw_csv_bytes": 86922677,
+      "filtered_csv_bytes": 104030879,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S16",
+      "numeric_id": 16,
+      "raw_mat": {
+        "filename": "16_raw.mat",
+        "size_bytes": 9910971,
+        "sha256": "93efc1a6c7c63b103dd895dd012472a03deaa407a3219d5781334f14c25de94b",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 16,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -5.1348876953125,
+          -4.83642578125,
+          1.092529296875,
+          -0.40802001953125
+        ],
+        "channel_max_mv": [
+          1.502685546875,
+          0.11810302734375,
+          6.7425537109375,
+          0.46905517578125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "16_filtered.mat",
+        "size_bytes": 39338757,
+        "sha256": "fba95dcc3738e2e0bbc1813e81e76ae44779b3185fcba7556d7e2b8856d199c4",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 16,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.9527683778424878,
+          -3.929779900310969,
+          -1.8477726551492895,
+          -0.3832593138192408
+        ],
+        "channel_max_mv": [
+          1.1418504339338977,
+          1.5929174014910679,
+          3.839089795564279,
+          0.45122894843104544
+        ]
+      },
+      "raw_csv_bytes": 85492950,
+      "filtered_csv_bytes": 103984155,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S17",
+      "numeric_id": 17,
+      "raw_mat": {
+        "filename": "17_raw.mat",
+        "size_bytes": 11208246,
+        "sha256": "fc1a328fc930868d070788c42305831a2665d67a9591c1d15d529b6d304753d4",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 17,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -3.00567626953125,
+          -8.096923828125,
+          -10.0,
+          -4.21112060546875
+        ],
+        "channel_max_mv": [
+          5.73760986328125,
+          -2.9583740234375,
+          -6.1126708984375,
+          3.023681640625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "17_filtered.mat",
+        "size_bytes": 39311817,
+        "sha256": "7de5e45301cece2902908574a0212575b466e5f7a770ce4e997d60e6e438afeb",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 17,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.6659078506627294,
+          -6.310724397116238,
+          -8.838274051919825,
+          -3.9926491548282366
+        ],
+        "channel_max_mv": [
+          2.176173400944019,
+          2.3951267051467546,
+          0.8820467193561106,
+          2.4864111356065357
+        ]
+      },
+      "raw_csv_bytes": 85919088,
+      "filtered_csv_bytes": 102355716,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S18",
+      "numeric_id": 18,
+      "raw_mat": {
+        "filename": "18_raw.mat",
+        "size_bytes": 10587550,
+        "sha256": "dece8ef5f2f153b38c44bb235b1abcb5338e23ccf72a2b35e59a56e4d25a56a0",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 18,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.8399658203125,
+          -0.62774658203125,
+          -2.04986572265625,
+          -0.8984375
+        ],
+        "channel_max_mv": [
+          1.90032958984375,
+          2.9443359375,
+          5.5572509765625,
+          0.5035400390625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "18_filtered.mat",
+        "size_bytes": 39337993,
+        "sha256": "8c80832dc4fed2347b5416c46e935961ca4353039743174b8e9abdb02f32360f",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 18,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.577856124564453,
+          -1.2827013280637942,
+          -1.3905852590252323,
+          -0.6751472414323363
+        ],
+        "channel_max_mv": [
+          1.1774133324184328,
+          1.6677466999949602,
+          2.1355792967207403,
+          0.5289598079958994
+        ]
+      },
+      "raw_csv_bytes": 84781531,
+      "filtered_csv_bytes": 103157940,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S19",
+      "numeric_id": 19,
+      "raw_mat": {
+        "filename": "19_raw.mat",
+        "size_bytes": 10114556,
+        "sha256": "f5baadbc66076f841f41da5e8703774b53ccd885dba7e97d2dcfe0476871cedf",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 19,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -4.0997314453125,
+          -4.12841796875,
+          -8.46527099609375,
+          -1.385498046875
+        ],
+        "channel_max_mv": [
+          0.99456787109375,
+          4.32373046875,
+          7.29736328125,
+          0.84197998046875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "19_filtered.mat",
+        "size_bytes": 39335314,
+        "sha256": "c8acb5bc151ba269201ccde3aade825e41082f51b24bdeda10a3c5ab9cf66f53",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 19,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.8269215694486962,
+          -2.3566950724679456,
+          -5.126086233755949,
+          -1.102181849876164
+        ],
+        "channel_max_mv": [
+          0.6468413196619645,
+          4.298302489850024,
+          4.150143496725493,
+          0.8844166955124609
+        ]
+      },
+      "raw_csv_bytes": 86171520,
+      "filtered_csv_bytes": 103731307,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S20",
+      "numeric_id": 20,
+      "raw_mat": {
+        "filename": "20_raw.mat",
+        "size_bytes": 11039037,
+        "sha256": "c377b91ead86cb131b1bc21b600ddb61ebdc779642ce101a162a6f27040219bd",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 20,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -8.58551025390625,
+          -9.322509765625,
+          -1.80694580078125,
+          -0.499267578125
+        ],
+        "channel_max_mv": [
+          9.99969482421875,
+          2.41302490234375,
+          4.7845458984375,
+          0.69366455078125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "20_filtered.mat",
+        "size_bytes": 39308775,
+        "sha256": "d49be657782cc91b888e0afe6160cd2641bb8d04bbe9f7ea9ecb47b4c85f78ea",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 20,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -5.490213894095349,
+          -3.4536908034019325,
+          -1.4474016225329,
+          -0.5412176155620931
+        ],
+        "channel_max_mv": [
+          4.241973220459413,
+          3.726012592012619,
+          2.192935172925247,
+          0.5973772064959632
+        ]
+      },
+      "raw_csv_bytes": 84576500,
+      "filtered_csv_bytes": 102435801,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S21",
+      "numeric_id": 21,
+      "raw_mat": {
+        "filename": "21_raw.mat",
+        "size_bytes": 10825950,
+        "sha256": "395531830f929e1a45a418f39ff766f6afdacb7a6e39542ced394646eeeb8207",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 21,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.51971435546875,
+          -4.76776123046875,
+          0.87066650390625,
+          -1.285400390625
+        ],
+        "channel_max_mv": [
+          5.80535888671875,
+          4.67559814453125,
+          4.33807373046875,
+          1.3421630859375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "21_filtered.mat",
+        "size_bytes": 39332754,
+        "sha256": "7265d8373e7b7057afadb7abe418940e552ebd7e75989fc3d1caf36586c984c5",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 21,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.5954607584563594,
+          -4.2269310861429625,
+          -0.3746818938285096,
+          -1.1546798809263197
+        ],
+        "channel_max_mv": [
+          2.1842184590376412,
+          3.083921611297873,
+          0.452678032540777,
+          1.1610865664574073
+        ]
+      },
+      "raw_csv_bytes": 84819720,
+      "filtered_csv_bytes": 102914069,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S22",
+      "numeric_id": 22,
+      "raw_mat": {
+        "filename": "22_raw.mat",
+        "size_bytes": 10750990,
+        "sha256": "49657388956a16259b732b0a99eeb6a12add3aa6e05d4d87c7792bab3deabfc2",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 22,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -3.22998046875,
+          -6.81396484375,
+          0.27618408203125,
+          -1.1688232421875
+        ],
+        "channel_max_mv": [
+          1.5155029296875,
+          0.06805419921875,
+          2.9296875,
+          1.14990234375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "22_filtered.mat",
+        "size_bytes": 39332817,
+        "sha256": "cda1fd066945fab54ef716907f9b62ecbe9932418d88ccbe27e298b160151a50",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 22,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.559910893351972,
+          -1.764911704367326,
+          -0.4503847872393512,
+          -1.0063149807270007
+        ],
+        "channel_max_mv": [
+          1.3614845018595725,
+          2.401485859906282,
+          1.5195082273954057,
+          1.144218525852281
+        ]
+      },
+      "raw_csv_bytes": 86094626,
+      "filtered_csv_bytes": 102786623,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S23",
+      "numeric_id": 23,
+      "raw_mat": {
+        "filename": "23_raw.mat",
+        "size_bytes": 10828307,
+        "sha256": "a6773d3400e6140dea179706a15ad7d0c19a91455962faf5388aae888d0e20c9",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 23,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          1.74957275390625,
+          -2.940673828125,
+          0.9002685546875,
+          -1.05316162109375
+        ],
+        "channel_max_mv": [
+          6.44805908203125,
+          5.69976806640625,
+          3.25958251953125,
+          0.83404541015625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "23_filtered.mat",
+        "size_bytes": 39332545,
+        "sha256": "eed39645b7098e99597af035b37d89093e472ad67f412b2577320a6b474e86ee",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 23,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.499283705175284,
+          -3.805801275618517,
+          -0.6700520864837436,
+          -0.8842006377917955
+        ],
+        "channel_max_mv": [
+          2.1329839970283775,
+          2.2013105113398495,
+          0.6721548991421742,
+          0.7724448411231511
+        ]
+      },
+      "raw_csv_bytes": 83600465,
+      "filtered_csv_bytes": 103005595,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S24",
+      "numeric_id": 24,
+      "raw_mat": {
+        "filename": "24_raw.mat",
+        "size_bytes": 10195507,
+        "sha256": "1ed6a2af2d7a359b66690099637e7028da463a9a6ff1d5810788bbacd76fd4ce",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 24,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -7.6690673828125,
+          -10.0,
+          -2.3968505859375,
+          -0.4376220703125
+        ],
+        "channel_max_mv": [
+          6.92657470703125,
+          3.93157958984375,
+          9.056396484375,
+          0.42022705078125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "24_filtered.mat",
+        "size_bytes": 39334071,
+        "sha256": "e053e05d7ddaf89b91b9a4bd4526e038301dcf44978df92c2d1cd229ca9aee74",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 24,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -3.156994996099762,
+          -4.737997393914912,
+          -3.3584518337182234,
+          -0.3655514821849762
+        ],
+        "channel_max_mv": [
+          4.169564249636138,
+          3.2173701879939545,
+          2.9879649271598434,
+          0.3605400884594171
+        ]
+      },
+      "raw_csv_bytes": 85869087,
+      "filtered_csv_bytes": 103500831,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S25",
+      "numeric_id": 25,
+      "raw_mat": {
+        "filename": "25_raw.mat",
+        "size_bytes": 11271583,
+        "sha256": "33762adf26f019b2d3fd347ae2460b13d22a5ed8ca70a03104d722886a0c1c7d",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 25,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.701416015625,
+          -7.41943359375,
+          -1.4593505859375,
+          -1.4208984375
+        ],
+        "channel_max_mv": [
+          6.01287841796875,
+          -0.23590087890625,
+          2.9205322265625,
+          2.01629638671875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "25_filtered.mat",
+        "size_bytes": 39330449,
+        "sha256": "8006eb0e952c0b6053bacfc65913dd40d707605f1e8b1f38bf16cec005b8c3eb",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 25,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.0582202028798258,
+          -1.987287835346747,
+          -0.3955657635707564,
+          -1.4234428037260018
+        ],
+        "channel_max_mv": [
+          2.252951180504983,
+          1.743402642621609,
+          1.8635588072245584,
+          1.6480626779357284
+        ]
+      },
+      "raw_csv_bytes": 85869806,
+      "filtered_csv_bytes": 102345986,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S26",
+      "numeric_id": 26,
+      "raw_mat": {
+        "filename": "26_raw.mat",
+        "size_bytes": 10515558,
+        "sha256": "7e983dceb09deec553e64b6c828b9acee82a31a9f4bab49dd1df2402da3b744f",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 26,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.139892578125,
+          -8.63922119140625,
+          -0.57464599609375,
+          -0.96282958984375
+        ],
+        "channel_max_mv": [
+          6.685791015625,
+          9.99969482421875,
+          4.532470703125,
+          1.19720458984375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "26_filtered.mat",
+        "size_bytes": 39333727,
+        "sha256": "e2a703e41364a3b1c3e1cad11704a040bf6cddfd1e0a9d16c78bf69d79e9afe9",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 26,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.0016009448793386,
+          -6.125794770099746,
+          -0.9288735612961215,
+          -0.849996365627761
+        ],
+        "channel_max_mv": [
+          2.4314277140202587,
+          4.049324406742725,
+          0.870897984556443,
+          1.0729207895837802
+        ]
+      },
+      "raw_csv_bytes": 83728828,
+      "filtered_csv_bytes": 103268910,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S27",
+      "numeric_id": 27,
+      "raw_mat": {
+        "filename": "27_raw.mat",
+        "size_bytes": 10361147,
+        "sha256": "2137adf27dbf0ffb31eb95908fad038d040f97aff3a10b0ad34f2a80d47b6b75",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 27,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -3.73565673828125,
+          -0.650634765625,
+          -3.94012451171875,
+          -0.63934326171875
+        ],
+        "channel_max_mv": [
+          0.97564697265625,
+          4.2449951171875,
+          0.472412109375,
+          0.86029052734375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "27_filtered.mat",
+        "size_bytes": 39337251,
+        "sha256": "242f33496905f1d138ddea9fd6885208fa0900bf72d79ff59759cf85fab2952a",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 27,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.70712078854342,
+          -2.4269141399479834,
+          -0.6514076113495041,
+          -0.6309858912063383
+        ],
+        "channel_max_mv": [
+          1.5713518535686573,
+          2.1737435600307125,
+          0.6006217215167675,
+          0.8010902088327536
+        ]
+      },
+      "raw_csv_bytes": 86047724,
+      "filtered_csv_bytes": 103434669,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S28",
+      "numeric_id": 28,
+      "raw_mat": {
+        "filename": "28_raw.mat",
+        "size_bytes": 10726175,
+        "sha256": "2187eba3ff2cb2c9769e663f495b424a7f70279002b016e751d63dd7f63b5306",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 28,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.52520751953125,
+          -3.18878173828125,
+          -2.60589599609375,
+          -1.38092041015625
+        ],
+        "channel_max_mv": [
+          3.75946044921875,
+          0.7525634765625,
+          0.62591552734375,
+          0.87890625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "28_filtered.mat",
+        "size_bytes": 39329559,
+        "sha256": "cb50aeb5b43923485984b78e1bdc7ad493fa2d93ae1f14131fc344d5ef00f5ab",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 28,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.0661385542340422,
+          -1.3262327595606571,
+          -0.7103022970657682,
+          -1.1630332248517214
+        ],
+        "channel_max_mv": [
+          1.293091947474025,
+          0.9862644151017822,
+          0.8882562294349369,
+          1.0180566911540911
+        ]
+      },
+      "raw_csv_bytes": 86208625,
+      "filtered_csv_bytes": 102730072,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S29",
+      "numeric_id": 29,
+      "raw_mat": {
+        "filename": "29_raw.mat",
+        "size_bytes": 10358137,
+        "sha256": "54dd89f335938316b9dbafcb84ceb74e6ef98ff0e97c99ddcf8301f44895b94c",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 29,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.838623046875,
+          -0.9405517578125,
+          -5.9063720703125,
+          -0.49957275390625
+        ],
+        "channel_max_mv": [
+          2.7044677734375,
+          2.015380859375,
+          -3.08746337890625,
+          0.8343505859375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "29_filtered.mat",
+        "size_bytes": 39337700,
+        "sha256": "3135e2725e261e7f63bb31e35317bd4936d5be8e274d8cce3286c943eec45cac",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 29,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.4218870392581144,
+          -0.9701153746057285,
+          -4.159751273362742,
+          -0.6129830977625129
+        ],
+        "channel_max_mv": [
+          1.7200205248334677,
+          1.5158903484814696,
+          0.9581475187962165,
+          0.6481204167321393
+        ]
+      },
+      "raw_csv_bytes": 84747156,
+      "filtered_csv_bytes": 103219418,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S30",
+      "numeric_id": 30,
+      "raw_mat": {
+        "filename": "30_raw.mat",
+        "size_bytes": 10937146,
+        "sha256": "b7edceb6f4c40b3b9409617a4b972a11cd380331d539f2cc69a00d1a8f13b41c",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 30,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -4.4171142578125,
+          -3.76983642578125,
+          -2.314453125,
+          -1.4410400390625
+        ],
+        "channel_max_mv": [
+          -0.128173828125,
+          2.3529052734375,
+          1.2933349609375,
+          1.4129638671875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "30_filtered.mat",
+        "size_bytes": 39330054,
+        "sha256": "4818ef6e5688f9ae3678fa503cd6fd82e308df6c7520f1e25cf4ce6ccd1e23a6",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 30,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.2959455223479104,
+          -2.275202577112569,
+          -0.6758298340691076,
+          -1.3067309384448054
+        ],
+        "channel_max_mv": [
+          1.3747309909517433,
+          1.8777479392708947,
+          0.6725719569887485,
+          1.259011215764148
+        ]
+      },
+      "raw_csv_bytes": 86836711,
+      "filtered_csv_bytes": 102470687,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S31",
+      "numeric_id": 31,
+      "raw_mat": {
+        "filename": "31_raw.mat",
+        "size_bytes": 10244785,
+        "sha256": "f41c8da641ac217032a15a673d44653d295fe19b67fb22bdc3f6406b5b68f307",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 31,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -10.0,
+          -9.41558837890625,
+          -10.0,
+          -0.426025390625
+        ],
+        "channel_max_mv": [
+          9.99969482421875,
+          8.759765625,
+          9.99969482421875,
+          0.64697265625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "31_filtered.mat",
+        "size_bytes": 39336841,
+        "sha256": "75f7b83d38df01cc3c8bbbd62d74c2409b43619d4af5901e8b59d20578284ffd",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 31,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -8.01475120368077,
+          -4.4803144043819705,
+          -4.180821742919558,
+          -0.3920754426696865
+        ],
+        "channel_max_mv": [
+          4.2101234458923695,
+          4.745395471235124,
+          5.278633965704501,
+          0.591678896958731
+        ]
+      },
+      "raw_csv_bytes": 84721338,
+      "filtered_csv_bytes": 103720590,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S32",
+      "numeric_id": 32,
+      "raw_mat": {
+        "filename": "32_raw.mat",
+        "size_bytes": 10633358,
+        "sha256": "b68aa7d9c3af175045d8845d63dc178d5c3ceb9e0293acc23ff19051247bf427",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 32,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.41412353515625,
+          -6.40869140625,
+          0.115966796875,
+          -0.4364013671875
+        ],
+        "channel_max_mv": [
+          4.161376953125,
+          0.113525390625,
+          1.429443359375,
+          0.67230224609375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "32_filtered.mat",
+        "size_bytes": 39336056,
+        "sha256": "e04fde9e34f5878011b742354ead26c4dd88c55c56b2237cb137d5652ed0ec24",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 32,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.640891390110904,
+          -2.6927270039875393,
+          -0.26259059477330904,
+          -0.47226140557044
+        ],
+        "channel_max_mv": [
+          1.3651613846398032,
+          1.6814106428335194,
+          0.29055334166824776,
+          0.5371855774802974
+        ]
+      },
+      "raw_csv_bytes": 84981998,
+      "filtered_csv_bytes": 103279211,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S33",
+      "numeric_id": 33,
+      "raw_mat": {
+        "filename": "33_raw.mat",
+        "size_bytes": 10817743,
+        "sha256": "685612ca0b69861d5e08c092cdd5528a414f45f8a4b62d50967e46e91bc2da1d",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 33,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -8.6273193359375,
+          -6.49688720703125,
+          -2.52838134765625,
+          -1.30615234375
+        ],
+        "channel_max_mv": [
+          -1.07025146484375,
+          0.20233154296875,
+          0.1922607421875,
+          1.77215576171875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "33_filtered.mat",
+        "size_bytes": 39334770,
+        "sha256": "9d86d827e87d6293d2bc9b67300a679e0349eb791cfd6210d9b63078be768676",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 33,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.5878735595876607,
+          -3.003377364959337,
+          -0.4577938249722674,
+          -1.0163781708451711
+        ],
+        "channel_max_mv": [
+          3.4329813315617885,
+          1.9189090367444597,
+          0.29588085776650797,
+          1.510528084518472
+        ]
+      },
+      "raw_csv_bytes": 87544685,
+      "filtered_csv_bytes": 102995657,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S34",
+      "numeric_id": 34,
+      "raw_mat": {
+        "filename": "34_raw.mat",
+        "size_bytes": 10189088,
+        "sha256": "fe014d340e945c2c0764f885f424a5606cd873e4f347e9eb97cfa340f38463bf",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 34,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -6.8914794921875,
+          -2.96600341796875,
+          -3.8568115234375,
+          -0.57891845703125
+        ],
+        "channel_max_mv": [
+          -3.58856201171875,
+          0.3826904296875,
+          -0.740966796875,
+          0.4571533203125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "34_filtered.mat",
+        "size_bytes": 39332984,
+        "sha256": "82a35c6bef3ce604af5455fab34ce9f6d50934fb08d31442467d4f2d3ce881c8",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 34,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.0405105105818,
+          -0.5883273357555976,
+          -0.29792185870041016,
+          -0.45174708963908544
+        ],
+        "channel_max_mv": [
+          0.8545527180186621,
+          1.054639635852547,
+          0.2907348143913605,
+          0.5093749994118648
+        ]
+      },
+      "raw_csv_bytes": 87418571,
+      "filtered_csv_bytes": 103875367,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S35",
+      "numeric_id": 35,
+      "raw_mat": {
+        "filename": "35_raw.mat",
+        "size_bytes": 10202568,
+        "sha256": "062d2c8bc80abd6e1c103f3d938ce32014ca2416dd92d480b56df9df4628f467",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 35,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.4080810546875,
+          -2.4456787109375,
+          -3.4088134765625,
+          -0.252685546875
+        ],
+        "channel_max_mv": [
+          2.3577880859375,
+          1.9866943359375,
+          -0.6805419921875,
+          0.323486328125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "35_filtered.mat",
+        "size_bytes": 39333152,
+        "sha256": "bdb063123f26602a8bee01d96d7c96e474e1b8352c26c405bcfbee9fe59d669f",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 35,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.530913925489872,
+          -1.6935675722979893,
+          -0.4090760968147462,
+          -0.24181101678906936
+        ],
+        "channel_max_mv": [
+          1.2872062795855483,
+          1.6526992334090804,
+          0.3352253016252169,
+          0.2907858111245076
+        ]
+      },
+      "raw_csv_bytes": 86088834,
+      "filtered_csv_bytes": 103621576,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S36",
+      "numeric_id": 36,
+      "raw_mat": {
+        "filename": "36_raw.mat",
+        "size_bytes": 10686503,
+        "sha256": "7f079e8443ae7d2603fd4b6eddf760202f33b3bc4ab8cfa2023e8db513fb726c",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 36,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          0.06072998046875,
+          -6.2158203125,
+          -0.26702880859375,
+          -1.62322998046875
+        ],
+        "channel_max_mv": [
+          4.05670166015625,
+          -0.452880859375,
+          1.61712646484375,
+          1.18072509765625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "36_filtered.mat",
+        "size_bytes": 39330277,
+        "sha256": "833f130ed37fb28befee4affbe297bdec5e7a75d675dddc643c49777dd47f1a6",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 36,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.11526197466864,
+          -2.356900061551357,
+          -0.28253513389226903,
+          -1.4196623095544927
+        ],
+        "channel_max_mv": [
+          1.6127947704520316,
+          1.840944942984968,
+          0.48519018222184906,
+          1.1606729557441349
+        ]
+      },
+      "raw_csv_bytes": 84984796,
+      "filtered_csv_bytes": 103145583,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S37",
+      "numeric_id": 37,
+      "raw_mat": {
+        "filename": "37_raw.mat",
+        "size_bytes": 11132259,
+        "sha256": "142803423952aedc05d7a26fe91d99435f9d6c36ce7600f99e3e298b87270305",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 37,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -6.31591796875,
+          -1.1199951171875,
+          -5.93048095703125,
+          -0.4119873046875
+        ],
+        "channel_max_mv": [
+          0.07781982421875,
+          4.8614501953125,
+          -2.2088623046875,
+          0.556640625
+        ]
+      },
+      "filtered_mat": {
+        "filename": "37_filtered.mat",
+        "size_bytes": 39329862,
+        "sha256": "ac6b6c62a27ae1265534f3d8ce4d6009c65c4574cf9e1658fba40b20a5271c69",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 37,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.6799936803121196,
+          -2.2417536490316174,
+          -5.046985885577709,
+          -0.3024237740849134
+        ],
+        "channel_max_mv": [
+          2.1559366811794822,
+          1.7380240290441133,
+          0.43955544989702544,
+          0.49973488587030573
+        ]
+      },
+      "raw_csv_bytes": 86240206,
+      "filtered_csv_bytes": 102724187,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S38",
+      "numeric_id": 38,
+      "raw_mat": {
+        "filename": "38_raw.mat",
+        "size_bytes": 10599378,
+        "sha256": "b1cdc75d318bdc1b21ec5af0153646fc2a972eaf305240a2c5ed9630e0212ece",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 38,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          1.43585205078125,
+          -6.1260986328125,
+          -4.2822265625,
+          -0.62896728515625
+        ],
+        "channel_max_mv": [
+          4.87060546875,
+          -0.54779052734375,
+          -2.99102783203125,
+          0.6365966796875
+        ]
+      },
+      "filtered_mat": {
+        "filename": "38_filtered.mat",
+        "size_bytes": 39318943,
+        "sha256": "5490149c3f86cfa63964b952a310a6c63aa1162a9cc12c0a6d0facf9bc988bfd",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 38,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.2990617627468164,
+          -4.908164789099781,
+          -3.4078005818769945,
+          -0.5563382551645768
+        ],
+        "channel_max_mv": [
+          3.510800784992304,
+          0.8361404646036127,
+          0.288279925799496,
+          0.5561891692950153
+        ]
+      },
+      "raw_csv_bytes": 86048577,
+      "filtered_csv_bytes": 103210465,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S39",
+      "numeric_id": 39,
+      "raw_mat": {
+        "filename": "39_raw.mat",
+        "size_bytes": 9782116,
+        "sha256": "872b6e5eeffda22513a4de6d5b471bbb2a3f1a9c132519af2b2ab926955a550f",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 39,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.3785400390625,
+          -2.58209228515625,
+          -8.4100341796875,
+          -0.82489013671875
+        ],
+        "channel_max_mv": [
+          6.09588623046875,
+          5.22735595703125,
+          1.5069580078125,
+          0.52490234375
+        ]
+      },
+      "filtered_mat": {
+        "filename": "39_filtered.mat",
+        "size_bytes": 39336543,
+        "sha256": "4e366e26cd85c2a38d207f6ad3825f981f876a4a05e66faa448d15602063b71f",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 39,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -2.0031827519129917,
+          -2.0121493547800626,
+          -2.7622869587831858,
+          -0.7721838209532266
+        ],
+        "channel_max_mv": [
+          2.581695889140724,
+          2.2252899786169476,
+          2.045523415462169,
+          0.42531266694725756
+        ]
+      },
+      "raw_csv_bytes": 85289237,
+      "filtered_csv_bytes": 104270871,
+      "status": "VALID"
+    },
+    {
+      "subject_id": "S40",
+      "numeric_id": 40,
+      "raw_mat": {
+        "filename": "40_raw.mat",
+        "size_bytes": 9966656,
+        "sha256": "dfbb8a3a8cba4a8d532aa606f78c2964e7aa283079e9944360bf7e89d4371182",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 40,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -0.78155517578125,
+          4.9920654296875,
+          -2.45635986328125,
+          -0.4986572265625
+        ],
+        "channel_max_mv": [
+          3.70574951171875,
+          8.427734375,
+          2.13226318359375,
+          0.703125
+        ]
+      },
+      "filtered_mat": {
+        "filename": "40_filtered.mat",
+        "size_bytes": 39336640,
+        "sha256": "7a8d9b0ce2c585c21bf8751eed0f6dce46e72f7096c2974056de784321d2fd33",
+        "samples": 1280000,
+        "channels": 4,
+        "fs": 2000,
+        "id_field": 40,
+        "has_nan": false,
+        "has_inf": false,
+        "channel_min_mv": [
+          -1.602703476343676,
+          -1.3110927605721454,
+          -0.8699627014650009,
+          -0.5890484743661099
+        ],
+        "channel_max_mv": [
+          1.3076211115493397,
+          1.5428933519898185,
+          0.7034230753424894,
+          0.5674533786176059
+        ]
+      },
+      "raw_csv_bytes": 84119890,
+      "filtered_csv_bytes": 103802320,
+      "status": "VALID"
+    }
+  ]
+}

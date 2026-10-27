@@ -1,0 +1,124 @@
+# Phase 0: Research & Architectural Decisions — Feature 004
+
+**Feature**: `004-baseline-training-and-evaluation`  
+**Status**: Contractually Reconciled  
+**Inputs**: Feature Specification (`spec.md`), CLARIFY Resolutions (Q1–Q5), Contract Schemas (`contracts/`)
+
+---
+
+## Decision 1 (Q1): Hardened Governance for Host-Only `scikit-learn` via Persistent ADR
+
+- **Decision**: Adopt `scikit-learn` strictly as a host-only development and evaluation dependency governed by a persistent Architecture Decision Record at [`docs/adr/ADR-004-001-scikit-learn-host-only.md`](file:///home/allisson/Projects/agents_emg/docs/adr/ADR-004-001-scikit-learn-host-only.md), without amending Constitution v1.1.0 (commit `ce75be0`).
+- **Current Status**: `PROPOSED` (Governance State: `CONDITIONAL_PASS`).
+  - Tasks modifying `pyproject.toml` or importing/executing `scikit-learn` remain strictly **`BLOCKED`** until the human approval lifecycle is complete and verified by the governance gate.
+- **Rationale**:
+  - Line 51 of `.specify/memory/constitution.md` states: *"Features MUST NOT introduce new third-party dependencies without prior governance approval."* The active Constitution does not define "prior governance approval" as strictly requiring a constitutional amendment.
+  - A persistent ADR with an explicit human approval lifecycle (`PROPOSED` → human sign-off with approver ID, date, and git commit → `APPROVED`) sealed by a SHA-256 fingerprint provides audit-grade governance.
+  - Scikit-learn is restricted to host-only evaluation: it is strictly prohibited in `semg_dsp/`, dataset ingestion, or embedded runtime code.
+  - Import path allowlist: `semg_baseline/**` and Feature 004 tests (`tests/feature_004/**`).
+  - API surface allowlist: `sklearn.discriminant_analysis`, `sklearn.covariance`, and `sklearn.metrics`. APIs that generate splits or pipelines (`model_selection`, `Pipeline`, `StandardScaler`) are strictly prohibited; splits originate 100% from Feature 003 frozen manifests.
+  - Automated deterministic quality gate verifies ADR status, human signature, version pinning, import paths, API surface, and ADR fingerprint. Any violation results in a blocking `FAIL`.
+  - Mutating `pyproject.toml` is blocked until the ADR is committed as `APPROVED` by a human.
+- **Alternatives Rejected**:
+  - *Amending Constitution to v1.2.0*: Rejected because the Constitution establishes universal operational principles; cataloging specific library dependencies in the Constitution creates unnecessary governance churn.
+  - *Ad-hoc import without ADR*: Rejected as a direct violation of Constitution Principle I and Technical Constraints.
+
+---
+
+## Decision 2 (Q2): Causal DSP Filtering, Windowing & Data-Driven Thresholds
+
+- **Decision**:
+  1. **DSP Causal Band-Pass**: 4th-order causal Butterworth band-pass filter (20–450 Hz) executed via [`CausalSosFilter`](file:///home/allisson/Projects/agents_emg/semg_dsp/filter.py). Second-order sections (SOS) coefficients, frequency response, and golden references are owned explicitly by Feature 004.
+  2. **Omission of 50 Hz Notch Filter**: The 50 Hz notch filter is formally omitted from the baseline. An empirical spectral audit on NinaPro DB2 recordings across all 5 folds demonstrated an average 50 Hz power ratio of **0.84** (< 1.0) compared to flanking bands (45–48 Hz and 52–55 Hz).
+     - *Scientific finding*: Na amostra auditada de 9 sujeitos cobrindo os 5 folds, não foi observado excesso espectral sistemático em 50 Hz ($R_{50}=0.84$). Com base nessa evidência, o baseline canônico omite notch de 50 Hz. Um filtro notch atenuaria desnecessariamente a potência de disparo de unidades motoras na faixa 20–150 Hz.
+  3. **Windowing Invariants**: Nominal sampling rate = 2000.0 Hz; window length $W = 200\,\text{ms}$ (400 samples); stride $S = 50\,\text{ms}$ (100 samples); overlap = 75%; decision rate = 20 Hz. Invariant: No window may cross `repetition_unit` or partition boundaries.
+  4. **Steady-State Pure Window Policy**: Majority voting is prohibited. A window is admitted if and only if all 400 samples belong to the exact same canonical state (label) and same repetition unit. Mixed windows (REST ↔ ACTIVE, ACTIVE ↔ ACTIVE, repetition crossings) are excluded from the baseline. Discarded window metrics are logged per subject/exercise for audit.
+  5. **Data-Driven ZC/SSC Thresholds**: Deadzone thresholds are computed as $\epsilon[\text{channel}] = R \times \text{RMS\_rest\_train}[\text{channel}]$, with candidate grid $R \in \{0.5, 1.0, 1.5, 2.0, 3.0\}$ selected strictly via training-pool validation. Single $R$ selected per configuration/fold.
+  6. **Train-Only Custom Z-Score Scaling**: $z_j = (x_j - \mu_j) / \sigma_j$. Mean and std computed strictly on TRAIN; validation and test transformed statelessly. If $\sigma_j == 0$, scale factor is fixed to $1.0$ and flagged as `zero_variance`. `sklearn.preprocessing.StandardScaler` is prohibited.
+  7. **Anti-Leakage Invariant**: Rest RMS, ZC/SSC thresholds, scaling statistics, and shrinkage parameters never depend on validation or test splits.
+- **Alternatives Rejected**:
+  - *Fixed $\epsilon = 15\,\mu\text{V}$ threshold*: Rejected because sensor impedances and resting noise floors vary across subjects and channels.
+  - *Majority voting on transition windows*: Rejected because transient boundary windows contaminate steady-state gesture representation.
+  - *Enabling 50 Hz notch by convention*: Rejected by the empirical findings of the spectral audit.
+
+---
+
+## Decision 3 (Q3): LDA Priors, Ledoit-Wolf Covariance Shrinkage & Neutral Export Boundary
+
+- **Decision**:
+  1. **Primary Baseline (`uniform_prior_baseline`)**: Canonical 50-class baseline uses uniform class priors $P(c) = 1/50$ for all classes $c \in \{0..49\}$. This removes the empirical advantage of the dominant REST class (~70–75% of duration) from the Bayesian decision rule, allowing direct measurement of intrinsic gesture separability.
+  2. **Secondary Reference (`empirical_prior_reference`)**: A distinct model is trained with empirical class frequencies $P(c) = N_c / N_{\text{train}}$ measured strictly on TRAIN to assess sensitivity to continuous class distribution.
+  3. **Distinct Model Fits**: The two configurations are executed as distinct fits because priors participate directly in pooled covariance estimation in scikit-learn's LDA.
+  4. **Analytic Ledoit-Wolf Shrinkage**: `LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")` implements the deterministic Ledoit-Wolf shrinkage lemma, improving covariance conditioning and numerical stability for 60 features without grid-search tuning.
+  5. **Shrinkage & Model Evidence**: Does not persist a single scalar $\lambda^*$ (which misrepresents multi-class internal pooling). Persists `classes_`, `means_`, `covariance_`, `coef_`, `intercept_`, and SHA-256 hashes in `TrainingJob`.
+  6. **Neutral Export Boundary (Feature 005 Isolation)**: Model artifacts are exported exclusively as neutral numerical arrays (`.npz` containing `classes`, `coef`, `intercept`, `mean`, `scale`) and structured JSON manifests. Pickles, joblib dumps, or sklearn objects are strictly prohibited. Feature 005 runtime inference evaluates $\text{scores} = X_{\text{scaled}} @ \text{coef}^T + \text{intercept}$ followed by $\text{argmax}$ without importing `scikit-learn`.
+  7. **Deterministic Equivalence Oracle**: An independent test in Feature 004 asserts $\text{sklearn.predict}(X) == \text{neutral\_numpy\_predict}(X)$ with exact class match and numerical score tolerances governed by `TOL-LDA-NEUTRAL-SCORES`.
+  8. **Test Split Immutability**: No prior, shrinkage, solver, or hyperparameter selection may access Within-Subject test repetitions `[2, 5]` or Cross-Subject test folds.
+- **Alternatives Rejected**:
+  - *Post-hoc log-prior adjustment*: Rejected because priors affect covariance shrinkage in scikit-learn.
+  - *Pickle / Joblib model dumps*: Rejected as dangerous, non-portable, and introducing runtime coupling to `scikit-learn`.
+
+---
+
+## Decision 4 (Q4): Model Taxonomy & Recording Confounding Audit
+
+- **Decision**:
+  1. **Primary Baseline (`global_50_class`)**: Unified 50-class classifier (REST 0 + ACTIVE 1..49) combining windows from E1, E2, and E3 after validation against Feature 003 contracts. Serves as the primary benchmark for full prosthetic control.
+  2. **Secondary Baselines (`exercise_E1`, `exercise_E2`, `exercise_E3`)**: Three independent exercise-stratified models (E1: 18 classes, E2: 24 classes, E3: 10 classes) using derived local labels from Feature 003 (`get_local_labels()`). Described in reports strictly as `exercise-stratified secondary baselines` or `literature-aligned exercise-level analysis` (not "exact replication of Atzori et al." unless all historical conditions match).
+  3. **Non-Averaging Invariant**: Metrics are reported separately for global and exercise models. Averaging E1, E2, E3 accuracies to substitute for the global baseline is prohibited.
+  4. **Diagnostic Confounding Audit (`exercise_id_from_rest`)**: Auxiliary classifier trained to predict `exercise_id \in \{E1, E2, E3\}` strictly from REST windows. Accuracy near chance (~33.3%) indicates "nenhuma evidência de confounding detectável por este diagnóstico" in baseline REST; accuracy substantially above chance indicates recording confounding that must accompany the scientific interpretation of global 50-class results. Recordings are never excluded based on this diagnostic.
+  5. **Scientific Hierarchy**: (1) `global_50_class` [Primary], (2) `E1/E2/E3 exercise-stratified` [Secondary], (3) `exercise_id_from_rest` [Diagnostic].
+- **Alternatives Rejected**:
+  - *Training only per-exercise models*: Rejected because a functional prosthetic controller must recognize all gesture classes from a single unified model.
+  - *Discarding REST or treating it as a standard gesture*: Rejected because REST requires segregated tracking to avoid skewing multi-class metrics.
+
+---
+
+## Decision 5 (Q5): Append-Only TrainingJob Contract, Deterministic Fingerprint & Fixtures
+
+- **Decision**:
+  1. **Formal Schemas in `contracts/`**: Authoritative JSON Schemas in `specs/004-baseline-training-and-evaluation/contracts/`:
+     - `training_job_schema.json` (state-aware conditional validation for `PLANNED`, `RUNNING`, `SUCCEEDED`, and `FAILED`)
+     - `evaluation_report_schema.json` (traceability, standardized `model_taxonomy`, `[0.0, 1.0]` bounds, and `subject_or_fold_breakdown`)
+     - `neutral_model_manifest_schema.json` (5 mandatory roles, sidecar `model_manifest.sha256`)
+     - `preprocessing_config_schema.json` (includes `config_hash`)
+  2. **Append-Only Job Storage**: Persisted in `artifacts/feature_004/jobs/<job_id>/` with files: `job.json`, `config.json`, `model_manifest.json`, `model_params.npz`, `metrics.json`, `environment.json`, `stdout.log`, `stderr.log`, `manifest.sha256`. Completed jobs are immutable and append-only.
+  3. **Deterministic `job_fingerprint`**: Computed from scientific inputs: Feature 003 lineage hashes, protocol/partition, preprocessing config hash, feature config hash, model config hash, seed, git commit, and `dependency_lock_hash`. Volatile fields (timestamp, PID, absolute path, timing) are strictly excluded.
+  4. **Git Versioning Policy**: Local job outputs in `artifacts/feature_004/jobs/**` are not committed to Git. Git versions schemas, canonical configs, traceability manifests, and consolidated reports in `reports/feature_004_baseline/`. Zero real DB2 samples in Git.
+  5. **Procedural Synthetic Fixtures**: Shared generator in `tests/fixtures/synthetic_semg.py` producing `RecordingData` NinaPro-like (12 channels, 2 kHz, REST, synthetic active classes with distinct channel/frequency/amplitude patterns, repetitions, unit boundaries, seed).
+  6. **Adversarial & Negative Control Coverage**: Covers zero-variance features, missing class in train, extreme REST imbalance, transition windows, repetition crossings, NaN/Inf, singular covariance, array shape/dtype/hash mismatches, artifact tampering, synthetic leakage, and shuffled-label negative control (`tests/test_baseline_shuffled_labels.py`).
+  7. **Three-Tier Oracles**:
+     - *Layer A*: Analytical feature oracles (mathematically exact MAV/RMS/WL/ZC/SSC).
+     - *Layer B*: Sklearn training/reference oracle (governed by ADR).
+     - *Layer C*: Neutral NumPy inference oracle (pure numerical arrays).
+     - Strict assertion: $\text{sklearn.predict}(X) == \text{neutral\_numpy\_predict}(X)$ with tolerance governed by `TOL-LDA-NEUTRAL-SCORES`.
+  8. **Unit Tests vs Real DB2 Separation**: `pytest -q` uses only synthetic fixtures, does not access `data/raw/ninapro_db2/`, runs fast (developer reference target <5s). Full 40-subject training runs via a dedicated orchestrator runner.
+  9. **Fail-Closed Integrity**: Discrepancies between manifests, arrays, hashes, schemas, splits, or lineage result in a blocking `FAIL`.
+- **Alternatives Rejected**:
+  - *Committing training runs or real DB2 data to Git*: Rejected by Constitution Principle VI and repository size limits.
+  - *Monolithic single-script execution*: Rejected because modular stages guarantee testability, auditability, and clear separation of concerns.
+
+---
+
+## Decision 6: Cross-Subject Validation, Hyperparameter Selection & Multi-Fold Aggregation Policy
+
+- **Decision**:
+  1. **Strict 5-Fold Partition Roles (24 TRAIN / 8 VAL / 8 TEST)**:
+     - For each of the 5 frozen Cross-Subject folds from Feature 003, subjects are partitioned into 24 TRAIN, 8 VAL, and 8 TEST subjects with zero overlap (TRAIN ∩ VAL = ∅, TRAIN ∩ TEST = ∅, VAL ∩ TEST = ∅) and complete universe preservation (TRAIN ∪ VAL ∪ TEST = 40 subjects).
+  2. **Trainable State Strictly Train-Only (Q2)**:
+     - All preprocessing calibration (noise deadzone thresholds $\epsilon = R \times \text{RMS\_rest\_train}$), feature normalization (`FeatureScaler`), and model parameters (`CanonicalLdaTrainer`) are fitted exclusively on data from the 24 TRAIN subjects.
+  3. **Hyperparameter Selection on VAL (Q1 & Q4)**:
+     - Candidate deadzone multipliers $R \in \{0.5, 1.0, 1.5, 2.0, 3.0\}$ are evaluated statelessly on the 8 VAL subjects using `transform()` and `predict()`.
+     - The canonical selection metric is mean Balanced Accuracy on VAL.
+     - In case of score ties, a deterministic, order-independent lowest-$R$ tie-break is applied (`min(candidate_r)`).
+  4. **Final Model Refit Strictly on 24 TRAIN (Q3)**:
+     - Once $R^*$ is selected, the final model is refitted strictly on the 24 TRAIN subjects with $R^*$ (VAL subjects are never pooled into the final training set).
+  5. **Zero-Access TEST Isolation & Test Evaluation Count**:
+     - The 8 TEST subjects remain completely unobserved (zero raw access, zero filtering, zero segmentation, zero prediction) during candidate selection.
+     - TEST data is evaluated strictly once post-freeze per fold, accumulating to exactly 5 evaluations across all 5 folds.
+  6. **Multi-Fold Aggregate Summary Contract**:
+     - Cross-subject benchmark results report per-fold metrics and an aggregate statistical summary (`CrossSubjectAggregateMetrics`) providing structured `MetricStats(mean, median, std)` for `accuracy`, `balanced_accuracy`, and `macro_f1`.
+  7. **Manifest Identity & Vocabulary Fail-Closed**:
+     - Rejection of split mutations or subject swaps even if partition counts (24/8/8) match.
+     - Fail-closed validation for gesture vocabulary mismatches under canonical 50-class mode.
+

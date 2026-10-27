@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RecordingContract",
+  "description": "Schema for canonical NinaPro DB2 recording metadata and contract specification",
+  "type": "object",
+  "required": [
+    "subject_id",
+    "exercise_id",
+    "num_samples",
+    "num_channels",
+    "sampling_rate_hz",
+    "dtype",
+    "alignment",
+    "views"
+  ],
+  "properties": {
+    "subject_id": {
+      "type": "string",
+      "pattern": "^S([1-9]|[1-3][0-9]|40)$"
+    },
+    "exercise_id": {
+      "type": "string",
+      "enum": ["E1", "E2", "E3"]
+    },
+    "num_samples": {
+      "type": "integer",
+      "minimum": 1000
+    },
+    "num_channels": {
+      "type": "integer",
+      "const": 12
+    },
+    "sampling_rate_hz": {
+      "type": "number",
+      "const": 2000.0
+    },
+    "dtype": {
+      "type": "string",
+      "const": "float32"
+    },
+    "alignment": {
+      "type": "object",
+      "required": ["status", "delta_samples", "start_anchored_proven"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["IDENTICAL", "ANCHOR_START_TRUNCATE_TAIL", "QUARANTINE"]
+        },
+        "delta_samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start_anchored_proven": {
+          "type": "boolean"
+        }
+      }
+    },
+    "views": {
+      "type": "object",
+      "required": ["refined", "stimulus"],
+      "properties": {
+        "refined": {
+          "type": "object",
+          "required": ["label_source", "repetition_source", "view_hash"],
+          "properties": {
+            "label_source": { "type": "string", "const": "restimulus" },
+            "repetition_source": { "type": "string", "const": "rerepetition" },
+            "view_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
+        "stimulus": {
+          "type": "object",
+          "required": ["label_source", "repetition_source", "view_hash"],
+          "properties": {
+            "label_source": { "type": "string", "const": "stimulus" },
+            "repetition_source": { "type": "string", "const": "repetition" },
+            "view_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

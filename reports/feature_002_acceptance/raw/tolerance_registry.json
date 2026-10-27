@@ -1,0 +1,38 @@
+{
+  "TOL-ANALYTICAL-L0": {
+    "runtime_dtype": "float32",
+    "comparison_target": "F\u00f3rmulas anal\u00edticas (degrau, DC, impulso, zeros, sen\u00f3ide, multi-tom)",
+    "rtol": 1e-06,
+    "atol": 1e-06,
+    "status": "ACCEPTED (Feature 002 Sign-off)",
+    "rationale": "Margem conservadora para opera\u00e7\u00f5es float32 do pipeline sint\u00e9tico IEEE 754 em precis\u00e3o simples.",
+    "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+  },
+  "TOL-SOS-FILTER-L1": {
+    "runtime_dtype": "float32",
+    "comparison_target": "Or\u00e1culo independente SciPy scipy.signal.sosfilt",
+    "rtol": 1e-05,
+    "atol": 1e-05,
+    "status": "ACCEPTED (Feature 002 Sign-off)",
+    "rationale": "Compensa pequenas diferen\u00e7as de acumula\u00e7\u00e3o de arredondamento entre o loop expl\u00edcito DF2T em float32 e a rotina C do SciPy.",
+    "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+  },
+  "TOL-CHUNK-INVARIANCE": {
+    "runtime_dtype": "float32",
+    "comparison_target": "Concatena\u00e7\u00e3o de sa\u00eddas streaming vs processamento em bloco",
+    "rtol": 1e-06,
+    "atol": 1e-06,
+    "status": "ACCEPTED (Feature 002 Sign-off)",
+    "rationale": "Garante que o estado interno do filtro ret\u00e9m continuidade exata sem deriva num\u00e9rica atrav\u00e9s de fronteiras de chunks.",
+    "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+  },
+  "TOL-WINDOW-ACCUMULATION": {
+    "runtime_dtype": "float32",
+    "comparison_target": "Janelamento cont\u00ednuo em bloco vs janelamento streaming com estado",
+    "rtol": 0.0,
+    "atol": 0.0,
+    "status": "ACCEPTED (Feature 002 Sign-off)",
+    "rationale": "Indexa\u00e7\u00e3o temporal e c\u00f3pias de buffers discretos devem ser estritamente bit a bit id\u00eanticos.",
+    "source_artifact": "specs/002-dsp-streaming-pipeline/spec.md"
+  }
+}

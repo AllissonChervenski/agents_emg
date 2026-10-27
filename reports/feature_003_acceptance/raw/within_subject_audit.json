@@ -1,0 +1,15 @@
+{
+  "train_repetitions": [
+    1,
+    3,
+    4,
+    6
+  ],
+  "test_repetitions": [
+    2,
+    5
+  ],
+  "val_empty": true,
+  "disjoint": true,
+  "complete": true
+}

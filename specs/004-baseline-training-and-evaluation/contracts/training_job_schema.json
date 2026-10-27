@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TrainingJobSchema",
+  "description": "JSON Schema validating TrainingJob metadata, scientific lineage, strict configs, and state-aware lifecycle for Feature 004",
+  "type": "object",
+  "required": [
+    "job_id",
+    "job_fingerprint",
+    "status",
+    "git_commit",
+    "dependency_lock_hash",
+    "lineage",
+    "protocol_id",
+    "partition_id",
+    "preprocessing_config",
+    "feature_config",
+    "model_config",
+    "seed"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[a-zA-Z0-9_\\-]+$"
+    },
+    "job_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PLANNED", "RUNNING", "SUCCEEDED", "FAILED"]
+    },
+    "git_commit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{7,40}$"
+    },
+    "dependency_lock_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "lineage": {
+      "$ref": "#/$defs/ScientificLineage"
+    },
+    "protocol_id": {
+      "type": "string",
+      "enum": ["within_subject", "cross_subject"]
+    },
+    "partition_id": {
+      "type": "string"
+    },
+    "preprocessing_config": {
+      "$ref": "#/$defs/PreprocessingConfig"
+    },
+    "feature_config": {
+      "$ref": "#/$defs/FeatureExtractionConfig"
+    },
+    "model_config": {
+      "$ref": "#/$defs/ModelConfig"
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "finished_at": {
+      "type": "string"
+    },
+    "environment_versions": {
+      "$ref": "#/$defs/EnvironmentVersions"
+    },
+    "threshold_calibration": {
+      "$ref": "#/$defs/ThresholdCalibration"
+    },
+    "timing_seconds": {
+      "type": "object",
+      "properties": {
+        "preprocessing": { "type": "number", "minimum": 0.0 },
+        "feature_extraction": { "type": "number", "minimum": 0.0 },
+        "fitting": { "type": "number", "minimum": 0.0 },
+        "evaluation": { "type": "number", "minimum": 0.0 },
+        "total": { "type": "number", "minimum": 0.0 }
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "$ref": "#/$defs/JobMetrics"
+    },
+    "artifact_hashes": {
+      "$ref": "#/$defs/ArtifactHashes"
+    },
+    "stdout_summary": {
+      "type": "string"
+    },
+    "stderr_summary": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "PLANNED" } }
+      },
+      "then": {
+        "description": "PLANNED status requires identity, lineage, configuration, seed, and fingerprints"
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "RUNNING" } }
+      },
+      "then": {
+        "required": ["environment_versions", "started_at"],
+        "description": "RUNNING status requires identity, configs, and execution start metadata"
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "FAILED" } }
+      },
+      "then": {
+        "required": ["environment_versions", "stderr_summary"],
+        "description": "FAILED status requires diagnostic failure evidence and execution metadata"
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "SUCCEEDED" } }
+      },
+      "then": {
+        "required": [
+          "environment_versions",
+          "threshold_calibration",
+          "timing_seconds",
+          "metrics",
+          "artifact_hashes",
+          "stdout_summary"
+        ],
+        "description": "SUCCEEDED status requires complete metrics, neutral artifact hashes, calibration, and execution evidence"
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "ScientificLineage": {
+      "type": "object",
+      "required": [
+        "raw_dataset_manifest_hash",
+        "dataset_view_hash",
+        "alignment_hash",
+        "split_manifest_hash",
+        "acceptance_package_hash"
+      ],
+      "properties": {
+        "raw_dataset_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "dataset_view_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "alignment_hash": { "type": "string" },
+        "split_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "acceptance_package_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "PreprocessingConfig": {
+      "type": "object",
+      "required": [
+        "filter_type",
+        "order",
+        "low_cutoff_hz",
+        "high_cutoff_hz",
+        "sampling_rate_hz",
+        "notch_50hz_enabled",
+        "sos_coefficients_hash",
+        "config_hash"
+      ],
+      "properties": {
+        "filter_type": { "type": "string", "enum": ["butterworth_causal_sos"] },
+        "order": { "type": "integer", "const": 4 },
+        "low_cutoff_hz": { "type": "number", "const": 20.0 },
+        "high_cutoff_hz": { "type": "number", "const": 450.0 },
+        "sampling_rate_hz": { "type": "number", "const": 2000.0 },
+        "notch_50hz_enabled": { "type": "boolean", "const": false },
+        "sos_coefficients_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "config_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "FeatureExtractionConfig": {
+      "type": "object",
+      "required": [
+        "window_length_samples",
+        "stride_samples",
+        "decision_rate_hz",
+        "feature_names",
+        "transition_policy",
+        "num_channels",
+        "total_features_per_window",
+        "config_hash"
+      ],
+      "properties": {
+        "window_length_samples": { "type": "integer", "const": 400 },
+        "stride_samples": { "type": "integer", "const": 100 },
+        "decision_rate_hz": { "type": "number", "const": 20.0 },
+        "feature_names": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["MAV", "RMS", "WL", "ZC", "SSC"] }
+        },
+        "transition_policy": { "type": "string", "const": "pure_window_steady_state" },
+        "num_channels": { "type": "integer", "const": 12 },
+        "total_features_per_window": { "type": "integer", "const": 60 },
+        "config_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "ModelConfig": {
+      "type": "object",
+      "required": [
+        "model_family",
+        "solver",
+        "shrinkage",
+        "prior_type",
+        "num_classes",
+        "vocabulary_type",
+        "config_hash"
+      ],
+      "properties": {
+        "model_family": { "type": "string", "const": "regularized_lda" },
+        "solver": { "type": "string", "const": "lsqr" },
+        "shrinkage": { "type": "string", "const": "auto" },
+        "prior_type": { "type": "string", "enum": ["uniform", "empirical"] },
+        "num_classes": { "type": "integer", "enum": [50, 18, 24, 10] },
+        "vocabulary_type": {
+          "type": "string",
+          "enum": ["global_50_class", "exercise_E1", "exercise_E2", "exercise_E3"]
+        },
+        "config_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "ThresholdCalibration": {
+      "type": "object",
+      "required": ["r_multiplier", "selection_method"],
+      "properties": {
+        "r_multiplier": { "type": "number", "enum": [0.5, 1.0, 1.5, 2.0, 3.0] },
+        "selection_method": { "type": "string" },
+        "rms_rest_train": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "epsilon_channels": {
+          "type": "array",
+          "items": { "type": "number" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "EnvironmentVersions": {
+      "type": "object",
+      "required": ["python", "numpy", "scipy", "scikit_learn"],
+      "properties": {
+        "python": { "type": "string" },
+        "numpy": { "type": "string" },
+        "scipy": { "type": "string" },
+        "scikit_learn": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "JobMetrics": {
+      "type": "object",
+      "required": ["top1_accuracy", "balanced_accuracy", "macro_f1"],
+      "properties": {
+        "top1_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "balanced_accuracy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "macro_f1": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      },
+      "additionalProperties": false
+    },
+    "ArtifactHashes": {
+      "type": "object",
+      "required": ["model_params_npz", "model_manifest_json"],
+      "properties": {
+        "model_params_npz": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "model_manifest_json": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "stdout_log": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "stderr_log": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "metrics_json": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
