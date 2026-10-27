@@ -16,10 +16,40 @@
         "tier_source": "config",
         "capabilities": ["coding", "testing", "implementation", "validation", "reasoning", "document_generation", "refactoring"]
       },
+      "gemini-4-argon-low": {
+        "tiers": ["balanced", "strong"],
+        "tier_source": "config",
+        "capabilities": ["reasoning", "reasoning_strong", "validation", "document_generation"]
+      },
+      "gemini-4-argon-medium": {
+        "tiers": ["strong", "coding_strong", "balanced"],
+        "tier_source": "config",
+        "capabilities": ["reasoning", "reasoning_strong", "coding", "validation", "architecture", "document_generation"]
+      },
+      "gemini-4-argon-high": {
+        "tiers": ["strong", "coding_strong", "balanced"],
+        "tier_source": "config",
+        "capabilities": ["reasoning", "reasoning_strong", "coding", "refactoring", "code_review", "architecture", "validation", "document_generation"]
+      },
       "gemini-3.1-pro-high": {
         "tiers": ["strong"],
         "tier_source": "config",
         "capabilities": ["reasoning_strong", "architecture", "complex_validation"]
+      },
+      "claude-opus-5-5-low": {
+        "tiers": ["strong"],
+        "tier_source": "config",
+        "capabilities": ["reasoning_strong", "architecture", "complex_validation", "extreme_fallback"]
+      },
+      "claude-opus-5-5-medium": {
+        "tiers": ["strong"],
+        "tier_source": "config",
+        "capabilities": ["reasoning_strong", "architecture", "complex_validation", "extreme_fallback"]
+      },
+      "claude-opus-5-5-high": {
+        "tiers": ["strong", "coding_strong"],
+        "tier_source": "config",
+        "capabilities": ["reasoning_strong", "architecture", "complex_validation", "extreme_fallback", "coding", "refactoring"]
       },
       "claude-sonnet-4-6": {
         "tiers": ["coding_strong", "balanced", "strong"],

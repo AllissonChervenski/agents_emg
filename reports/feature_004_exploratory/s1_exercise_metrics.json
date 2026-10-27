@@ -1,0 +1,68 @@
+{
+  "subject_id": "S1",
+  "selected_r": 0.5,
+  "test_evaluation_count": 1,
+  "test_windows": 16079,
+  "global_top1_accuracy": 0.730891224578643,
+  "global_balanced_accuracy": 0.6697546069900604,
+  "global_macro_f1": 0.6518574290757375,
+  "by_exercise": [
+    {
+      "exercise_id": "E1",
+      "test_windows": 5642,
+      "rest_windows": 3324,
+      "active_windows": 2318,
+      "top1_accuracy": 0.7236795462601914,
+      "balanced_accuracy": 0.6652272471323527,
+      "macro_f1": 0.6878729766429549,
+      "active_top1_accuracy": 0.6544434857635893,
+      "rest_recall": 0.7719614921780987,
+      "rest_false_alarm_rate": 0.22803850782190133,
+      "active_to_rest_count": 73,
+      "active_to_rest_rate": 0.031492666091458156,
+      "outside_exercise_prediction_count": 743,
+      "outside_exercise_prediction_rate": 0.13169088975540588
+    },
+    {
+      "exercise_id": "E2",
+      "test_windows": 7726,
+      "rest_windows": 4203,
+      "active_windows": 3523,
+      "top1_accuracy": 0.6931141599792907,
+      "balanced_accuracy": 0.5811926741464039,
+      "macro_f1": 0.5826561090475812,
+      "active_top1_accuracy": 0.543854669315924,
+      "rest_recall": 0.8182250773257197,
+      "rest_false_alarm_rate": 0.18177492267428028,
+      "active_to_rest_count": 235,
+      "active_to_rest_rate": 0.06670451319897815,
+      "outside_exercise_prediction_count": 160,
+      "outside_exercise_prediction_rate": 0.020709293295366294
+    },
+    {
+      "exercise_id": "E3",
+      "test_windows": 2711,
+      "rest_windows": 999,
+      "active_windows": 1712,
+      "top1_accuracy": 0.8535595721136112,
+      "balanced_accuracy": 0.9089810368576012,
+      "macro_f1": 0.9308295632511087,
+      "active_top1_accuracy": 0.929322429906542,
+      "rest_recall": 0.7237237237237237,
+      "rest_false_alarm_rate": 0.27627627627627627,
+      "active_to_rest_count": 36,
+      "active_to_rest_rate": 0.02102803738317757,
+      "outside_exercise_prediction_count": 290,
+      "outside_exercise_prediction_rate": 0.10697159719660641
+    }
+  ],
+  "evidence_status": "EXPLORATORY_NOT_SCIENTIFIC_ACCEPTANCE",
+  "limitations": [
+    "REST (label 0) attributed by recorded E1/E2/E3 window origin, not predicted label",
+    "All predictions come from one global 50-class model and one TEST evaluation",
+    "Per-exercise balanced accuracy and macro-F1 average over each exercise's original label vocabulary",
+    "Outside-exercise predictions are counted as errors; no label remapping",
+    "Positive S1 REST/session confounding remains unresolved",
+    "No independently anchored dataset provenance or scientific sign-off"
+  ]
+}

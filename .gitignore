@@ -14,3 +14,10 @@ logs/
 .orchestrator/runs/
 data/raw/
 data/derived/
+*.patch
+*.bak
+*SUPERVISOR*
+*OPERACIONAL*
+apply_feature004_scipy_fastpath.py
+fix_feature004_governance.py
+lineage_hardened.py
